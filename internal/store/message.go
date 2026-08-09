@@ -1,0 +1,348 @@
+package store
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	bolt "go.etcd.io/bbolt"
+)
+
+// ErrMessageNotFound is returned when a message lookup misses.
+var ErrMessageNotFound = errors.New("message not found")
+
+// Message is the stored record for one piece of mail.
+type Message struct {
+	ID         string   `json:"id"`          // ULID
+	From       string   `json:"from"`        // sender address
+	To         []string `json:"to"`          // recipient addresses
+	Subject    string   `json:"subject"`
+	Body       string   `json:"body"`
+	ReceivedAt int64    `json:"received_at"` // unix seconds
+}
+
+// MessageSummary is a lightweight inbox entry (no body).
+type MessageSummary struct {
+	ID         string   `json:"id"`
+	From       string   `json:"from"`
+	To         []string `json:"to"`
+	Subject    string   `json:"subject"`
+	Preview    string   `json:"preview"`
+	ReceivedAt int64    `json:"received_at"`
+	Unread     bool     `json:"unread"`
+}
+
+// SendResult is returned by Send.
+type SendResult struct {
+	MessageID string `json:"message_id"`
+}
+
+// Send composes and delivers a message from "from" to every address in "to".
+// It writes one copy of the message body and adds inbox references for each
+// recipient plus a sent reference for the sender. Recipients that do not
+// exist are silently skipped (the message still goes to the valid ones); if
+// NO recipient is valid, Send returns an error.
+//
+// The whole operation is one bbolt transaction, so a crash mid-send leaves
+// nothing half-delivered.
+func (s *Store) Send(from, fromName string, to []string, subject, body string) (*SendResult, error) {
+	msgID := newULID()
+	now := s.now().Unix()
+	msg := Message{
+		ID:         msgID,
+		From:       from,
+		To:         to,
+		Subject:    subject,
+		Body:       body,
+		ReceivedAt: now,
+	}
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	delivered := 0
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		// Store the message body once.
+		mb := tx.Bucket(bMessages)
+		if existing := mb.Get([]byte(msgID)); existing != nil {
+			// Idempotency guard: a retried send with the same ID is a no-op.
+			return nil
+		}
+		if err := mb.Put([]byte(msgID), msgBytes); err != nil {
+			return err
+		}
+
+		// Add an inbox reference for each valid recipient.
+		ib := tx.Bucket(bInbox)
+		ub := tx.Bucket(bUnread)
+		for _, addr := range to {
+			acc, err := getAccountInTx(tx, addr)
+			if err != nil {
+				continue // unknown recipient: skip
+			}
+			key := indexKey(acc.UUID, msgID)
+			if err := ib.Put(key, nil); err != nil {
+				return err
+			}
+			// Mark as unread for this recipient.
+			if err := ub.Put(key, nil); err != nil {
+				return err
+			}
+			delivered++
+		}
+
+		// Add a sent reference for the sender.
+		sb := tx.Bucket(bSent)
+		if sender, err := getAccountInTx(tx, from); err == nil {
+			key := indexKey(sender.UUID, msgID)
+			if err := sb.Put(key, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	if delivered == 0 {
+		return nil, fmt.Errorf("no valid recipients among %v", to)
+	}
+	return &SendResult{MessageID: msgID}, nil
+}
+
+// ReadInbox returns up to limit most-recent inbox messages for the account
+// with the given address. limit<=0 defaults to 20. Unread status reflects the
+// inbox owner's view (the account itself).
+func (s *Store) ReadInbox(address string, limit int) ([]MessageSummary, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return nil, err
+	}
+	return s.readIndex(bInbox, acc.UUID, acc.UUID, limit)
+}
+
+// ReadSent returns the account's sent messages (used by the admin UI later).
+func (s *Store) ReadSent(address string, limit int) ([]MessageSummary, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return nil, err
+	}
+	return s.readIndex(bSent, acc.UUID, acc.UUID, limit)
+}
+
+// ReadInboxAsViewer is like ReadInbox but the unread status reflects the
+// viewer's perspective (e.g. admin viewing alice's inbox sees admin's own
+// unread state, which is always "read" since admin is not a recipient).
+// Used by admin endpoints so admin views don't mutate the owner's unread state.
+func (s *Store) ReadInboxAsViewer(owner, viewer string, limit int) ([]MessageSummary, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	ownerAcc, err := s.GetAccount(owner)
+	if err != nil {
+		return nil, err
+	}
+	viewerAcc, err := s.GetAccount(viewer)
+	if err != nil {
+		// viewer unknown: fall back to owner's view
+		return s.readIndex(bInbox, ownerAcc.UUID, ownerAcc.UUID, limit)
+	}
+	return s.readIndex(bInbox, ownerAcc.UUID, viewerAcc.UUID, limit)
+}
+
+// readIndex scans an index bucket (inbox or sent) for the given account UUID,
+// newest first, and resolves each referenced message to a summary. indexOwner
+// selects whose inbox/sent to read; viewerUuid selects whose unread state to
+// report (often the same, but different for admin viewing another's inbox).
+func (s *Store) readIndex(bucket []byte, indexOwner, viewerUuid string, limit int) ([]MessageSummary, error) {
+	prefix := indexKey(indexOwner, "")
+	prefixStr := string(prefix)
+	var ids []string
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucket)
+		if b == nil {
+			return nil // bucket missing — treat as empty index
+		}
+		c := b.Cursor()
+		for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+			ids = append(ids, string(k[len(prefix):]))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
+		ids[i], ids[j] = ids[j], ids[i]
+	}
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	if len(ids) == 0 {
+		return []MessageSummary{}, nil
+	}
+	out := make([]MessageSummary, 0, len(ids))
+	err = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMessages)
+		if mb == nil {
+			return nil
+		}
+		ub := tx.Bucket(bUnread)
+		for _, id := range ids {
+			val := mb.Get([]byte(id))
+			if val == nil {
+				continue
+			}
+			var msg Message
+			if err := json.Unmarshal(val, &msg); err != nil {
+				continue
+			}
+			ms := summarize(msg)
+			// Unread is per-viewer: check if this viewer's uuid+ulid key exists
+			// in the unread bucket. Absent = read (default).
+			if ub != nil {
+				ms.Unread = ub.Get(indexKey(viewerUuid, id)) != nil
+			}
+			out = append(out, ms)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// GetMessage returns the full body of a single message, provided it is
+// reachable by the requesting account (in their inbox OR sent).
+func (s *Store) GetMessage(requester, messageID string) (*Message, error) {
+	acc, err := s.GetAccount(requester)
+	if err != nil {
+		return nil, err
+	}
+	// Verify the requester has a reference to this message.
+	visible := false
+	prefix := indexKey(acc.UUID, "")
+	err = s.db.View(func(tx *bolt.Tx) error {
+		for _, bucket := range [][]byte{bInbox, bSent} {
+			c := tx.Bucket(bucket).Cursor()
+			for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), string(prefix)); k, _ = c.Next() {
+				if string(k[len(prefix):]) == messageID {
+					visible = true
+					return nil
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, ErrMessageNotFound
+	}
+	// Load the body.
+	var msg Message
+	err = s.db.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(bMessages).Get([]byte(messageID))
+		if val == nil {
+			return ErrMessageNotFound
+		}
+		return json.Unmarshal(val, &msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Mark as read for this viewer (best-effort: ignore error, the message is
+	// still returned even if the unread marker can't be cleared).
+	_ = s.MarkRead(acc.UUID, messageID)
+	return &msg, nil
+}
+
+// MarkRead removes the unread marker for (uuid, messageID). Best-effort: a
+// missing key is a no-op (already read). Fast path: a cheap View first checks
+// whether the marker exists; only if it does (truly unread) do we pay for an
+// Update. This avoids unnecessary write transactions (bbolt write txns are
+// exclusive and serialize all access) on repeated reads of already-read mail.
+func (s *Store) MarkRead(uuidHex, messageID string) error {
+	key := indexKey(uuidHex, messageID)
+	// Fast path: if already read, skip the write transaction entirely.
+	needsWrite := false
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		ub := tx.Bucket(bUnread)
+		if ub == nil {
+			return nil
+		}
+		if ub.Get(key) != nil {
+			needsWrite = true
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if !needsWrite {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		ub := tx.Bucket(bUnread)
+		if ub == nil {
+			return nil
+		}
+		return ub.Delete(key)
+	})
+}
+
+// GetMessageAdmin returns the full body of a message by ID with no requester
+// check. Intended only for the admin endpoints; regular account access must go
+// through GetMessage (which enforces the inbox/sent reference check).
+func (s *Store) GetMessageAdmin(messageID string) (*Message, error) {
+	var msg Message
+	err := s.db.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(bMessages).Get([]byte(messageID))
+		if val == nil {
+			return ErrMessageNotFound
+		}
+		return json.Unmarshal(val, &msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &msg, nil
+}
+
+// getAccountInTx reads an account inside an existing transaction.
+func getAccountInTx(tx *bolt.Tx, address string) (*Account, error) {
+	val := tx.Bucket(bAccounts).Get([]byte(address))
+	if val == nil {
+		return nil, ErrAccountNotFound
+	}
+	var acc Account
+	if err := json.Unmarshal(val, &acc); err != nil {
+		return nil, err
+	}
+	return &acc, nil
+}
+
+// summarize projects a Message to a MessageSummary with a short body preview.
+func summarize(m Message) MessageSummary {
+	preview := m.Body
+	// Truncate by RUNE count, not byte count, to avoid cutting a multibyte char
+	// mid-sequence AND to avoid the slice-bounds panic when byte length > 100
+	// but rune count < 100 (e.g. 72 Chinese chars = 216 bytes, but only 72 runes).
+	if r := []rune(preview); len(r) > 100 {
+		preview = string(r[:100])
+	}
+	return MessageSummary{
+		ID:         m.ID,
+		From:       m.From,
+		To:         m.To,
+		Subject:    m.Subject,
+		Preview:    preview,
+		ReceivedAt: m.ReceivedAt,
+	}
+}

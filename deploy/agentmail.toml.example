@@ -1,0 +1,18 @@
+# agentmail-server config — copy to agentmail.toml and edit.
+
+[server]
+# HTTP listen address. Use 127.0.0.1 for local-only; 0.0.0.0 to allow remote
+# (put a reverse proxy with TLS in front for remote access).
+listen = "127.0.0.1:8090"
+# The mail domain accounts live under. Affects account addresses only.
+domain = "agentmail.local"
+
+[storage]
+# Path to the bbolt database file. Holds accounts, messages, audit log.
+db_path = "agentmail.db"
+
+[admin]
+# The admin account is created on first run from these credentials. The admin
+# can read any account's mail and the audit log.
+address  = "admin@agentmail.local"
+password = "change-me"

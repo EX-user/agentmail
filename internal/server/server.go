@@ -1,0 +1,219 @@
+// Package server is agentmail-server's HTTP API. It exposes the message-store
+// operations behind HTTP Basic auth: every mailbox-affecting endpoint
+// authenticates as the acting account, so per-account isolation is enforced
+// by the server (not by the gateway or by convention). The gateway holds no
+// data and simply forwards Basic-authed requests.
+package server
+
+import (
+	"context"
+	"encoding/base64"
+	"io/fs"
+	"net/http"
+	"strings"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/agentmail/agentmail/internal/audit"
+	"github.com/agentmail/agentmail/internal/config"
+	"github.com/agentmail/agentmail/internal/store"
+)
+
+// Server wires the store and audit log to the HTTP router.
+type Server struct {
+	store    *store.Store
+	audit    *audit.Store
+	cfg      *config.Config
+}
+
+// New builds a server with the given dependencies.
+func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
+	return &Server{store: s, audit: a, cfg: cfg}
+}
+
+// Handler returns the HTTP handler for the API.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", s.handleHealthz)
+
+	// Public API (no auth).
+	mux.HandleFunc("/api/register", s.handleRegister)
+	mux.HandleFunc("/api/verify-password", s.handleVerifyPassword)
+
+	// Authed API (account Basic auth).
+	mux.HandleFunc("/api/send", s.requireAccount(s.handleSend))
+	mux.HandleFunc("/api/inbox", s.requireAccount(s.handleInbox))
+	mux.HandleFunc("/api/message", s.requireAccount(s.handleMessage))
+
+	// Admin API (admin Basic auth).
+	mux.HandleFunc("/admin/messages", s.requireAdmin(s.handleAdminMessages))
+	mux.HandleFunc("/admin/sent", s.requireAdmin(s.handleAdminSent))
+	mux.HandleFunc("/admin/message", s.requireAdmin(s.handleAdminMessage))
+	mux.HandleFunc("/admin/accounts", s.requireAdmin(s.handleAdminAccounts))
+	mux.HandleFunc("/admin/audit", s.requireAdmin(s.handleAdminAudit))
+	mux.HandleFunc("/admin/stats", s.requireAdmin(s.handleAdminStats))
+	mux.HandleFunc("/admin/reset-password", s.requireAdmin(s.handleAdminResetPassword))
+	mux.HandleFunc("/admin/set-disabled", s.requireAdmin(s.handleAdminSetDisabled))
+	mux.HandleFunc("/admin/send", s.requireAdmin(s.handleAdminSend))
+
+	// Admin web panel: static files under /static/*, plus the index page at "/".
+	// The mux's longest-prefix-wins rule keeps all the exact patterns above
+	// reachable. The panel itself is served without server-side auth so the
+	// browser shows its native Basic prompt on first load; every data API it
+	// calls is independently protected by requireAdmin.
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSubFS))))
+	mux.HandleFunc("/", s.serveIndex)
+
+	return mux
+}
+
+// serveIndex returns the embedded index.html for the panel root. It is the
+// unauthenticated entry point: the browser will prompt for Basic auth when the
+// page's first admin fetch runs.
+func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
+	// Only serve the index at exactly "/"; anything else is a 404.
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := fs.ReadFile(staticSubFS, "index.html")
+	if err != nil {
+		http.Error(w, "index not found", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(data)
+}
+
+// ListenAndServe starts the HTTP server. Blocks until ctx is cancelled.
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	srv := &http.Server{
+		Addr:              s.cfg.Server.Listen,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		<-ctx.Done()
+		shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shut)
+	}()
+	return srv.ListenAndServe()
+}
+
+// requireAccount wraps a handler so that it only runs after a valid non-admin
+// account credential is presented via HTTP Basic auth. The authenticated
+// address is passed to the handler via the request context.
+func (s *Server) requireAccount(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		address, ok := s.basicAuthAccount(w, r)
+		if !ok {
+			return // already wrote 401
+		}
+		h.ServeHTTP(w, r.WithContext(withAccount(r.Context(), address)))
+	}
+}
+
+// requireAdmin wraps a handler so that it only runs for the configured admin
+// credential.
+func (s *Server) requireAdmin(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.basicAuthAdmin(w, r) {
+			return
+		}
+		h.ServeHTTP(w, r)
+	}
+}
+
+// basicAuthAccount validates a Basic auth header against a real account and
+// returns the address on success. Writes 401 and returns false on failure.
+func (s *Server) basicAuthAccount(w http.ResponseWriter, r *http.Request) (string, bool) {
+	user, pass, ok := parseBasicAuth(r.Header.Get("Authorization"))
+	if !ok {
+		unauthorized(w)
+		return "", false
+	}
+	// The admin credential also satisfies account auth (the admin is an
+	// account), but admin-only endpoints use requireAdmin separately.
+	if err := s.store.VerifyPassword(user, pass); err != nil {
+		unauthorized(w)
+		return "", false
+	}
+	return user, true
+}
+
+// basicAuthAdmin validates a Basic auth header against a stored admin account.
+// Admin credentials are looked up in bbolt (not the config file), so an admin
+// who resets their password via the panel keeps working after the change and
+// across restarts. The config file's [admin] section only seeds the initial
+// admin account at first startup (see EnsureAdmin).
+//
+// A credential pair is admin-valid iff:
+//   - the account exists in bbolt,
+//   - the bcrypt hash matches, and
+//   - the account has IsAdmin == true.
+func (s *Server) basicAuthAdmin(w http.ResponseWriter, r *http.Request) bool {
+	user, pass, ok := parseBasicAuth(r.Header.Get("Authorization"))
+	if !ok {
+		unauthorized(w)
+		return false
+	}
+	acc, err := s.store.GetAccount(user)
+	if err != nil {
+		unauthorized(w)
+		return false
+	}
+	if err := bcryptCompare(acc.PasswordHash, []byte(pass)); err != nil {
+		unauthorized(w)
+		return false
+	}
+	if !acc.IsAdmin {
+		unauthorized(w)
+		return false
+	}
+	return true
+}
+
+// --- helpers ---
+
+type ctxKey int
+
+const accountKey ctxKey = 1
+
+func withAccount(ctx context.Context, address string) context.Context {
+	return context.WithValue(ctx, accountKey, address)
+}
+
+func accountFrom(ctx context.Context) string {
+	v, _ := ctx.Value(accountKey).(string)
+	return v
+}
+
+// parseBasicAuth splits an "Authorization: Basic ..." header.
+func parseBasicAuth(header string) (user, pass string, ok bool) {
+	const prefix = "Basic "
+	if !strings.HasPrefix(header, prefix) {
+		return "", "", false
+	}
+	dec, err := base64.StdEncoding.DecodeString(strings.TrimSpace(header[len(prefix):]))
+	if err != nil {
+		return "", "", false
+	}
+	parts := strings.SplitN(string(dec), ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
+func unauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
+	http.Error(w, "unauthorized", http.StatusUnauthorized)
+}
+
+// bcryptCompare is a thin wrapper kept here so the server package does not
+// reach into store internals for the admin auth check.
+func bcryptCompare(hash, password []byte) error {
+	return bcrypt.CompareHashAndPassword(hash, password)
+}

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agentmail admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>agentmail</h1>
+    <nav>
+      <button class="tab" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="accounts">Accounts</button>
+      <button class="tab" data-tab="mail">Mail</button>
+      <button class="tab" data-tab="compose">Compose</button>
+      <button class="tab" data-tab="audit">Audit</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Overview -->
+    <section id="tab-overview" class="tab-panel">
+      <h2>Overview</h2>
+      <div class="stats" id="stats">Loading…</div>
+      <h3>Recent activity</h3>
+      <div id="recent-activity">Loading…</div>
+    </section>
+
+    <!-- Accounts -->
+    <section id="tab-accounts" class="tab-panel hidden">
+      <h2>Accounts</h2>
+      <button id="btn-register" class="primary">+ Register new account</button>
+      <div id="register-result" class="callout hidden"></div>
+      <table id="accounts-table">
+        <thead><tr><th>Address</th><th>UUID</th><th>Admin</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Mail -->
+    <section id="tab-mail" class="tab-panel hidden">
+      <h2>Mail</h2>
+      <div class="row">
+        <label>Account:
+          <select id="mail-account"><option value="">Loading…</option></select>
+        </label>
+        <label>Folder:
+          <select id="mail-folder">
+            <option value="inbox">Inbox</option>
+            <option value="sent">Sent</option>
+          </select>
+        </label>
+        <label>Limit:
+          <input type="number" id="mail-limit" value="50" min="1" max="500" />
+        </label>
+        <button id="btn-load-mail" class="primary">Load</button>
+      </div>
+      <div class="mail-grid">
+        <div id="mail-list" class="pane">Pick an account and click Load.</div>
+        <div id="mail-detail" class="pane">Select a message to view its body.</div>
+      </div>
+    </section>
+
+    <!-- Audit -->
+    <section id="tab-audit" class="tab-panel hidden">
+      <h2>Audit log</h2>
+      <table id="audit-table">
+        <thead><tr><th>Time</th><th>Action</th><th>Account</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Compose -->
+    <section id="tab-compose" class="tab-panel hidden">
+      <h2>Compose <small>(as admin)</small></h2>
+      <div class="compose-form">
+        <label>To
+          <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" />
+        </label>
+        <label>Subject
+          <input type="text" id="compose-subject" placeholder="subject" />
+        </label>
+        <label>Body
+          <textarea id="compose-body" rows="10" placeholder="message body"></textarea>
+        </label>
+        <div class="row">
+          <button id="btn-send" class="primary">Send</button>
+          <button id="btn-refresh-thread" class="row-action">Refresh thread</button>
+          <span id="compose-status" class="muted"></span>
+        </div>
+      </div>
+
+      <h3 id="thread-title">Recent conversation</h3>
+      <div id="compose-thread" class="thread-list muted">Fill in "To" and click Send or Refresh to load the thread.</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
