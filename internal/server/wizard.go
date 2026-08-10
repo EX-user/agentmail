@@ -48,6 +48,8 @@ func RunWizard(cfg *config.Config) (*WizardResult, error) {
 	mux.HandleFunc("/setup", w.handleSetup)
 	mux.HandleFunc("/api/bootstrap-info", w.handleBootstrapInfo)
 	mux.HandleFunc("/write-mcp-config", w.handleWriteMCPConfig)
+	mux.HandleFunc("/open-config-folder", w.handleOpenConfigFolder)
+	mux.HandleFunc("/api/mcp-config-status", w.handleMCPConfigStatus)
 	mux.HandleFunc("/launch", w.handleLaunch)
 
 	srv := &http.Server{Addr: WizardPort, Handler: mux, ReadHeaderTimeout: 10e9}
@@ -189,7 +191,9 @@ func (w *wizard) handleBootstrapInfo(resp http.ResponseWriter, req *http.Request
 	})
 }
 
-// handleWriteMCPConfig writes the MCP client config file for the requested client.
+// handleWriteMCPConfig creates a NEW config file only if it does not already
+// exist. If the file exists, it returns 409 — we never overwrite an existing
+// config (the user must merge manually to avoid losing other MCP servers).
 //
 //	POST /write-mcp-config {"client": "codex"|"zcode"|"opencode"}
 func (w *wizard) handleWriteMCPConfig(resp http.ResponseWriter, req *http.Request) {
@@ -206,26 +210,120 @@ func (w *wizard) handleWriteMCPConfig(resp http.ResponseWriter, req *http.Reques
 		writeJSON(resp, http.StatusBadRequest, map[string]any{"error": "invalid body"})
 		return
 	}
-	gwPath := gatewayPath()
-	serverURL := "http://" + w.result.Listen
-
-	type target struct {
-		path string
-		content string
+	info, err := mcpClientInfo(body.Client, gatewayPath(), w.result.Listen)
+	if err != nil {
+		writeJSON(resp, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
 	}
-	var t target
-	switch body.Client {
+	// Create parent directory if needed.
+	if err := os.MkdirAll(filepath.Dir(info.path), 0o755); err != nil {
+		writeJSON(resp, http.StatusInternalServerError, map[string]any{"error": "create dir: " + err.Error()})
+		return
+	}
+	// Refuse to overwrite an existing file.
+	if fileExists(info.path) {
+		writeJSON(resp, http.StatusConflict, map[string]any{
+			"error":  "file already exists — copy the snippet and merge manually to avoid losing existing config",
+			"path":   info.path,
+			"exists": true,
+		})
+		return
+	}
+	if err := os.WriteFile(info.path, []byte(info.content), 0o600); err != nil {
+		writeJSON(resp, http.StatusInternalServerError, map[string]any{"error": "write: " + err.Error()})
+		return
+	}
+	writeJSON(resp, http.StatusOK, map[string]any{
+		"client":  body.Client,
+		"path":    info.path,
+		"written": true,
+	})
+}
+
+// handleOpenConfigFolder opens the directory containing the config file in
+// the system file manager. If the directory doesn't exist, returns 404.
+//
+//	POST /open-config-folder {"client": "codex"}
+func (w *wizard) handleOpenConfigFolder(resp http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(resp, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct{ Client string `json:"client"` }
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSON(resp, http.StatusBadRequest, map[string]any{"error": "invalid body"})
+		return
+	}
+	info, err := mcpClientInfo(body.Client, gatewayPath(), "")
+	if err != nil {
+		writeJSON(resp, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		return
+	}
+	dir := filepath.Dir(info.path)
+	if !fileExists(dir) {
+		writeJSON(resp, http.StatusNotFound, map[string]any{
+			"error":   "directory not found — the client may not be installed",
+			"path":    info.path,
+			"dir":     dir,
+			"missing": "dir",
+		})
+		return
+	}
+	openFolder(dir, info.path)
+	writeJSON(resp, http.StatusOK, map[string]any{"opened": true, "path": info.path})
+}
+
+// handleMCPConfigStatus checks for all known clients whether their config
+// file and/or directory exists. Used by the wizard to show honest status
+// (installed vs not found) before the user clicks anything.
+//
+//	GET /api/mcp-config-status
+func (w *wizard) handleMCPConfigStatus(resp http.ResponseWriter, req *http.Request) {
+	gwPath := gatewayPath()
+	clients := []string{"codex", "zcode", "opencode", "claude"}
+	status := map[string]any{}
+	for _, c := range clients {
+		info, err := mcpClientInfo(c, gwPath, "")
+		if err != nil {
+			status[c] = map[string]any{"error": err.Error()}
+			continue
+		}
+		status[c] = map[string]any{
+			"path":        info.path,
+			"file_exists": fileExists(info.path),
+			"dir_exists":  fileExists(filepath.Dir(info.path)),
+		}
+	}
+	writeJSON(resp, http.StatusOK, status)
+}
+
+// mcpClientInfo describes one agent client's config file location and the
+// snippet to put in it.
+type mcpClientInfoStruct struct {
+	path    string
+	content string
+	kind    string // "file" (config file) or "command" (shell command, e.g. claude)
+}
+
+func mcpClientInfo(client, gwPath, serverURL string) (*mcpClientInfoStruct, error) {
+	switch client {
 	case "codex":
 		home, _ := os.UserHomeDir()
-		t.path = filepath.Join(home, ".codex", "config.toml")
-		t.content = fmt.Sprintf(`[mcp_servers.agentmail]
+		path := filepath.Join(home, ".codex", "config.toml")
+		content := ""
+		if serverURL != "" {
+			content = fmt.Sprintf(`[mcp_servers.agentmail]
 command = "%s"
 args = ["--server-url", "%s"]
 `, escapeBackslash(gwPath), serverURL)
+		}
+		return &mcpClientInfoStruct{path: path, content: content, kind: "file"}, nil
 	case "zcode":
 		home, _ := os.UserHomeDir()
-		t.path = filepath.Join(home, ".zcode", "cli", "config.json")
-		t.content = fmt.Sprintf(`{
+		path := filepath.Join(home, ".zcode", "cli", "config.json")
+		content := ""
+		if serverURL != "" {
+			content = fmt.Sprintf(`{
   "mcp": {
     "servers": {
       "agentmail": {
@@ -238,9 +336,13 @@ args = ["--server-url", "%s"]
   }
 }
 `, escapeBackslash(gwPath), serverURL)
+		}
+		return &mcpClientInfoStruct{path: path, content: content, kind: "file"}, nil
 	case "opencode":
-		t.path = "opencode.json"
-		t.content = fmt.Sprintf(`{
+		path := "opencode.json"
+		content := ""
+		if serverURL != "" {
+			content = fmt.Sprintf(`{
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "agentmail": {
@@ -251,23 +353,40 @@ args = ["--server-url", "%s"]
   }
 }
 `, gwPath, serverURL)
+		}
+		return &mcpClientInfoStruct{path: path, content: content, kind: "file"}, nil
+	case "claude":
+		cmd := ""
+		if serverURL != "" {
+			cmd = fmt.Sprintf("claude mcp add agentmail -- %s --server-url %s", gwPath, serverURL)
+		}
+		return &mcpClientInfoStruct{path: "", content: cmd, kind: "command"}, nil
 	default:
-		writeJSON(resp, http.StatusBadRequest, map[string]any{"error": "unknown client: " + body.Client})
-		return
+		return nil, fmt.Errorf("unknown client: %s", client)
 	}
-	if err := os.MkdirAll(filepath.Dir(t.path), 0o755); err != nil {
-		writeJSON(resp, http.StatusInternalServerError, map[string]any{"error": "create dir: " + err.Error()})
-		return
+}
+
+// fileExists reports whether the given path exists (file or directory).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// openFolder opens the system file manager at dir, selecting targetFile if
+// it exists.
+func openFolder(dir, targetFile string) {
+	switch runtime.GOOS {
+	case "windows":
+		if fileExists(targetFile) {
+			exec.Command("explorer", "/select,"+targetFile).Start()
+		} else {
+			exec.Command("explorer", dir).Start()
+		}
+	case "darwin":
+		exec.Command("open", dir).Start()
+	default:
+		exec.Command("xdg-open", dir).Start()
 	}
-	if err := os.WriteFile(t.path, []byte(t.content), 0o600); err != nil {
-		writeJSON(resp, http.StatusInternalServerError, map[string]any{"error": "write: " + err.Error()})
-		return
-	}
-	writeJSON(resp, http.StatusOK, map[string]any{
-		"client": body.Client,
-		"path":   t.path,
-		"written": true,
-	})
 }
 
 // handleLaunch signals the wizard to shut down so main() can start the real server.

@@ -121,11 +121,10 @@
         }
         body.classList.remove("hidden");
         if (body.dataset.loaded !== "1") {
-          body.innerHTML = '<span class="muted">Loading…</span>';
           try {
             const info = await api("/api/bootstrap-info");
             body.innerHTML = renderSnippet(id, info);
-            wireWriteButton(body, id);
+            await loadCapsuleStatus(body, id);
             body.dataset.loaded = "1";
           } catch (e) {
             body.innerHTML = '<span class="error-text">Error: ' + esc(e.message) + '</span>';
@@ -140,49 +139,118 @@
     const url = info.server_url || "http://127.0.0.1:8090";
     const gwEsc = esc(gw);
     const gwJson = esc(gw.replace(/\\/g, "\\\\"));
-    let snippet = "", writeBtn = "";
+    let snippet = "";
     switch (id) {
       case "codex":
         snippet = '[mcp_servers.agentmail]\ncommand = "' + gwJson + '"\nargs = ["--server-url", "' + url + '"]';
-        writeBtn = '<button class="row-action write-btn" data-client="codex">Write to ~/.codex/config.toml</button>';
         break;
       case "zcode":
         snippet = '{\n  "mcp": {\n    "servers": {\n      "agentmail": {\n        "type": "stdio",\n        "command": "' + gwJson + '",\n        "args": ["--server-url", "' + url + '"],\n        "enabled": true\n      }\n    }\n  }\n}';
-        writeBtn = '<button class="row-action write-btn" data-client="zcode">Write to ~/.zcode/cli/config.json</button>';
         break;
       case "opencode":
         snippet = '{\n  "mcp": {\n    "agentmail": {\n      "type": "local",\n      "command": ["' + gwEsc + '", "--server-url", "' + url + '"],\n      "enabled": true\n    }\n  }\n}';
-        writeBtn = '<button class="row-action write-btn" data-client="opencode">Write to opencode.json</button>';
         break;
       case "claude":
         snippet = 'claude mcp add agentmail -- ' + gwEsc + ' --server-url ' + url;
-        writeBtn = '<button class="row-action" onclick="navigator.clipboard.writeText(\'' + esc(snippet).replace(/'/g, "\\'") + '\'); event.stopPropagation();">Copy command</button>';
         break;
     }
-    return '<pre class="snippet">' + esc(snippet) + '</pre>' +
-      '<div class="row">' + writeBtn + ' <span class="write-status muted"></span></div>';
+    // Fetch status (file exists? dir exists?) to show honest buttons.
+    return '<div class="snippet-loading muted">Checking…</div>' +
+      '<pre class="snippet hidden">' + esc(snippet) + '</pre>' +
+      '<div class="row hidden mcp-actions"></div>';
   }
 
-  function wireWriteButton(body, id) {
-    const btn = body.querySelector(".write-btn");
-    if (!btn) return;
-    const status = body.querySelector(".write-status");
-    btn.addEventListener("click", async function (e) {
-      e.stopPropagation();
-      status.textContent = "Writing…";
-      try {
-        const res = await api("/write-mcp-config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client: id }),
-        });
-        status.textContent = "✓ Written to " + res.path;
-        status.className = "write-status muted";
-      } catch (e) {
-        status.textContent = "Error: " + e.message;
-        status.className = "write-status error-text";
+  async function loadCapsuleStatus(body, id) {
+    const loading = body.querySelector(".snippet-loading");
+    const pre = body.querySelector(".snippet");
+    const actions = body.querySelector(".mcp-actions");
+    try {
+      const all = await api("/api/mcp-config-status");
+      const st = all[id];
+      if (!st) { loading.textContent = "Status unknown."; return; }
+      loading.classList.add("hidden");
+      pre.classList.remove("hidden");
+      actions.classList.remove("hidden");
+
+      const snippet = pre.textContent;
+
+      // Always show "Copy config".
+      let html = '<button class="row-action copy-btn">Copy config</button>';
+
+      if (id === "claude") {
+        // Claude is a command, not a file — copy only.
+      } else if (st.dir_exists === false) {
+        html += ' <span class="muted">Client not detected (directory not found).</span>';
+      } else if (st.file_exists) {
+        // File exists — don't offer to write (would overwrite). Offer to open folder.
+        html += ' <button class="row-action open-btn">Open folder</button>';
+        html += ' <span class="muted">Config file exists — merge manually.</span>';
+      } else {
+        // Dir exists but file doesn't — safe to create.
+        html += ' <button class="row-action open-btn">Open folder</button>';
+        html += ' <button class="row-action create-btn">Create file</button>';
       }
-    });
+      actions.innerHTML = html + ' <span class="write-status muted"></span>';
+      wireActions(body, id);
+    } catch (e) {
+      loading.textContent = "Error: " + e.message;
+      loading.className = "error-text";
+    }
+  }
+
+  function wireActions(body, id) {
+    const status = body.querySelector(".write-status");
+    // Copy
+    const copyBtn = body.querySelector(".copy-btn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const text = body.querySelector(".snippet").textContent;
+        navigator.clipboard.writeText(text).then(function () {
+          status.textContent = "✓ Copied to clipboard";
+        });
+      });
+    }
+    // Open folder
+    const openBtn = body.querySelector(".open-btn");
+    if (openBtn) {
+      openBtn.addEventListener("click", async function (e) {
+        e.stopPropagation();
+        try {
+          await api("/open-config-folder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ client: id }),
+          });
+          status.textContent = "✓ Opened folder";
+        } catch (err) {
+          status.textContent = "Not found: " + err.message;
+          status.className = "write-status error-text";
+        }
+      });
+    }
+    // Create file (only shown when file doesn't exist)
+    const createBtn = body.querySelector(".create-btn");
+    if (createBtn) {
+      createBtn.addEventListener("click", async function (e) {
+        e.stopPropagation();
+        status.textContent = "Creating…";
+        try {
+          const res = await api("/write-mcp-config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ client: id }),
+          });
+          status.textContent = "✓ Created " + res.path;
+          status.className = "write-status muted";
+          // Reload status to reflect new file.
+          loadCapsuleStatus(body, id);
+        } catch (err) {
+          status.textContent = err.message;
+          status.className = "write-status error-text";
+        }
+      });
+    }
   }
 
   // --- launch ---
