@@ -21,9 +21,10 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 	tools := []toolDef{
 		{
 			Name:        "register",
-			Description: "Register a new mail account with a semantic identity. Returns the account address and a generated password. Store the password in session memory; you'll need it to authenticate.",
+			Description: "Register a new mail account with a semantic identity. Returns the account address and a generated password. Store the password in session memory; you'll need it to authenticate. Optional server_url targets a different agentmail server than the default.",
 			InputSchema: schemaObject(map[string]any{
-				"name": prop("ASCII local-part, e.g. 'frontend-engineer-1'", "string", true),
+				"name":       prop("ASCII local-part, e.g. 'frontend-engineer-1'", "string", true),
+				"server_url": prop("Server origin, e.g. http://10.0.0.5:8090. If omitted, uses the default server this gateway started with.", "string", false),
 			}, []string{"name"}),
 		},
 		{
@@ -157,7 +158,8 @@ func (s *Server) toolRegister(ctx context.Context, args map[string]any) (any, er
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	res, err := s.getClient("").Register(name)
+	serverURL := strings.TrimSpace(str(args["server_url"]))
+	res, err := s.getClient(serverURL).Register(name)
 	if err != nil {
 		return nil, fmt.Errorf("register: %w", err)
 	}
