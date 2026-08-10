@@ -373,15 +373,18 @@ func fileExists(path string) bool {
 }
 
 // openFolder opens the system file manager at dir, selecting targetFile if
-// it exists. On Windows, explorer /select has a habit of not bringing the
-// window to front; we use a PowerShell call to force it foreground.
+// it exists.
 func openFolder(dir, targetFile string) {
 	switch runtime.GOOS {
 	case "windows":
-		// PowerShell's Invoke-Item / Start-Process is more reliable at
-		// foregrounding the explorer window than a bare explorer /select.
-		psCmd := `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::Shell("explorer ` + filepath.ToSlash(dir) + `", 1)`
-		_ = exec.Command("powershell", "-Command", psCmd).Start()
+		// Use explorer.exe directly. Start() returns immediately; explorer
+		// manages its own window. We pass the directory as a single argument.
+		// (explorer /select,/path/to/file opens and selects, but doesn't
+		// foreground reliably; opening the directory directly is more
+		// predictable.)
+		c := exec.Command("explorer.exe", dir)
+		c.SysProcAttr = nil
+		_ = c.Start()
 	case "darwin":
 		_ = exec.Command("open", dir).Start()
 	default:
