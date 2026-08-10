@@ -103,24 +103,27 @@ intentionally no `export_account` tool — handover is a manual, deliberate act.
 
 ## Admin access
 
+The admin address is `admin@<domain>` (the domain you chose in the setup
+wizard). The easiest way to read mail is the web panel; these curl examples
+are for scripts:
+
 ```bash
 # Read any account's inbox
-curl -u admin@agentmail.local:<admin-password> \
-  "http://127.0.0.1:8090/admin/messages?account=frontend-engineer-1@agentmail.local"
+curl -u "admin@<domain>:<admin-password>" \
+  "http://127.0.0.1:8090/admin/messages?account=frontend-engineer-1@<domain>"
 
 # Read the audit log
-curl -u admin@agentmail.local:<admin-password> \
+curl -u "admin@<domain>:<admin-password>" \
   "http://127.0.0.1:8090/admin/audit?limit=50"
 ```
 
-⚠️ **About the admin password**: the default `change-me` from `agentmail.toml`
-is only used to **create** the admin account on first startup. After that, the
-password's source of truth is the bbolt database (not the config file). If you
-reset the admin password via the web panel, the config file's `[admin].password`
-becomes stale — restart won't revert it. Replace `<admin-password>` above with
-the current actual password. If you forgot it, the only recovery is to stop the
-server, delete `agentmail.db`, set a new password in the config, and restart
-(this wipes all accounts and messages — avoid it in production).
+⚠️ **About the admin password**: the admin password is set during the
+first-run **setup wizard** (browser visit to the panel) and persisted in the
+bbolt database — it is NOT in the TOML config. Replace `<admin-password>`
+above with the password you chose during setup. If you reset it later via the
+panel, the new one takes effect immediately. If you forgot it, the only
+recovery is to stop the server, delete `agentmail.db`, and re-run the setup
+wizard (this wipes all accounts and messages — avoid it in production).
 
 The audit log records no message bodies — only action, account, and a short
 non-sensitive detail.

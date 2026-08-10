@@ -14,9 +14,9 @@ agentmail 是一个跑在 **Windows 主机**上的本地消息系统（不是真
 |---|---|
 | 服务器二进制 | `agentmail-server.exe` |
 | HTTP API 地址 | `http://127.0.0.1:8090`（默认） |
-| 管理员账号 | `admin@agentmail.local`（密码在 `agentmail.toml`，默认 `change-me`） |
-| 配置文件 | `agentmail.toml`（关键项：`[server] listen`、`[server] domain`） |
-| 邮件域 | `agentmail.local`（账号地址形如 `xxx@agentmail.local`） |
+| 管理员账号 | `admin@<domain>`（密码和域名通过**首次启动向导**设置，存数据库） |
+| 配置文件 | `agentmail.toml`（只有 `listen` 和 `db_path`） |
+| 邮件域 | 向导设置（账号地址形如 `xxx@<domain>`） |
 
 主要 API 端点（无需关注全部，下面会逐个用到）：
 
@@ -224,9 +224,9 @@ curl -s http://$WIN_HOST:8090/healthz
 
 很多 admin 操作（注册新账号走 panel、列所有账号、读任意账号邮件、重置密码、看审计）都需要 admin 凭证。admin 凭证的来源：
 
-1. **首次启动**：从 `agentmail.toml` 的 `[admin]` 段读，默认 `admin@agentmail.local` / `change-me`。server 启动时用这个在 bbolt 数据库里创建 admin 账号。
-2. **首次启动之后**：admin 密码的真源是 **bbolt 数据库**（不是配置文件）。如果你在 panel 上用"重置密码"改过 admin 密码，配置文件里的旧密码就失效了，重启 server 也不会回到旧密码（bbolt 优先）。
-3. **所以**：如果你忘了 admin 密码，唯一办法是停掉 server、删掉 `agentmail.db`、改 `agentmail.toml` 的 admin 密码、重启——但这会**清空所有账号和邮件**。生产环境务必记好 admin 密码。
+1. **首次启动**：浏览器打开 panel，向导让你设置**邮件域名**和 **admin 密码**。向导创建 `admin@<domain>` 账号 + `guest@<domain>`（密码 `12345678`，方便测试）。这些存 bbolt 数据库，不进 toml。
+2. **之后**：admin 密码的真源是 **bbolt 数据库**。如果你在 panel 上用"重置密码"改过 admin 密码，新密码立即生效。
+3. **所以**：如果你忘了 admin 密码，唯一办法是停掉 server、删掉 `agentmail.db`、重新跑向导——但这会**清空所有账号和邮件**。生产环境务必记好 admin 密码。
 
 ### 两种注册流程
 
@@ -415,5 +415,5 @@ AGENT_ADDR="wsl-agent-1@agentmail.local" AGENT_PASS="你的密码" ./agentmail-w
   - 或者在前面加反向代理（nginx / Caddy）+ TLS；
   - 路由器不要把 8090 端口做端口映射到公网。
 - `/api/register` 无鉴权是设计如此（方便 agent 自助注册），但这也意味着**任何能连到 8090 的人都能注册**。生产环境优先用「流程 A：admin 代注册」。
-- admin 账号密码默认是 `change-me`，**部署前一定要改 `agentmail.toml`**。
+- admin 密码在**首次启动向导**里设置（不进 toml）。guest 账号（`12345678`）是方便测试自动创建的，生产环境建议在 panel 禁用或重置。
 - 审计日志（`/admin/audit`）只记录动作、账号、非敏感摘要，不含邮件正文。但仍建议定期看看有没有异常注册。
