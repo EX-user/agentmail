@@ -127,7 +127,12 @@ func runAuto(cfg *config.Config, ctx context.Context) {
 }
 
 // serve starts the real HTTP server with the given store and config.
+// If the store has a listen address in bbolt (set by the wizard), it
+// overrides cfg.Server.Listen.
 func serve(st *store.Store, cfg *config.Config, ctx context.Context) {
+	if l := st.GetListen(); l != "" {
+		cfg.Server.Listen = l
+	}
 	auditStore, err := audit.New(st.DB())
 	if err != nil {
 		fatal("init audit: %v", err)

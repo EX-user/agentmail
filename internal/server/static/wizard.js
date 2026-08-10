@@ -183,13 +183,16 @@
     try {
       await api("/launch", { method: "POST" });
       const panelURL = "http://" + $("#wz-listen").value.trim() + "/";
-      status.innerHTML = 'Server is starting. <a href="' + panelURL + '" target="_blank">Open panel</a>';
+      status.innerHTML = 'Server is starting. <a href="' + panelURL + '">Open panel</a>';
       setTimeout(function () {
         document.body.innerHTML = '<div class="setup-card" style="text-align:center;">' +
           '<h1>Server starting…</h1>' +
           '<p class="muted">The server is now running on your configured address.</p>' +
-          '<a href="' + panelURL + '" target="_blank"><button class="primary">Open panel</button></a>' +
+          '<button class="primary" id="open-panel-btn">Open panel</button>' +
           '</div>';
+        document.getElementById("open-panel-btn").addEventListener("click", function () {
+          window.location.href = panelURL;
+        });
       }, 2000);
     } catch (e) {
       status.textContent = "Error: " + e.message;
