@@ -110,7 +110,6 @@
         '<div class="capsule-body hidden" id="capsule-body-' + c.id + '"></div>' +
         '</div>';
     }).join("");
-    // Wire toggle + fetch snippet.
     document.querySelectorAll("[data-capsule]").forEach(function (btn) {
       btn.addEventListener("click", async function () {
         const id = btn.dataset.capsule;
@@ -124,7 +123,7 @@
           try {
             const info = await api("/api/bootstrap-info");
             body.innerHTML = renderSnippet(id, info);
-            await loadCapsuleStatus(body, id);
+            wireActions(body, id);
             body.dataset.loaded = "1";
           } catch (e) {
             body.innerHTML = '<span class="error-text">Error: ' + esc(e.message) + '</span>';
@@ -139,116 +138,40 @@
     const url = info.server_url || "http://127.0.0.1:8090";
     const gwEsc = esc(gw);
     const gwJson = esc(gw.replace(/\\/g, "\\\\"));
-    let snippet = "";
+    let snippet = "", where = "";
     switch (id) {
       case "codex":
         snippet = '[mcp_servers.agentmail]\ncommand = "' + gwJson + '"\nargs = ["--server-url", "' + url + '"]';
+        where = "Save to: <code>~/.codex/config.toml</code>";
         break;
       case "zcode":
         snippet = '{\n  "mcp": {\n    "servers": {\n      "agentmail": {\n        "type": "stdio",\n        "command": "' + gwJson + '",\n        "args": ["--server-url", "' + url + '"],\n        "enabled": true\n      }\n    }\n  }\n}';
+        where = "Save to: <code>~/.zcode/cli/config.json</code> (global) or <code>&lt;project&gt;/.zcode/config.json</code> (workspace)";
         break;
       case "opencode":
         snippet = '{\n  "mcp": {\n    "agentmail": {\n      "type": "local",\n      "command": ["' + gwEsc + '", "--server-url", "' + url + '"],\n      "enabled": true\n    }\n  }\n}';
+        where = "Save to: <code>opencode.json</code> in your project root";
         break;
       case "claude":
         snippet = 'claude mcp add agentmail -- ' + gwEsc + ' --server-url ' + url;
+        where = "Run this command in your terminal";
         break;
     }
-    // Fetch status (file exists? dir exists?) to show honest buttons.
-    return '<div class="snippet-loading muted">Checking…</div>' +
-      '<pre class="snippet hidden">' + esc(snippet) + '</pre>' +
-      '<div class="row hidden mcp-actions"></div>';
-  }
-
-  async function loadCapsuleStatus(body, id) {
-    const loading = body.querySelector(".snippet-loading");
-    const pre = body.querySelector(".snippet");
-    const actions = body.querySelector(".mcp-actions");
-    try {
-      const all = await api("/api/mcp-config-status");
-      const st = all[id];
-      if (!st) { loading.textContent = "Status unknown."; return; }
-      loading.classList.add("hidden");
-      pre.classList.remove("hidden");
-      actions.classList.remove("hidden");
-
-      const snippet = pre.textContent;
-
-      // Always show "Copy config".
-      let html = '<button class="row-action copy-btn">Copy config</button>';
-
-      if (id === "claude") {
-        // Claude is a command, not a file — copy only.
-      } else if (st.dir_exists === false) {
-        html += ' <span class="muted">Client not detected (directory not found).</span>';
-      } else if (st.file_exists) {
-        // File exists — don't offer to write (would overwrite). Offer to open folder.
-        html += ' <button class="row-action open-btn">Open folder</button>';
-        html += ' <span class="muted">Config file exists — merge manually.</span>';
-      } else {
-        // Dir exists but file doesn't — safe to create.
-        html += ' <button class="row-action open-btn">Open folder</button>';
-        html += ' <button class="row-action create-btn">Create file</button>';
-      }
-      actions.innerHTML = html + ' <span class="write-status muted"></span>';
-      wireActions(body, id);
-    } catch (e) {
-      loading.textContent = "Error: " + e.message;
-      loading.className = "error-text";
-    }
+    return '<div class="muted snippet-where">' + where + '</div>' +
+      '<pre class="snippet">' + esc(snippet) + '</pre>' +
+      '<div class="row"><button class="row-action copy-btn">Copy config</button> <span class="write-status muted"></span></div>';
   }
 
   function wireActions(body, id) {
     const status = body.querySelector(".write-status");
-    // Copy
     const copyBtn = body.querySelector(".copy-btn");
     if (copyBtn) {
       copyBtn.addEventListener("click", function (e) {
         e.stopPropagation();
         const text = body.querySelector(".snippet").textContent;
         navigator.clipboard.writeText(text).then(function () {
-          status.textContent = "✓ Copied to clipboard";
+          status.textContent = "✓ Copied";
         });
-      });
-    }
-    // Open folder
-    const openBtn = body.querySelector(".open-btn");
-    if (openBtn) {
-      openBtn.addEventListener("click", async function (e) {
-        e.stopPropagation();
-        try {
-          await api("/open-config-folder", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ client: id }),
-          });
-          status.textContent = "✓ Opened folder";
-        } catch (err) {
-          status.textContent = "Not found: " + err.message;
-          status.className = "write-status error-text";
-        }
-      });
-    }
-    // Create file (only shown when file doesn't exist)
-    const createBtn = body.querySelector(".create-btn");
-    if (createBtn) {
-      createBtn.addEventListener("click", async function (e) {
-        e.stopPropagation();
-        status.textContent = "Creating…";
-        try {
-          const res = await api("/write-mcp-config", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ client: id }),
-          });
-          status.textContent = "✓ Created " + res.path;
-          status.className = "write-status muted";
-          // Reload status to reflect new file.
-          loadCapsuleStatus(body, id);
-        } catch (err) {
-          status.textContent = err.message;
-          status.className = "write-status error-text";
-        }
       });
     }
   }

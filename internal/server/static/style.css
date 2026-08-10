@@ -291,6 +291,7 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .capsule-desc { font-weight: 400; font-size: 11px; }
 .capsule-toggle { margin-left: auto; color: var(--muted); }
 .capsule-body { padding: 12px 14px; }
+.snippet-where { margin-bottom: 6px; font-size: 12px; }
 .snippet {
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
   padding: 10px; font-family: ui-monospace, "SF Mono", Consolas, monospace;
