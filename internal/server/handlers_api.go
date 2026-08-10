@@ -17,6 +17,77 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+// handleStatus reports initialization state (no auth). Used by the panel to
+// decide whether to show the setup wizard or the normal UI.
+//   GET /api/status -> {"initialized": bool, "domain": "..."}
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"initialized": s.store.IsInitialized(),
+		"domain":      s.domain(),
+	})
+}
+
+// handleSetup performs first-time initialization. Only works when the system
+// is NOT yet initialized; after that it returns 409. Creates the admin
+// account (with the caller-chosen password), a guest account (fixed password
+// 12345678), stores the domain, and marks the system initialized.
+//   POST /setup {"admin_password": "...", "domain": "..."}
+//   -> {"admin_address": "...", "guest_address": "...", "guest_password": "12345678"}
+func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if s.store.IsInitialized() {
+		http.Error(w, "already initialized", http.StatusConflict)
+		return
+	}
+	var body struct {
+		AdminPassword string `json:"admin_password"`
+		Domain        string `json:"domain"`
+		AdminLocalPart string `json:"admin_local_part"` // optional, default "admin"
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if len(body.AdminPassword) < 8 {
+		badRequest(w, "admin_password must be at least 8 characters")
+		return
+	}
+	domain := strings.TrimSpace(body.Domain)
+	if domain == "" {
+		badRequest(w, "domain is required")
+		return
+	}
+	if !isASCIILocalPart(domain) && domain != "" {
+		badRequest(w, "domain must be ASCII")
+		return
+	}
+	adminLocal := strings.TrimSpace(body.AdminLocalPart)
+	if adminLocal == "" {
+		adminLocal = "admin"
+	}
+	if !isASCIILocalPart(adminLocal) {
+		badRequest(w, "admin_local_part must be ASCII letters/digits/-/_")
+		return
+	}
+
+	const guestPassword = "12345678"
+	if err := s.store.BootstrapSystem(adminLocal, body.AdminPassword, domain, guestPassword); err != nil {
+		internalError(w, "bootstrap: "+err.Error())
+		return
+	}
+	// Update config in-memory so the rest of this process uses the new domain.
+	s.cfg.Server.Domain = domain
+	_ = s.audit.Record(r.Context(), audit.ActionRegister, adminLocal+"@"+domain, "bootstrap admin")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"admin_address":  adminLocal + "@" + domain,
+		"guest_address":  "guest@" + domain,
+		"guest_password": guestPassword,
+	})
+}
+
 // handleRegister creates a new account from a semantic name.
 //   POST /api/register  {"name": "frontend-engineer-1"}
 //   -> {"address": "...", "password": "..."}
@@ -42,7 +113,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := s.store.CreateAccount(name, s.cfg.Server.Domain, false)
+	res, err := s.store.CreateAccount(name, s.domain(), false)
 	if err != nil {
 		if errors.Is(err, store.ErrAccountExists) {
 			conflict(w, "account already exists")

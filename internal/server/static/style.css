@@ -266,3 +266,15 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .toast.success { border-color: var(--success); }
 
 .hidden { display: none !important; }
+
+/* Setup wizard */
+.setup-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 20px;
+}
+.setup-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 32px; max-width: 460px; width: 100%;
+}
+.setup-card h1 { font-size: 22px; margin: 0 0 8px; }
+.setup-note { margin-top: 16px; font-size: 12px; }

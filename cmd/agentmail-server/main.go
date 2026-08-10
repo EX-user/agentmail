@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/agentmail/agentmail/internal/audit"
@@ -49,11 +50,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Ensure the admin account exists (created on first run from config).
-	if cfg.Admin.Address != "" && cfg.Admin.Password != "" {
-		if err := st.EnsureAdmin(cfg.Admin.Address, cfg.Admin.Password); err != nil {
-			fmt.Fprintf(os.Stderr, "agentmail-server: ensure admin: %v\n", err)
-			os.Exit(1)
+	// Bootstrap / migration logic.
+	// - If already initialized (bbolt flag set): nothing to do.
+	// - If NOT initialized but config has admin address+password and a domain:
+	//   migrate from old-style config (auto-bootstrap, no wizard needed).
+	// - If NOT initialized and config lacks admin/domain: the system starts
+	//   in "uninitialized" mode and the setup wizard handles it on first
+	//   browser visit.
+	if !st.IsInitialized() {
+		if cfg.Admin.Address != "" && cfg.Admin.Password != "" && cfg.Server.Domain != "" {
+			// Old-style config present: auto-migrate. Extract the admin local-part
+			// from the configured address (everything before "@").
+			adminLocal := cfg.Admin.Address
+			if at := strings.IndexByte(adminLocal, '@'); at > 0 {
+				adminLocal = adminLocal[:at]
+			}
+			log.Printf("agentmail-server: migrating from config, bootstrapping (domain=%s)", cfg.Server.Domain)
+			if err := st.BootstrapSystem(adminLocal, cfg.Admin.Password, cfg.Server.Domain, "12345678"); err != nil {
+				fmt.Fprintf(os.Stderr, "agentmail-server: bootstrap from config: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			log.Printf("agentmail-server: not initialized — setup wizard required (open the panel at http://%s/)", cfg.Server.Listen)
 		}
 	}
 

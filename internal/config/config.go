@@ -62,7 +62,9 @@ func defaults() *Config {
 	return &Config{
 		Server: ServerConfig{
 			Listen: "127.0.0.1:8090",
-			Domain: "agentmail.local",
+			// Domain defaults to empty: new installations set it via the setup
+			// wizard. Existing deployments that have it in the TOML still work.
+			Domain: "",
 		},
 		Storage: StorageConfig{
 			DBPath: "agentmail.db",
@@ -74,9 +76,8 @@ func (c *Config) validate() error {
 	if c.Server.Listen == "" {
 		return fmt.Errorf("server.listen must be set")
 	}
-	if c.Server.Domain == "" {
-		return fmt.Errorf("server.domain must be set")
-	}
+	// Domain is optional here — for new installs it is set via the setup wizard
+	// and persisted in bbolt. For existing installs it comes from TOML.
 	if c.Storage.DBPath == "" {
 		return fmt.Errorf("storage.db_path must be set")
 	}

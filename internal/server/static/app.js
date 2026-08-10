@@ -328,7 +328,60 @@
   }
 
   // ---- init ----
-  activateTab("overview");
+
+  // Check initialization state; show setup wizard or normal panel.
+  async function init() {
+    try {
+      const st = await api("/api/status");
+      if (!st.initialized) {
+        showSetup();
+      } else {
+        showApp();
+        activateTab("overview");
+      }
+    } catch (e) {
+      // If /api/status itself fails, show app anyway (server may be mid-restart).
+      showApp();
+      activateTab("overview");
+    }
+  }
+
+  function showSetup() {
+    $("#setup-page").classList.remove("hidden");
+    $("#app-header").classList.add("hidden");
+    document.querySelector("main").classList.add("hidden");
+  }
+
+  function showApp() {
+    $("#setup-page").classList.add("hidden");
+    $("#app-header").classList.remove("hidden");
+    document.querySelector("main").classList.remove("hidden");
+  }
+
+  $("#btn-setup").addEventListener("click", async function () {
+    const domain = $("#setup-domain").value.trim();
+    const pw = $("#setup-admin-password").value;
+    const status = $("#setup-status");
+    if (!domain) { status.textContent = "Domain is required."; return; }
+    if (pw.length < 8) { status.textContent = "Password must be at least 8 characters."; return; }
+    status.textContent = "Initializing…";
+    try {
+      const res = await api("/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admin_password: pw, domain: domain }),
+      });
+      status.textContent = "Done. Reloading…";
+      toast("System initialized", "success");
+      // The admin must now log in via Basic auth. Force a reload; the browser
+      // will prompt for credentials on first /admin/* call.
+      setTimeout(function () { window.location.reload(); }, 1500);
+    } catch (e) {
+      status.textContent = "Error: " + e.message;
+    }
+  });
+
+  init();
 
   // ---- compose ----
 

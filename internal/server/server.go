@@ -32,40 +32,65 @@ func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 	return &Server{store: s, audit: a, cfg: cfg}
 }
 
+// domain returns the effective mail domain: prefer the value persisted in
+// bbolt (set by the setup wizard), fall back to the config file value.
+func (s *Server) domain() string {
+	if d := s.store.GetDomain(); d != "" {
+		return d
+	}
+	return s.cfg.Server.Domain
+}
+
 // Handler returns the HTTP handler for the API.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 
-	// Public API (no auth).
-	mux.HandleFunc("/api/register", s.handleRegister)
-	mux.HandleFunc("/api/verify-password", s.handleVerifyPassword)
+	// Setup + status — always available (no auth, no initialization required).
+	mux.HandleFunc("/setup", s.handleSetup)
+	mux.HandleFunc("/api/status", s.handleStatus)
 
-	// Authed API (account Basic auth).
-	mux.HandleFunc("/api/send", s.requireAccount(s.handleSend))
-	mux.HandleFunc("/api/inbox", s.requireAccount(s.handleInbox))
-	mux.HandleFunc("/api/message", s.requireAccount(s.handleMessage))
+	// Public API (no auth) — requires initialization.
+	mux.HandleFunc("/api/register", s.requireInitialized(s.handleRegister))
+	mux.HandleFunc("/api/verify-password", s.requireInitialized(s.handleVerifyPassword))
 
-	// Admin API (admin Basic auth).
-	mux.HandleFunc("/admin/messages", s.requireAdmin(s.handleAdminMessages))
-	mux.HandleFunc("/admin/sent", s.requireAdmin(s.handleAdminSent))
-	mux.HandleFunc("/admin/message", s.requireAdmin(s.handleAdminMessage))
-	mux.HandleFunc("/admin/accounts", s.requireAdmin(s.handleAdminAccounts))
-	mux.HandleFunc("/admin/audit", s.requireAdmin(s.handleAdminAudit))
-	mux.HandleFunc("/admin/stats", s.requireAdmin(s.handleAdminStats))
-	mux.HandleFunc("/admin/reset-password", s.requireAdmin(s.handleAdminResetPassword))
-	mux.HandleFunc("/admin/set-disabled", s.requireAdmin(s.handleAdminSetDisabled))
-	mux.HandleFunc("/admin/send", s.requireAdmin(s.handleAdminSend))
+	// Authed API (account Basic auth) — requires initialization.
+	mux.HandleFunc("/api/send", s.requireInitialized(s.requireAccount(s.handleSend)))
+	mux.HandleFunc("/api/inbox", s.requireInitialized(s.requireAccount(s.handleInbox)))
+	mux.HandleFunc("/api/message", s.requireInitialized(s.requireAccount(s.handleMessage)))
+
+	// Admin API (admin Basic auth) — requires initialization.
+	mux.HandleFunc("/admin/messages", s.requireInitialized(s.requireAdmin(s.handleAdminMessages)))
+	mux.HandleFunc("/admin/sent", s.requireInitialized(s.requireAdmin(s.handleAdminSent)))
+	mux.HandleFunc("/admin/message", s.requireInitialized(s.requireAdmin(s.handleAdminMessage)))
+	mux.HandleFunc("/admin/accounts", s.requireInitialized(s.requireAdmin(s.handleAdminAccounts)))
+	mux.HandleFunc("/admin/audit", s.requireInitialized(s.requireAdmin(s.handleAdminAudit)))
+	mux.HandleFunc("/admin/stats", s.requireInitialized(s.requireAdmin(s.handleAdminStats)))
+	mux.HandleFunc("/admin/reset-password", s.requireInitialized(s.requireAdmin(s.handleAdminResetPassword)))
+	mux.HandleFunc("/admin/set-disabled", s.requireInitialized(s.requireAdmin(s.handleAdminSetDisabled)))
+	mux.HandleFunc("/admin/send", s.requireInitialized(s.requireAdmin(s.handleAdminSend)))
 
 	// Admin web panel: static files under /static/*, plus the index page at "/".
-	// The mux's longest-prefix-wins rule keeps all the exact patterns above
-	// reachable. The panel itself is served without server-side auth so the
-	// browser shows its native Basic prompt on first load; every data API it
-	// calls is independently protected by requireAdmin.
+	// These are always served (the panel JS checks /api/status to decide
+	// whether to show the setup wizard or the normal UI).
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSubFS))))
 	mux.HandleFunc("/", s.serveIndex)
 
 	return mux
+}
+
+// requireInitialized gates a handler on the system being bootstrapped. Before
+// initialization, every data endpoint returns 503 so the only paths that work
+// are /healthz, /setup, /api/status, and the static panel (which shows the
+// setup wizard).
+func (s *Server) requireInitialized(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.store.IsInitialized() {
+			http.Error(w, "not initialized", http.StatusServiceUnavailable)
+			return
+		}
+		h(w, r)
+	}
 }
 
 // serveIndex returns the embedded index.html for the panel root. It is the

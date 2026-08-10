@@ -7,7 +7,28 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header>
+  <!-- Setup wizard (shown only when system is not initialized) -->
+  <section id="setup-page" class="setup-page hidden">
+    <div class="setup-card">
+      <h1>agentmail setup</h1>
+      <p class="muted">First-time initialization. Set the admin password and mail domain to create the system.</p>
+      <div class="compose-form">
+        <label>Mail domain
+          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local" />
+        </label>
+        <label>Admin password (min 8 chars)
+          <input type="password" id="setup-admin-password" placeholder="choose a strong password" />
+        </label>
+        <div class="row">
+          <button id="btn-setup" class="primary">Initialize system</button>
+          <span id="setup-status" class="muted"></span>
+        </div>
+      </div>
+      <p class="muted setup-note">A guest account (guest@&lt;domain&gt;, password 12345678) is also created for quick testing. You can disable or reset it from the panel after setup.</p>
+    </div>
+  </section>
+
+  <header id="app-header" class="hidden">
     <h1>agentmail</h1>
     <nav>
       <button class="tab" data-tab="overview">Overview</button>

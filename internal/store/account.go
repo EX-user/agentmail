@@ -44,10 +44,20 @@ type CreateAccountResult struct {
 // here — the store keeps a bcrypt hash). Returns ErrAccountExists if the
 // address is taken.
 func (s *Store) CreateAccount(name, domain string, isAdmin bool) (*CreateAccountResult, error) {
+	return s.createAccountWithPassword(name, domain, isAdmin, generatePassword(24))
+}
+
+// CreateAccountWithPassword is like CreateAccount but lets the caller supply
+// the plaintext password (used by the setup wizard to create the guest
+// account with a fixed password).
+func (s *Store) CreateAccountWithPassword(name, domain string, isAdmin bool, password string) (*CreateAccountResult, error) {
+	return s.createAccountWithPassword(name, domain, isAdmin, password)
+}
+
+func (s *Store) createAccountWithPassword(name, domain string, isAdmin bool, password string) (*CreateAccountResult, error) {
 	name = strings.TrimSpace(name)
 	address := name + "@" + domain
 
-	password := generatePassword(24)
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -229,6 +239,32 @@ func (s *Store) EnsureAdmin(address, password string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bAccounts).Put([]byte(address), val)
 	})
+}
+
+// BootstrapSystem initializes a fresh installation: creates the admin account
+// with the given password, creates a guest account with a fixed password,
+// stores the domain, and marks the system initialized. This is called once
+// (either from the setup wizard or as config migration). If already
+// initialized it returns nil (idempotent).
+//
+// adminLocalPart is the local-part of the admin address (e.g. "admin"); the
+// full address becomes adminLocalPart + "@" + domain.
+func (s *Store) BootstrapSystem(adminLocalPart, adminPassword, domain, guestPassword string) error {
+	if s.IsInitialized() {
+		return nil // already bootstrapped; idempotent
+	}
+	adminAddress := adminLocalPart + "@" + domain
+	if err := s.EnsureAdmin(adminAddress, adminPassword); err != nil {
+		return fmt.Errorf("create admin: %w", err)
+	}
+	// Guest account (may already exist from a prior partial bootstrap; ignore ErrAccountExists).
+	if _, err := s.CreateAccountWithPassword("guest", domain, false, guestPassword); err != nil && !errors.Is(err, ErrAccountExists) {
+		return fmt.Errorf("create guest: %w", err)
+	}
+	if err := s.SetDomain(domain); err != nil {
+		return fmt.Errorf("set domain: %w", err)
+	}
+	return s.SetInitialized()
 }
 
 // generatePassword returns a cryptographically random password from the

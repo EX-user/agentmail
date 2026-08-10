@@ -32,6 +32,13 @@ var (
 	bInbox    = []byte("inbox")
 	bSent     = []byte("sent")
 	bUnread   = []byte("unread") // key: uuid(32 hex) + ulid(26) -> exists = unread for that account
+	bMeta     = []byte("meta")   // system metadata (initialized flag, domain, ...)
+)
+
+// Meta keys within the meta bucket.
+var (
+	mInitialized = []byte("initialized")
+	mDomain      = []byte("domain")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -48,7 +55,7 @@ func Open(path string) (*Store, error) {
 	}
 	s := &Store{db: db, now: time.Now}
 	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread} {
+		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread, bMeta} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return fmt.Errorf("create bucket %q: %w", b, err)
 			}
@@ -116,4 +123,59 @@ func (s *Store) CountMessages() (int, error) {
 		return nil
 	})
 	return n, err
+}
+
+// --- system metadata (meta bucket) ---
+
+// IsInitialized reports whether the system has been bootstrapped (admin
+// account created via setup wizard or config migration).
+func (s *Store) IsInitialized() bool {
+	var ok bool
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		ok = string(mb.Get(mInitialized)) == "1"
+		return nil
+	})
+	return ok
+}
+
+// SetInitialized marks the system as bootstrapped.
+func (s *Store) SetInitialized() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mInitialized, []byte("1"))
+	})
+}
+
+// GetDomain returns the system domain set during bootstrap, or "" if unset.
+func (s *Store) GetDomain() string {
+	var d string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if v := mb.Get(mDomain); v != nil {
+			d = string(v)
+		}
+		return nil
+	})
+	return d
+}
+
+// SetDomain persists the system domain (used during bootstrap).
+func (s *Store) SetDomain(domain string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mDomain, []byte(domain))
+	})
 }
