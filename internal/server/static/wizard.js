@@ -32,7 +32,32 @@
       const st = await api("/api/status");
       if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
     } catch (e) { /* dev */ }
+    updateAdminDomain();
+    // Show the resolved absolute path for db_path.
+    updateDbHint();
   }
+
+  function updateAdminDomain() {
+    const d = $("#wz-domain").value.trim() || "domain";
+    $("#wz-admin-domain").textContent = d;
+  }
+
+  function updateDbHint() {
+    const p = $("#wz-db-path").value.trim();
+    if (!p) return;
+    // If it's a relative path, show what it resolves to relative to CWD.
+    // The server process CWD is typically the release directory.
+    const hint = $("#wz-db-hint");
+    if (p.startsWith("/") || p.match(/^[A-Za-z]:/)) {
+      hint.textContent = "Database file: " + p;
+    } else {
+      hint.textContent = "Relative path — resolves next to the server executable as: ./" + p;
+    }
+  }
+
+  // Live-update admin domain hint when domain field changes.
+  $("#wz-domain").addEventListener("input", updateAdminDomain);
+  $("#wz-db-path").addEventListener("input", updateDbHint);
 
   // --- step 1: submit config ---
   $("#wz-submit").addEventListener("click", async function () {
