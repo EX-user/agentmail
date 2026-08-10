@@ -259,9 +259,14 @@
     status.textContent = "Starting server…";
     try {
       await api("/launch", { method: "POST" });
-      status.textContent = "Server is starting. This page will go offline. Open the panel at the address you configured.";
+      const panelURL = "http://" + $("#wz-listen").value.trim() + "/";
+      status.innerHTML = 'Server is starting. <a href="' + panelURL + '" target="_blank">Open panel</a>';
       setTimeout(function () {
-        document.body.innerHTML = '<div class="setup-card" style="text-align:center;"><h1>Server starting…</h1><p class="muted">Close this tab. The server is now running on your configured address.</p></div>';
+        document.body.innerHTML = '<div class="setup-card" style="text-align:center;">' +
+          '<h1>Server starting…</h1>' +
+          '<p class="muted">The server is now running on your configured address.</p>' +
+          '<a href="' + panelURL + '" target="_blank"><button class="primary">Open panel</button></a>' +
+          '</div>';
       }, 2000);
     } catch (e) {
       status.textContent = "Error: " + e.message;
