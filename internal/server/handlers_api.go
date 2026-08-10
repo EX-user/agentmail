@@ -61,8 +61,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "domain is required")
 		return
 	}
-	if !isASCIILocalPart(domain) && domain != "" {
-		badRequest(w, "domain must be ASCII")
+	if !isASCIIDomain(domain) {
+		badRequest(w, "domain must be ASCII letters, digits, '.', or '-'")
 		return
 	}
 	adminLocal := strings.TrimSpace(body.AdminLocalPart)
@@ -280,6 +280,30 @@ func isASCIILocalPart(s string) bool {
 		default:
 			return false
 		}
+	}
+	return true
+}
+
+// isASCIIDomain accepts a dot-separated domain like "agentmail.local" or
+// "mail.example.com". Each label is [a-zA-Z0-9-]+. No underscores (DNS
+// hostnames don't allow them, though some systems tolerate them).
+func isASCIIDomain(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	// Reject leading/trailing dot or dash, and empty labels (..).
+	if s[0] == '.' || s[0] == '-' || s[len(s)-1] == '.' || s[len(s)-1] == '-' {
+		return false
+	}
+	if strings.Contains(s, "..") {
+		return false
 	}
 	return true
 }
