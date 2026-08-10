@@ -183,7 +183,6 @@
     try {
       await api("/launch", { method: "POST" });
       const panelURL = "http://" + $("#wz-listen").value.trim() + "/";
-      status.innerHTML = 'Server is starting. <a href="' + panelURL + '">Open panel</a>';
       setTimeout(function () {
         document.body.innerHTML = '<div class="setup-card" style="text-align:center;">' +
           '<h1>Server starting…</h1>' +
