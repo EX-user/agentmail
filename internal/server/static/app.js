@@ -5,6 +5,9 @@
 (function () {
   "use strict";
 
+  // System domain from /api/status, used to construct admin address etc.
+  let systemDomain = "agentmail.local";
+
   // ---- helpers ----
 
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -333,6 +336,7 @@
   async function init() {
     try {
       const st = await api("/api/status");
+      if (st.domain) systemDomain = st.domain;
       if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
       if (!st.initialized) {
         showSetup();
@@ -469,7 +473,7 @@
       // admin's sent messages (all), filter to those addressed to `to`.
       // /admin/sent?account=admin@... returns what admin sent.
       // And admin's own inbox contains replies from `to`.
-      const adminAddr = "admin@agentmail.local"; // the compose sender
+      const adminAddr = "admin@" + systemDomain; // the compose sender
       const [sentRes, inboxRes] = await Promise.all([
         api("/admin/sent?account=" + encodeURIComponent(adminAddr) + "&limit=50"),
         api("/admin/messages?account=" + encodeURIComponent(adminAddr) + "&limit=50"),
