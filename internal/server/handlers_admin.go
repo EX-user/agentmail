@@ -130,8 +130,8 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 	// the admin (so the admin's own inbox unread state stays accurate). When
 	// the admin is merely viewing someone else's mail, do NOT mutate state.
 	for _, rcpt := range msg.To {
-		if rcpt == s.cfg.Admin.Address {
-			if acc, err := s.store.GetAccount(s.cfg.Admin.Address); err == nil {
+		if rcpt == s.adminAddress() {
+			if acc, err := s.store.GetAccount(s.adminAddress()); err == nil {
 				_ = s.store.MarkRead(acc.UUID, id)
 			}
 			break
@@ -248,7 +248,7 @@ func (s *Server) handleAdminSetDisabled(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// Lockout guard: the admin cannot disable itself.
-	if account == s.cfg.Admin.Address && body.Disabled {
+	if account == s.adminAddress() && body.Disabled {
 		badRequest(w, "cannot disable your own admin account")
 		return
 	}
@@ -300,7 +300,7 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	from := s.cfg.Admin.Address
+	from := s.adminAddress()
 	fromName := localPart(from)
 	res, err := s.store.Send(from, fromName, body.To, body.Subject, body.Body)
 	if err != nil {

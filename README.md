@@ -62,24 +62,29 @@ credentials. Features:
 go build -o agentmail-server ./cmd/agentmail-server
 go build -o agentmail-gateway ./cmd/agentmail-gateway
 
-# 2. Write a minimal config (or copy deploy/agentmail.toml.example)
+# 2. Write a minimal config (only runtime settings — copy deploy/agentmail.toml.example)
 cat > agentmail.toml <<'EOF'
 [server]
 listen = "127.0.0.1:8090"
-domain = "agentmail.local"
 [storage]
 db_path = "agentmail.db"
-[admin]
-address  = "admin@agentmail.local"
-password = "change-me"
 EOF
 
 # 3. Start the server (runs in foreground)
 ./agentmail-server --config agentmail.toml
 
-# 4. Open the admin panel in a browser
-#    http://127.0.0.1:8090/  (login: admin@agentmail.local / change-me)
+# 4. Open the admin panel in a browser → first visit shows a setup wizard
+#    http://127.0.0.1:8090/
+#    Choose a mail domain and an admin password. The wizard creates:
+#      - admin@<domain>  (your chosen password)
+#      - guest@<domain>  (password: 12345678, for quick testing — disable or
+#                         reset it from the panel after setup)
+#    After setup, the panel asks for admin credentials (browser Basic auth).
 ```
+
+The config file only holds `listen` and `db_path`. The mail domain, admin
+password, and all account state live in the bbolt database, set once through
+the setup wizard.
 
 ### Registering the gateway with an agent client
 
@@ -97,13 +102,18 @@ For WSL2 clients connecting to a Windows host server, see
 
 ## Configuration
 
+The TOML file only holds runtime settings. Domain and admin credentials are
+set through the setup wizard (persisted in the database).
+
 | File / flag | What it controls | Default |
 |---|---|---|
 | `agentmail.toml` `[server] listen` | HTTP listen address | `127.0.0.1:8090` (use `0.0.0.0` for LAN) |
-| `[server] domain` | Mail domain (affects addresses) | `agentmail.local` |
 | `[storage] db_path` | bbolt database file | `agentmail.db` |
-| `[admin] address/password` | Admin account (created on first run) | `admin@agentmail.local` / `change-me` |
 | `--server-url` (gateway) | Server origin | `http://127.0.0.1:8090` |
+
+The setup wizard (first browser visit) sets: mail domain, admin password. It
+also auto-creates a `guest@<domain>` account (password `12345678`) for quick
+testing — disable or reset it from the panel after setup.
 
 ## Documentation
 

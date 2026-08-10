@@ -20,6 +20,10 @@ import (
 	"github.com/agentmail/agentmail/internal/store"
 )
 
+// Version is the agentmail-server version. Overridden at build time via
+// -ldflags "-X github.com/agentmail/agentmail/internal/server.Version=v0.1.2".
+var Version = "dev"
+
 // Server wires the store and audit log to the HTTP router.
 type Server struct {
 	store    *store.Store
@@ -32,13 +36,16 @@ func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 	return &Server{store: s, audit: a, cfg: cfg}
 }
 
-// domain returns the effective mail domain: prefer the value persisted in
-// bbolt (set by the setup wizard), fall back to the config file value.
+// domain returns the effective mail domain: the value persisted in bbolt
+// (set by the setup wizard).
 func (s *Server) domain() string {
-	if d := s.store.GetDomain(); d != "" {
-		return d
-	}
-	return s.cfg.Server.Domain
+	return s.store.GetDomain()
+}
+
+// adminAddress returns the admin account address for the current domain.
+// The admin local-part is fixed as "admin".
+func (s *Server) adminAddress() string {
+	return "admin@" + s.domain()
 }
 
 // Handler returns the HTTP handler for the API.

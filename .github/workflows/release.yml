@@ -47,7 +47,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -trimpath -ldflags="-s -w" -o agentmail-server${{ matrix.ext }} ./cmd/agentmail-server
+          go build -trimpath -ldflags="-s -w -X github.com/agentmail/agentmail/internal/server.Version=${GITHUB_REF_NAME}" -o agentmail-server${{ matrix.ext }} ./cmd/agentmail-server
           go build -trimpath -ldflags="-s -w" -o agentmail-gateway${{ matrix.ext }} ./cmd/agentmail-gateway
 
       - name: Package

@@ -1,8 +1,9 @@
 // Package config loads the agentmail-server configuration.
 //
-// The server reads a single TOML file that says where to listen, where to
-// keep its bbolt database, what mail domain accounts live under, and the
-// admin credentials used to read any account's mail for ops/audit.
+// The TOML file holds only runtime settings that the server reads on every
+// start: where to listen and where the bbolt database lives. First-time
+// initialization (mail domain, admin password) is handled by the setup wizard
+// and persisted in bbolt — it is NOT configured here.
 package config
 
 import (
@@ -15,7 +16,6 @@ import (
 // Config is the top-level configuration object for agentmail-server.
 type Config struct {
 	Server  ServerConfig  `toml:"server"`
-	Admin   AdminConfig   `toml:"admin"`
 	Storage StorageConfig `toml:"storage"`
 }
 
@@ -23,17 +23,6 @@ type Config struct {
 type ServerConfig struct {
 	// Listen is the address:port the HTTP API binds, e.g. "127.0.0.1:8090".
 	Listen string `toml:"listen"`
-	// Domain is the mail domain accounts live under, e.g. "agentmail.local".
-	Domain string `toml:"domain"`
-}
-
-// AdminConfig holds the administrator account. The admin is a regular account
-// with the privilege to read any account's mail and the audit log over HTTP.
-type AdminConfig struct {
-	// Address of the admin account, e.g. "admin@agentmail.local".
-	Address string `toml:"address"`
-	// Password of the admin account. Set on first run to create the account.
-	Password string `toml:"password"`
 }
 
 // StorageConfig describes where the bbolt database lives.
@@ -62,9 +51,6 @@ func defaults() *Config {
 	return &Config{
 		Server: ServerConfig{
 			Listen: "127.0.0.1:8090",
-			// Domain defaults to empty: new installations set it via the setup
-			// wizard. Existing deployments that have it in the TOML still work.
-			Domain: "",
 		},
 		Storage: StorageConfig{
 			DBPath: "agentmail.db",
@@ -76,8 +62,6 @@ func (c *Config) validate() error {
 	if c.Server.Listen == "" {
 		return fmt.Errorf("server.listen must be set")
 	}
-	// Domain is optional here — for new installs it is set via the setup wizard
-	// and persisted in bbolt. For existing installs it comes from TOML.
 	if c.Storage.DBPath == "" {
 		return fmt.Errorf("storage.db_path must be set")
 	}

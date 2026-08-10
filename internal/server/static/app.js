@@ -333,6 +333,7 @@
   async function init() {
     try {
       const st = await api("/api/status");
+      if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
       if (!st.initialized) {
         showSetup();
       } else {

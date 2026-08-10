@@ -24,6 +24,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"initialized": s.store.IsInitialized(),
 		"domain":      s.domain(),
+		"version":     Version,
 	})
 }
 
@@ -78,8 +79,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "bootstrap: "+err.Error())
 		return
 	}
-	// Update config in-memory so the rest of this process uses the new domain.
-	s.cfg.Server.Domain = domain
+	// BootstrapSystem persisted the domain to bbolt; s.domain() reads it from there.
 	_ = s.audit.Record(r.Context(), audit.ActionRegister, adminLocal+"@"+domain, "bootstrap admin")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"admin_address":  adminLocal + "@" + domain,
