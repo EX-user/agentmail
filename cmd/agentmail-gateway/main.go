@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	serverURL := flag.String("server-url", os.Getenv("AGENTMAIL_SERVER_URL"), "agentmail-server origin, e.g. http://127.0.0.1:8090")
+	serverURL := flag.String("server-url", os.Getenv("AGENTMAIL_SERVER_URL"), "default agentmail-server origin, e.g. http://127.0.0.1:8090 (authenticate can target other servers via server_url)")
 	codeTTL := flag.Duration("code-ttl", time.Hour, "access code lifetime")
 	codeMaxCalls := flag.Int("code-max-calls", 20, "max tool calls per access code")
 	flag.Parse()

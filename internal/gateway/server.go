@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,9 +32,14 @@ var CodeTTL = time.Hour
 // CodeMaxCalls is how many tool calls one access code may serve.
 var CodeMaxCalls = 20
 
-// Server is the gateway: MCP transport + access-code map + HTTP client.
+// Server is the gateway: MCP transport + access-code map + multi-server HTTP clients.
+// The gateway can talk to multiple agentmail-server instances. The default
+// server is set at startup (--server-url); authenticate can target a different
+// server by passing server_url. Each access code remembers which server it
+// belongs to, so subsequent calls route automatically.
 type Server struct {
-	client *httpclient.Client
+	defaultURL string
+	clients    map[string]*httpclient.Client // serverURL -> cached client
 
 	mu    sync.Mutex
 	codes map[string]*codeEntry // access_code plaintext -> entry
@@ -46,20 +52,40 @@ type Server struct {
 type codeEntry struct {
 	Address   string
 	Password  string
+	ServerURL string // which server this code was authenticated against
 	ExpiresAt time.Time
 	CallsUsed int
 	MaxCalls  int
 }
 
-// New returns a gateway talking to the server at baseURL, reading MCP from
+// New returns a gateway whose default server is baseURL, reading MCP from
 // stdin and writing to stdout.
 func New(baseURL string) *Server {
+	c := httpclient.New(baseURL)
 	return &Server{
-		client: httpclient.New(baseURL),
-		codes:  make(map[string]*codeEntry),
-		in:     bufio.NewReader(os.Stdin),
-		out:    os.Stdout,
+		defaultURL: c.BaseURL(), // normalized (trailing slash trimmed)
+		clients:    map[string]*httpclient.Client{c.BaseURL(): c},
+		codes:      make(map[string]*codeEntry),
+		in:         bufio.NewReader(os.Stdin),
+		out:        os.Stdout,
 	}
+}
+
+// getClient returns the HTTP client for serverURL, creating and caching it on
+// first use. If serverURL is empty, the default server is used.
+func (s *Server) getClient(serverURL string) *httpclient.Client {
+	if serverURL == "" {
+		serverURL = s.defaultURL
+	}
+	serverURL = strings.TrimRight(serverURL, "/")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.clients[serverURL]; ok {
+		return c
+	}
+	c := httpclient.New(serverURL)
+	s.clients[serverURL] = c
+	return c
 }
 
 // Serve runs the JSON-RPC loop until stdin closes.
@@ -86,10 +112,12 @@ func (s *Server) Serve(ctx context.Context) error {
 
 // --- access code management (gateway-local, in-memory) ---
 
-// issueCode verifies credentials with the server and, on success, mints a
-// short-lived access code bound to them.
-func (s *Server) issueCode(ctx context.Context, address, password string) (string, error) {
-	if err := s.client.VerifyPassword(address, password); err != nil {
+// issueCode verifies credentials with the specified server (or the default if
+// serverURL is empty) and, on success, mints a short-lived access code bound
+// to them. The code remembers which server it was authenticated against.
+func (s *Server) issueCode(ctx context.Context, address, password, serverURL string) (string, error) {
+	client := s.getClient(serverURL)
+	if err := client.VerifyPassword(address, password); err != nil {
 		return "", fmt.Errorf("authentication failed: %w", err)
 	}
 	code, err := randomCode(32)
@@ -100,6 +128,7 @@ func (s *Server) issueCode(ctx context.Context, address, password string) (strin
 	s.codes[code] = &codeEntry{
 		Address:   address,
 		Password:  password,
+		ServerURL: client.BaseURL(),
 		ExpiresAt: time.Now().Add(CodeTTL),
 		CallsUsed: 0,
 		MaxCalls:  CodeMaxCalls,
@@ -108,52 +137,44 @@ func (s *Server) issueCode(ctx context.Context, address, password string) (strin
 	return code, nil
 }
 
-// consumeCode validates a code, returns the bound credentials, and consumes
-// one call against the per-code call budget. Used for operations with side
-// effects (register, authenticate, send_email). Returns ErrInvalidCode if the
-// code is unknown, expired, or exhausted.
-func (s *Server) consumeCode(code string) (address, password string, err error) {
+// consumeCode validates a code, returns the entry, and consumes one call
+// against the per-code call budget. Used for operations with side effects
+// (register, authenticate, send_email). Returns ErrInvalidCode if the code is
+// unknown, expired, or exhausted.
+func (s *Server) consumeCode(code string) (*codeEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.codes[code]
 	if !ok {
-		return "", "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if time.Now().After(e.ExpiresAt) {
 		delete(s.codes, code)
-		return "", "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if e.CallsUsed >= e.MaxCalls {
 		delete(s.codes, code)
-		return "", "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	e.CallsUsed++
-	return e.Address, e.Password, nil
+	return e, nil
 }
 
-// consumeCodeReadOnly validates a code and returns the bound credentials
-// WITHOUT consuming a call against the budget. Used for read-only operations
-// (read_inbox, get_message). The TTL still applies — a read-only call on an
-// expired code still fails — but reads do not exhaust the 20-call budget.
-//
-// Rationale: per-account isolation (enforced by the server via Basic auth)
-// already guarantees that a read only ever touches the code owner's own mail,
-// so the blast radius of an over-used code on reads is negligible. Counting
-// reads would force long-polling/watching agents to burn their entire budget
-// in minutes, defeating the access code's role as a session credential. The
-// TTL (1h) remains the time-bound protection.
-func (s *Server) consumeCodeReadOnly(code string) (address, password string, err error) {
+// consumeCodeReadOnly validates a code and returns the entry WITHOUT consuming
+// a call against the budget. Used for read-only operations (read_inbox,
+// get_message, wait_for_new_mail). The TTL still applies.
+func (s *Server) consumeCodeReadOnly(code string) (*codeEntry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.codes[code]
 	if !ok {
-		return "", "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
 	if time.Now().After(e.ExpiresAt) {
 		delete(s.codes, code)
-		return "", "", ErrInvalidCode
+		return nil, ErrInvalidCode
 	}
-	return e.Address, e.Password, nil
+	return e, nil
 }
 
 // ErrInvalidCode signals an unknown, expired, or exhausted access code.
@@ -249,6 +270,8 @@ Typical flow:
 2. Use the access_code with send_email / read_inbox / get_message / wait_for_new_mail.
 3. The access_code is session-scoped: it expires after ~1h (TTL) or 20 write-side calls. Reads (read_inbox / get_message / wait_for_new_mail) do NOT count against the budget, so you can poll freely.
 4. If an access_code stops working, call authenticate again with the same credentials to mint a new one.
+
+Multiple servers: this gateway can talk to more than one agentmail server. Pass server_url (e.g. http://10.0.0.5:8090) to authenticate against a different server than the default. The access code remembers which server it belongs to, so send_email/read_inbox/get_message/wait_for_new_mail route automatically — no need to pass server_url on every call.
 
 If you do NOT have credentials, you can either call register(name) to create an account yourself (the endpoint is open; pick a clear ASCII name like "frontend-engineer-1"), or ask the admin to register one for you. Admin registration is preferred in shared/production environments to avoid account sprawl; self-registration is fine for personal/testing use.
 

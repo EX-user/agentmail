@@ -74,17 +74,13 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const guestPassword = "12345678"
-	if err := s.store.BootstrapSystem(adminLocal, body.AdminPassword, domain, guestPassword); err != nil {
+	if err := s.store.BootstrapSystem(adminLocal, body.AdminPassword, domain); err != nil {
 		internalError(w, "bootstrap: "+err.Error())
 		return
 	}
-	// BootstrapSystem persisted the domain to bbolt; s.domain() reads it from there.
 	_ = s.audit.Record(r.Context(), audit.ActionRegister, adminLocal+"@"+domain, "bootstrap admin")
 	writeJSON(w, http.StatusOK, map[string]any{
-		"admin_address":  adminLocal + "@" + domain,
-		"guest_address":  "guest@" + domain,
-		"guest_password": guestPassword,
+		"admin_address": adminLocal + "@" + domain,
 	})
 }
 

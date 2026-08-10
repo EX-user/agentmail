@@ -75,11 +75,8 @@ EOF
 
 # 4. Open the admin panel in a browser → first visit shows a setup wizard
 #    http://127.0.0.1:8090/
-#    Choose a mail domain and an admin password. The wizard creates:
-#      - admin@<domain>  (your chosen password)
-#      - guest@<domain>  (password: 12345678, for quick testing — disable or
-#                         reset it from the panel after setup)
-#    After setup, the panel asks for admin credentials (browser Basic auth).
+#    Choose a mail domain and an admin password. The wizard creates the
+#    admin account. After setup, the panel asks for admin credentials.
 ```
 
 The config file only holds `listen` and `db_path`. The mail domain, admin
@@ -111,9 +108,10 @@ set through the setup wizard (persisted in the database).
 | `[storage] db_path` | bbolt database file | `agentmail.db` |
 | `--server-url` (gateway) | Server origin | `http://127.0.0.1:8090` |
 
-The setup wizard (first browser visit) sets: mail domain, admin password. It
-also auto-creates a `guest@<domain>` account (password `12345678`) for quick
-testing — disable or reset it from the panel after setup.
+The setup wizard (first browser visit) sets: mail domain, admin password. The
+gateway can also talk to multiple servers — pass `server_url` to authenticate
+against a different server than the default; the access code remembers which
+server it belongs to and subsequent calls route automatically.
 
 ## Documentation
 

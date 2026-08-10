@@ -28,10 +28,11 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "authenticate",
-			Description: "Exchange address + password for a short-lived access code. The code is used by send_email/read_inbox/get_message and expires after a limited time or number of calls.",
+			Description: "Exchange address + password for a short-lived access code. The code is used by send_email/read_inbox/get_message/wait_for_new_mail and expires after a limited time or number of calls. Optional server_url targets a different agentmail server than the default; the access code remembers which server it belongs to, so subsequent calls route automatically.",
 			InputSchema: schemaObject(map[string]any{
-				"address":  prop("Account address, e.g. 'frontend-engineer-1@agentmail.local'", "string", true),
-				"password": prop("Account password from register", "string", true),
+				"address":    prop("Account address, e.g. 'frontend-engineer-1@agentmail.local'", "string", true),
+				"password":   prop("Account password from register", "string", true),
+				"server_url": prop("Server origin, e.g. http://10.0.0.5:8090. If omitted, uses the default server this gateway started with.", "string", false),
 			}, []string{"address", "password"}),
 		},
 		{
@@ -156,7 +157,7 @@ func (s *Server) toolRegister(ctx context.Context, args map[string]any) (any, er
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	res, err := s.client.Register(name)
+	res, err := s.getClient("").Register(name)
 	if err != nil {
 		return nil, fmt.Errorf("register: %w", err)
 	}
@@ -170,25 +171,27 @@ func (s *Server) toolRegister(ctx context.Context, args map[string]any) (any, er
 func (s *Server) toolAuthenticate(ctx context.Context, args map[string]any) (any, error) {
 	address, _ := args["address"].(string)
 	password, _ := args["password"].(string)
+	serverURL := strings.TrimSpace(str(args["server_url"]))
 	address = strings.TrimSpace(address)
 	if address == "" || password == "" {
 		return nil, fmt.Errorf("address and password are required")
 	}
-	code, err := s.issueCode(ctx, address, password)
+	code, err := s.issueCode(ctx, address, password, serverURL)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"access_code": code,
-		"hint":        "Use this for send_email/read_inbox/get_message. If a later call fails with 'invalid or expired access code', call authenticate again.",
+		"hint":        "Use this for send_email/read_inbox/get_message/wait_for_new_mail. If a later call fails with 'invalid or expired access code', call authenticate again.",
 	}, nil
 }
 
 func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error) {
-	address, password, err := s.consumeCode(str(args["access_code"]))
+	entry, err := s.consumeCode(str(args["access_code"]))
 	if err != nil {
 		return nil, err
 	}
+	client := s.getClient(entry.ServerURL)
 	to := toStringSlice(args["to"])
 	if len(to) == 0 {
 		return nil, fmt.Errorf("to is required")
@@ -198,35 +201,32 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	if subject == "" || body == "" {
 		return nil, fmt.Errorf("subject and body are required")
 	}
-	res, err := s.client.Send(address, password, to, subject, body)
+	res, err := client.Send(entry.Address, entry.Password, to, subject, body)
 	if err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
 	return map[string]any{
 		"status":      "sent",
 		"message_id":  res.MessageID,
-		"from":        address,
+		"from":        entry.Address,
 		"to":          to,
 	}, nil
 }
 
 func (s *Server) toolReadInbox(ctx context.Context, args map[string]any) (any, error) {
 	// Read-only: does not consume the call budget (see consumeCodeReadOnly).
-	address, password, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
 	if err != nil {
 		return nil, err
 	}
+	client := s.getClient(entry.ServerURL)
 	limit := 20
 	if l, ok := args["limit"].(float64); ok && l > 0 {
 		limit = int(l)
 	}
 	sinceID := strings.TrimSpace(str(args["since_id"]))
 
-	// Fetch a reasonable window, then optionally filter by since_id. ULIDs are
-	// time-ordered Crockford-Base32 strings, so lexicographic compare == time
-	// compare. We fetch up to `limit` and keep only those strictly greater than
-	// since_id; if the caller polls frequently a small limit suffices.
-	res, err := s.client.Inbox(address, password, limit)
+	res, err := client.Inbox(entry.Address, entry.Password, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read inbox: %w", err)
 	}
@@ -245,15 +245,16 @@ func (s *Server) toolReadInbox(ctx context.Context, args map[string]any) (any, e
 
 func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, error) {
 	// Read-only: does not consume the call budget.
-	address, password, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
 	if err != nil {
 		return nil, err
 	}
+	client := s.getClient(entry.ServerURL)
 	id, _ := args["message_id"].(string)
 	if id == "" {
 		return nil, fmt.Errorf("message_id is required")
 	}
-	res, err := s.client.GetMessage(address, password, id)
+	res, err := client.GetMessage(entry.Address, entry.Password, id)
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
 	}
@@ -271,10 +272,13 @@ func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, 
 // agent client sees a single long-ish call instead of a tight loop. Read-only:
 // does not consume the access code's call budget.
 func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (any, error) {
-	address, password, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
 	if err != nil {
 		return nil, err
 	}
+	client := s.getClient(entry.ServerURL)
+	address := entry.Address
+	password := entry.Password
 	sinceID := strings.TrimSpace(str(args["since_id"]))
 
 	// Parse timeout, default 25s, cap at 60s. Beyond 60s risks the MCP client
@@ -290,7 +294,7 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 	// If since_id was not supplied, baseline to the current newest id so that
 	// the call only returns mail that arrives AFTER it started.
 	if sinceID == "" {
-		res, err := s.client.Inbox(address, password, 1)
+		res, err := client.Inbox(address, password, 1)
 		if err != nil {
 			return nil, fmt.Errorf("wait_for_new_mail: baseline read: %w", err)
 		}
@@ -305,7 +309,7 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 
 	for {
 		// Check for new mail.
-		res, err := s.client.Inbox(address, password, 50)
+		res, err := client.Inbox(address, password, 50)
 		if err != nil {
 			return nil, fmt.Errorf("wait_for_new_mail: poll: %w", err)
 		}

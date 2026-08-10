@@ -242,24 +242,19 @@ func (s *Store) EnsureAdmin(address, password string) error {
 }
 
 // BootstrapSystem initializes a fresh installation: creates the admin account
-// with the given password, creates a guest account with a fixed password,
-// stores the domain, and marks the system initialized. This is called once
-// (either from the setup wizard or as config migration). If already
-// initialized it returns nil (idempotent).
+// with the given password, stores the domain, and marks the system initialized.
+// This is called once (either from the setup wizard or as config migration).
+// If already initialized it returns nil (idempotent).
 //
 // adminLocalPart is the local-part of the admin address (e.g. "admin"); the
 // full address becomes adminLocalPart + "@" + domain.
-func (s *Store) BootstrapSystem(adminLocalPart, adminPassword, domain, guestPassword string) error {
+func (s *Store) BootstrapSystem(adminLocalPart, adminPassword, domain string) error {
 	if s.IsInitialized() {
 		return nil // already bootstrapped; idempotent
 	}
 	adminAddress := adminLocalPart + "@" + domain
 	if err := s.EnsureAdmin(adminAddress, adminPassword); err != nil {
 		return fmt.Errorf("create admin: %w", err)
-	}
-	// Guest account (may already exist from a prior partial bootstrap; ignore ErrAccountExists).
-	if _, err := s.CreateAccountWithPassword("guest", domain, false, guestPassword); err != nil && !errors.Is(err, ErrAccountExists) {
-		return fmt.Errorf("create guest: %w", err)
 	}
 	if err := s.SetDomain(domain); err != nil {
 		return fmt.Errorf("set domain: %w", err)

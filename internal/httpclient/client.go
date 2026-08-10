@@ -31,6 +31,11 @@ func New(baseURL string) *Client {
 	}
 }
 
+// BaseURL returns the server origin this client talks to.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 // Error is returned for non-2xx responses, carrying the status and a snippet
 // of the body for diagnostics.
 type Error struct {
