@@ -39,6 +39,7 @@ var (
 var (
 	mInitialized = []byte("initialized")
 	mDomain      = []byte("domain")
+	mListen      = []byte("listen")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -177,5 +178,32 @@ func (s *Store) SetDomain(domain string) error {
 			return nil
 		}
 		return mb.Put(mDomain, []byte(domain))
+	})
+}
+
+// GetListen returns the listen address set during bootstrap, or "" if unset.
+func (s *Store) GetListen() string {
+	var d string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if v := mb.Get(mListen); v != nil {
+			d = string(v)
+		}
+		return nil
+	})
+	return d
+}
+
+// SetListen persists the listen address (used during bootstrap).
+func (s *Store) SetListen(listen string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mListen, []byte(listen))
 	})
 }

@@ -1,15 +1,18 @@
-# agentmail-server config — copy to agentmail.toml and edit.
+# agentmail-server config
 #
-# This file holds ONLY runtime settings (where to listen, where the database
-# is). First-time initialization (mail domain, admin password) is done through
-# the setup wizard in the web panel and persisted in the database — NOT here.
+# For normal/wizard startup, only [server].listen and [storage].db_path are
+# read. The mail domain and admin password are set through the browser wizard
+# and stored in the database.
+#
+# For unattended init (--yes-init-from-config), ALL fields below are required.
+# The wizard is skipped; the server bootstraps from this file directly.
 
 [server]
-# HTTP listen address. Use 127.0.0.1 for local-only; 0.0.0.0 to allow remote
-# (put a reverse proxy with TLS in front for remote access).
-listen = "127.0.0.1:8090"
+listen = "127.0.0.1:8090"     # HTTP listen address
+domain = "agentmail.local"    # mail domain (init only — read from db otherwise)
 
 [storage]
-# Path to the bbolt database file. Holds accounts, messages, audit log,
-# and system metadata (domain, initialized flag).
-db_path = "agentmail.db"
+db_path = "agentmail.db"      # bbolt database file
+
+[admin]
+password = "change-me"        # admin password (init only — read from db otherwise)

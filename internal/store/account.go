@@ -48,8 +48,7 @@ func (s *Store) CreateAccount(name, domain string, isAdmin bool) (*CreateAccount
 }
 
 // CreateAccountWithPassword is like CreateAccount but lets the caller supply
-// the plaintext password (used by the setup wizard to create the guest
-// account with a fixed password).
+// the plaintext password (used by the setup wizard / bootstrap).
 func (s *Store) CreateAccountWithPassword(name, domain string, isAdmin bool, password string) (*CreateAccountResult, error) {
 	return s.createAccountWithPassword(name, domain, isAdmin, password)
 }

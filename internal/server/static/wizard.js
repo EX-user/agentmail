@@ -1,0 +1,183 @@
+// agentmail setup wizard — vanilla JS, no build step.
+(function () {
+  "use strict";
+
+  function $(s) { return document.querySelector(s); }
+
+  async function api(path, opts) {
+    const res = await fetch(path, opts || {});
+    const ct = res.headers.get("Content-Type") || "";
+    const body = ct.includes("application/json") ? await res.json() : await res.text();
+    if (!res.ok) {
+      const msg = (body && body.error) ? body.error : (typeof body === "string" ? body : res.statusText);
+      throw new Error(msg);
+    }
+    return body;
+  }
+
+  function toast(el, msg, ok) {
+    el.textContent = msg;
+    el.className = ok ? "muted" : "muted error-text";
+  }
+
+  // --- load defaults from server ---
+  async function loadDefaults() {
+    try {
+      const d = await api("/api/wizard-defaults");
+      $("#wz-db-path").value = d.db_path || "agentmail.db";
+      $("#wz-listen").value = d.listen || "127.0.0.1:8090";
+      $("#wz-domain").value = d.domain || "agentmail.local";
+    } catch (e) { /* use placeholders */ }
+    try {
+      const st = await api("/api/status");
+      if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
+    } catch (e) { /* dev */ }
+  }
+
+  // --- step 1: submit config ---
+  $("#wz-submit").addEventListener("click", async function () {
+    const body = {
+      db_path: $("#wz-db-path").value.trim(),
+      listen: $("#wz-listen").value.trim(),
+      domain: $("#wz-domain").value.trim(),
+      admin_password: $("#wz-password").value,
+    };
+    const status = $("#wz-status");
+    if (!body.db_path || !body.listen || !body.domain || !body.admin_password) {
+      toast(status, "All fields are required.", false);
+      return;
+    }
+    if (body.admin_password.length < 8) {
+      toast(status, "Password must be at least 8 characters.", false);
+      return;
+    }
+    status.textContent = "Initializing…";
+    try {
+      const res = await api("/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      $("#wz-admin-addr").textContent = res.admin_address || ("admin@" + body.domain);
+      $("#wizard-step-config").classList.add("hidden");
+      $("#wizard-step-mcp").classList.remove("hidden");
+      buildCapsules(body.listen);
+    } catch (e) {
+      toast(status, "Error: " + e.message, false);
+    }
+  });
+
+  // --- step 2: MCP capsules ---
+  function buildCapsules(listen) {
+    const serverURL = "http://" + listen;
+    const container = $("#mcp-capsules");
+    const clients = [
+      { id: "codex", label: "I use Codex CLI", desc: "~/.codex/config.toml" },
+      { id: "zcode", label: "I use zcode", desc: "~/.zcode/cli/config.json" },
+      { id: "opencode", label: "I use opencode", desc: "opencode.json (project-level)" },
+      { id: "claude", label: "I use Claude Code", desc: "claude mcp add command" },
+    ];
+    container.innerHTML = clients.map(function (c) {
+      return '<div class="capsule">' +
+        '<button class="capsule-header" data-capsule="' + c.id + '">' + esc(c.label) +
+        ' <span class="muted capsule-desc">' + esc(c.desc) + '</span>' +
+        ' <span class="capsule-toggle">▾</span></button>' +
+        '<div class="capsule-body hidden" id="capsule-body-' + c.id + '"></div>' +
+        '</div>';
+    }).join("");
+    // Wire toggle + fetch snippet.
+    document.querySelectorAll("[data-capsule]").forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const id = btn.dataset.capsule;
+        const body = $("#capsule-body-" + id);
+        if (!body.classList.contains("hidden")) {
+          body.classList.add("hidden");
+          return;
+        }
+        body.classList.remove("hidden");
+        if (body.dataset.loaded !== "1") {
+          body.innerHTML = '<span class="muted">Loading…</span>';
+          try {
+            const info = await api("/api/bootstrap-info");
+            body.innerHTML = renderSnippet(id, info);
+            wireWriteButton(body, id);
+            body.dataset.loaded = "1";
+          } catch (e) {
+            body.innerHTML = '<span class="error-text">Error: ' + esc(e.message) + '</span>';
+          }
+        }
+      });
+    });
+  }
+
+  function renderSnippet(id, info) {
+    const gw = info.gateway_path || "agentmail-gateway";
+    const url = info.server_url || "http://127.0.0.1:8090";
+    const gwEsc = esc(gw);
+    const gwJson = esc(gw.replace(/\\/g, "\\\\"));
+    let snippet = "", writeBtn = "";
+    switch (id) {
+      case "codex":
+        snippet = '[mcp_servers.agentmail]\ncommand = "' + gwJson + '"\nargs = ["--server-url", "' + url + '"]';
+        writeBtn = '<button class="row-action write-btn" data-client="codex">Write to ~/.codex/config.toml</button>';
+        break;
+      case "zcode":
+        snippet = '{\n  "mcp": {\n    "servers": {\n      "agentmail": {\n        "type": "stdio",\n        "command": "' + gwJson + '",\n        "args": ["--server-url", "' + url + '"],\n        "enabled": true\n      }\n    }\n  }\n}';
+        writeBtn = '<button class="row-action write-btn" data-client="zcode">Write to ~/.zcode/cli/config.json</button>';
+        break;
+      case "opencode":
+        snippet = '{\n  "mcp": {\n    "agentmail": {\n      "type": "local",\n      "command": ["' + gwEsc + '", "--server-url", "' + url + '"],\n      "enabled": true\n    }\n  }\n}';
+        writeBtn = '<button class="row-action write-btn" data-client="opencode">Write to opencode.json</button>';
+        break;
+      case "claude":
+        snippet = 'claude mcp add agentmail -- ' + gwEsc + ' --server-url ' + url;
+        writeBtn = '<button class="row-action" onclick="navigator.clipboard.writeText(\'' + esc(snippet).replace(/'/g, "\\'") + '\'); event.stopPropagation();">Copy command</button>';
+        break;
+    }
+    return '<pre class="snippet">' + esc(snippet) + '</pre>' +
+      '<div class="row">' + writeBtn + ' <span class="write-status muted"></span></div>';
+  }
+
+  function wireWriteButton(body, id) {
+    const btn = body.querySelector(".write-btn");
+    if (!btn) return;
+    const status = body.querySelector(".write-status");
+    btn.addEventListener("click", async function (e) {
+      e.stopPropagation();
+      status.textContent = "Writing…";
+      try {
+        const res = await api("/write-mcp-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client: id }),
+        });
+        status.textContent = "✓ Written to " + res.path;
+        status.className = "write-status muted";
+      } catch (e) {
+        status.textContent = "Error: " + e.message;
+        status.className = "write-status error-text";
+      }
+    });
+  }
+
+  // --- launch ---
+  $("#wz-launch").addEventListener("click", async function () {
+    const status = $("#wz-launch-status");
+    status.textContent = "Starting server…";
+    try {
+      await api("/launch", { method: "POST" });
+      status.textContent = "Server is starting. This page will go offline. Open the panel at the address you configured.";
+      setTimeout(function () {
+        document.body.innerHTML = '<div class="setup-card" style="text-align:center;"><h1>Server starting…</h1><p class="muted">Close this tab. The server is now running on your configured address.</p></div>';
+      }, 2000);
+    } catch (e) {
+      status.textContent = "Error: " + e.message;
+    }
+  });
+
+  function esc(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  loadDefaults();
+})();

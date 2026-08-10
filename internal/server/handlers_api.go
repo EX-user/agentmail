@@ -30,10 +30,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleSetup performs first-time initialization. Only works when the system
 // is NOT yet initialized; after that it returns 409. Creates the admin
-// account (with the caller-chosen password), a guest account (fixed password
-// 12345678), stores the domain, and marks the system initialized.
+// account, stores the domain, and marks the system initialized.
 //   POST /setup {"admin_password": "...", "domain": "..."}
-//   -> {"admin_address": "...", "guest_address": "...", "guest_password": "12345678"}
+//   -> {"admin_address": "..."}
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)

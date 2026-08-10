@@ -62,26 +62,38 @@ credentials. Features:
 go build -o agentmail-server ./cmd/agentmail-server
 go build -o agentmail-gateway ./cmd/agentmail-gateway
 
-# 2. Write a minimal config (only runtime settings — copy deploy/agentmail.toml.example)
-cat > agentmail.toml <<'EOF'
-[server]
-listen = "127.0.0.1:8090"
-[storage]
-db_path = "agentmail.db"
-EOF
-
-# 3. Start the server (runs in foreground)
-./agentmail-server --config agentmail.toml
-
-# 4. Open the admin panel in a browser → first visit shows a setup wizard
-#    http://127.0.0.1:8090/
-#    Choose a mail domain and an admin password. The wizard creates the
-#    admin account. After setup, the panel asks for admin credentials.
+# 2. Double-click agentmail-server (or run it without flags).
+#    On first run (no database yet), a browser setup wizard opens at
+#    http://127.0.0.1:8848/ — configure the database path, listen address,
+#    mail domain, and admin password there. The wizard also offers one-click
+#    MCP config writing for Codex CLI / zcode / opencode / Claude Code.
+#
+#    After setup, the server starts on your chosen listen address.
+#    Subsequent launches skip the wizard and start directly.
 ```
 
-The config file only holds `listen` and `db_path`. The mail domain, admin
-password, and all account state live in the bbolt database, set once through
-the setup wizard.
+### Three ways to start
+
+| Command | When to use |
+|---|---|
+| `agentmail-server` (no flags) | **Default.** If the database exists and is initialized → starts directly. If not → launches the browser wizard automatically. |
+| `agentmail-server --init` | Force the browser wizard (refuses if already initialized). |
+| `agentmail-server --yes-init-from-config --config agentmail.toml` | Unattended init from a TOML file (for automation/CI). Requires `[server].domain` and `[admin].password` in the config. |
+
+### Unattended init config (for `--yes-init-from-config`)
+
+```toml
+[server]
+listen = "127.0.0.1:8090"
+domain = "agentmail.local"
+[storage]
+db_path = "agentmail.db"
+[admin]
+password = "your-admin-password"
+```
+
+This is the only mode that reads domain and admin password from the TOML.
+The normal and wizard paths store them in the database (set via wizard).
 
 ### Registering the gateway with an agent client
 

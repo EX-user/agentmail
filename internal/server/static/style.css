@@ -279,3 +279,24 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 }
 .setup-card h1 { font-size: 22px; margin: 0 0 8px; }
 .setup-note { margin-top: 16px; font-size: 12px; }
+
+/* Wizard MCP capsules */
+.capsule { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+.capsule-header {
+  width: 100%; text-align: left; background: var(--panel-2); border: none;
+  padding: 10px 14px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.capsule-header:hover { background: var(--border); }
+.capsule-desc { font-weight: 400; font-size: 11px; }
+.capsule-toggle { margin-left: auto; color: var(--muted); }
+.capsule-body { padding: 12px 14px; }
+.snippet {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px; font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px; white-space: pre-wrap; word-break: break-all; overflow-x: auto;
+  margin: 0 0 8px;
+}
+.write-status { font-size: 12px; }
+.success-note { color: var(--success); font-size: 14px; margin: 16px 0; }
+.error-text { color: var(--error); }
