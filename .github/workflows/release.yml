@@ -2,6 +2,16 @@ name: release
 
 # Build cross-platform binaries for both agentmail-server and agentmail-gateway
 # on tag push. Pure Go, no cgo — single static binary per target.
+#
+# Two-phase design to avoid a release-creation race:
+#   1. build (matrix, parallel): compile + package, upload the package as a
+#      workflow artifact. Does NOT touch the GitHub release.
+#   2. release (single job, needs: build): downloads every artifact, creates
+#      the release ONCE, and uploads all assets to it.
+# The previous single-phase design ran softprops/action-gh-release in every
+# matrix job; they raced on the same tag, so the last-finalizing job hit
+# "already_exists: tag_name" and failed — dropping a random target per release
+# (v0.2.5 windows, v0.2.8 linux-amd64). One release job = no race.
 on:
   push:
     tags:
@@ -16,6 +26,8 @@ jobs:
     name: ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
+      max-parallel: 5
       matrix:
         include:
           - goos: windows
@@ -61,10 +73,109 @@ jobs:
             tar czf "${name}.tar.gz" -C dist .
           fi
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+      # Hand the package off to the release job as a workflow artifact. No race
+      # here: each matrix job uploads a uniquely-named artifact.
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            agentmail-*.tar.gz
-            agentmail-*.zip
+          name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: agentmail-v0.2.*-*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: build
+    # Only publish on a real tag push (not workflow_dispatch runs without a tag).
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          merge-multiple: true
+
+      - name: Create release and upload all assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          echo "Publishing release ${TAG} with:"
+          ls -1 agentmail-*
+
+          # Resolve or create the release for this tag. create-or-get avoids the
+          # race entirely: there is exactly one release job, so no concurrent
+          # create. (A defensive fetch-then-create still guards against re-runs
+          # that may find a release from a previous attempt.)
+          REL_ID=$(curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            | jq -r .id)
+          if [ "$REL_ID" = "null" ] || [ -z "$REL_ID" ]; then
+            echo "Creating new release for ${TAG}"
+            REL_ID=$(curl -fsSL -X POST \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"generate_release_notes\":false}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
+              | jq -r .id)
+          fi
+          echo "Release id: ${REL_ID}"
+
+          UPLOAD_URL=$(curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${REL_ID}" \
+            | jq -r .upload_url)
+          UPLOAD_URL="${UPLOAD_URL%\{?name,label\}}"
+
+          # Upload every asset. Delete any pre-existing same-name asset first so
+          # re-runs are a clean replace (avoids 422 conflict).
+          for f in agentmail-*.tar.gz agentmail-*.zip; do
+            [ -e "$f" ] || continue
+            EXIST_ID=$(curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/${REL_ID}" \
+              | jq -r --arg n "$f" '[.assets[] | select(.name==$n) | .id] | first // ""')
+            if [ -n "$EXIST_ID" ]; then
+              curl -fsSL -X DELETE \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${EXIST_ID}" || true
+            fi
+            echo "Uploading $f"
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Content-Type: application/gzip" \
+              --data-binary "@$f" \
+              "${UPLOAD_URL}?name=${f}"
+          done
+
+      - name: Verify all expected assets present
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          AUTH=( -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" )
+          EXPECT=( agentmail-${TAG}-windows-amd64.zip agentmail-${TAG}-linux-amd64.tar.gz \
+                   agentmail-${TAG}-linux-arm64.tar.gz agentmail-${TAG}-darwin-amd64.tar.gz \
+                   agentmail-${TAG}-darwin-arm64.tar.gz )
+          for i in 1 2 3 4 5 6; do
+            NAMES=$(curl -fsSL "${AUTH[@]}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | jq -r '.assets[].name')
+            MISSING=()
+            for e in "${EXPECT[@]}"; do echo "$NAMES" | grep -qx "$e" || MISSING+=("$e"); done
+            if [ ${#MISSING[@]} -eq 0 ]; then
+              echo "All ${#EXPECT[@]} assets present."
+              exit 0
+            fi
+            echo "attempt $i: still missing: ${MISSING[*]}"
+            sleep 5
+          done
+          echo "ERROR: missing assets after retries: ${MISSING[*]}"
+          exit 1
