@@ -151,6 +151,30 @@ func (c *Client) InfoRaw(authUser, authPass, query string) (map[string]any, erro
 	return out, err
 }
 
+// AccountInfoRaw calls the account-scoped /api/account/info?query=<query>
+// endpoint and returns the raw JSON. Always requires account Basic auth
+// (authUser/authPass). query is "self" (caller's own profile) or "directory"
+// (public address book). Mirrors InfoRaw but for account-level queries.
+func (c *Client) AccountInfoRaw(authUser, authPass, query string) (map[string]any, error) {
+	var out map[string]any
+	q := url.Values{}
+	q.Set("query", query)
+	err := c.do("GET", "/api/account/info", basicAuth(authUser, authPass), q, nil, &out)
+	return out, err
+}
+
+// UpdateProfile POSTs to /api/profile/self to set the caller's directory
+// visibility and signature. Returns the raw JSON the server replies with
+// ({"ok":true,"visible":...,"signature":...}).
+func (c *Client) UpdateProfile(authUser, authPass string, visible bool, signature string) (map[string]any, error) {
+	var out map[string]any
+	err := c.do("POST", "/api/profile/self", basicAuth(authUser, authPass), nil, map[string]any{
+		"visible":   visible,
+		"signature": signature,
+	}, &out)
+	return out, err
+}
+
 // --- transport ---
 
 func (c *Client) do(method, path, authHeader string, q url.Values, body any, out any) error {
