@@ -29,6 +29,8 @@ const (
 	ActionResetPassword  Action = "reset_password"
 	ActionDisableAccount Action = "disable_account"
 	ActionProfileUpdate  Action = "profile_update"
+	ActionSetRegistration   Action = "set_registration"
+	ActionSetDirectoryListed Action = "set_directory_listed"
 )
 
 // Entry is one audit record.

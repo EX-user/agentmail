@@ -291,6 +291,17 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, fmt.Sprintf("signature too long (max %d chars)", MaxSignatureLen))
 		return
 	}
+	// Global guard: if the admin has disabled directory listing, block the
+	// false→true transition. Existing listed accounts stay listed (true→true
+	// is allowed), and anyone can un-list themselves (→false). Only opting IN
+	// is refused.
+	if body.Visible && !s.store.IsDirectoryListedEnabled() {
+		cur, err := s.store.GetAccount(who)
+		if err != nil || !cur.Visible {
+			http.Error(w, "directory listing is disabled", http.StatusForbidden)
+			return
+		}
+	}
 	if err := s.store.UpdateProfile(who, body.Visible, sig); err != nil {
 		internalError(w, "update profile: "+err.Error())
 		return

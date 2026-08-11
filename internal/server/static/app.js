@@ -106,21 +106,26 @@
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No accounts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">No accounts.</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
         const rowCls = a.disabled ? " class=\"row-disabled\"" : "";
-        const disabledBadge = a.disabled ? ' <span class="badge-disabled">disabled</span>' : "";
+        // Build tag badges: admin, listed (visible), disabled.
+        var tags = "";
+        if (a.is_admin) tags += ' <span class="badge-admin">admin</span>';
+        if (a.visible) tags += ' <span class="badge-listed">listed</span>';
+        if (a.disabled) tags += ' <span class="badge-disabled">disabled</span>';
         const toggleBtn = a.is_admin
           ? "" // admin cannot be disabled (lockout guard), so no toggle button
           : a.disabled
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">Enable</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">Disable</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell">' + esc(a.address) + disabledBadge + "</td>" +
+          '<td class="addr-cell">' + esc(a.address) + "</td>" +
+          "<td>" + tags.trim() + "</td>" +
+          "<td>" + esc(a.signature || "") + "</td>" +
           "<td><code>" + esc(a.uuid) + "</code></td>" +
-          "<td>" + (a.is_admin ? "✓" : "") + "</td>" +
           "<td>" + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell"><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
@@ -417,6 +422,18 @@
       }
       regBtn.classList.remove("hidden");
 
+      // Directory-listed toggle.
+      const listedStatus = $("#listed-status");
+      const listedBtn = $("#btn-toggle-listed");
+      if (s.directory_listed_enabled) {
+        listedStatus.textContent = "Open (accounts can list themselves)";
+        listedBtn.textContent = "Disable listing";
+      } else {
+        listedStatus.textContent = "Closed (accounts cannot newly list)";
+        listedBtn.textContent = "Enable listing";
+      }
+      listedBtn.classList.remove("hidden");
+
       $("#send-rate-input").value = s.send_rate;
       $("#byte-rate-input").value = Math.round(s.byte_rate / 1048576 * 100) / 100; // bytes → MB
     } catch (e) {
@@ -434,6 +451,22 @@
         body: JSON.stringify({ enabled: next }),
       });
       toast(next ? "Registration enabled" : "Registration disabled");
+      loadSettings();
+    } catch (e) {
+      toast("Error: " + e.message, "error");
+    }
+  });
+
+  $("#btn-toggle-listed").addEventListener("click", async function () {
+    try {
+      const cur = await api("/admin/settings");
+      const next = !cur.directory_listed_enabled;
+      await api("/admin/set-directory-listed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      toast(next ? "Directory listing enabled" : "Directory listing disabled");
       loadSettings();
     } catch (e) {
       toast("Error: " + e.message, "error");
