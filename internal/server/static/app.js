@@ -110,6 +110,23 @@
     const recent = $("#recent-activity");
     stats.textContent = "Loading…";
     recent.textContent = "Loading…";
+    const s = getSession();
+    // Regular accounts can't read /admin/* — calling it would 401 and the
+    // api() wrapper would treat that as session-expired. Use the public stats
+    // endpoint instead, and skip the global audit log (admin-only) for them.
+    if (s && !s.is_admin) {
+      try {
+        const d = await api("/api/info?query=stats");
+        stats.innerHTML =
+          '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
+          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>";
+        recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
+      } catch (e) {
+        stats.textContent = "Error: " + e.message;
+        recent.textContent = "";
+      }
+      return;
+    }
     try {
       const s = await api("/admin/stats");
       stats.innerHTML =
