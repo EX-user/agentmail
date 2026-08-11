@@ -30,6 +30,13 @@ type Account struct {
 	IsAdmin     bool   `json:"is_admin"`
 	Disabled    bool   `json:"disabled"`
 	CreatedAt   int64  `json:"created_at"` // unix seconds
+	// Visible controls whether the account appears in the public directory
+	// (query=directory). Defaults to false; old records missing this field
+	// unmarshal to false, so no data migration is needed.
+	Visible bool `json:"visible"`
+	// Signature is a short user-supplied tagline shown next to the address in
+	// the public directory. Empty by default.
+	Signature string `json:"signature"`
 }
 
 // CreateAccountResult is returned by CreateAccount.
@@ -204,6 +211,57 @@ func (s *Store) SetAccountDisabled(address string, disabled bool) error {
 		}
 		return b.Put([]byte(address), newVal)
 	})
+}
+
+// UpdateProfile sets an account's directory visibility and signature. The
+// caller is responsible for trimming/length-limiting signature. Returns
+// ErrAccountNotFound if the account does not exist.
+func (s *Store) UpdateProfile(address string, visible bool, signature string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bAccounts)
+		val := b.Get([]byte(address))
+		if val == nil {
+			return ErrAccountNotFound
+		}
+		var acc Account
+		if err := json.Unmarshal(val, &acc); err != nil {
+			return err
+		}
+		acc.Visible = visible
+		acc.Signature = signature
+		newVal, err := json.Marshal(acc)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(address), newVal)
+	})
+}
+
+// ListVisibleAccounts returns every account with Visible == true, sorted by
+// address. Disabled accounts are excluded even if marked visible (a disabled
+// account should not advertise itself). Used to build the public directory.
+func (s *Store) ListVisibleAccounts() ([]Account, error) {
+	var out []Account
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bAccounts).Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var acc Account
+			if err := json.Unmarshal(v, &acc); err != nil {
+				continue
+			}
+			if acc.Visible && !acc.Disabled {
+				out = append(out, acc)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Address < out[j].Address
+	})
+	return out, nil
 }
 
 // GeneratePassword returns a cryptographically random password of length n

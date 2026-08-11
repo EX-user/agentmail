@@ -60,6 +60,8 @@
     if (name === "accounts") loadAccounts();
     if (name === "mail") ensureAccountOptions();
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); }
+    if (name === "directory") loadDirectory();
+    if (name === "profile") loadProfile();
     if (name === "settings") loadSettings();
     if (name === "audit") loadAudit();
   }
@@ -331,6 +333,74 @@
     }
   }
 
+  // ---- directory (public address book) ----
+
+  async function loadDirectory() {
+    const tbody = $("#directory-table tbody");
+    tbody.innerHTML = '<tr><td colspan="2">Loading…</td></tr>';
+    try {
+      const data = await api("/api/info?query=directory");
+      const entries = data.entries || [];
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="2">No visible accounts yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map(function (e) {
+        return "<tr>" +
+          "<td>" + esc(e.address) + "</td>" +
+          "<td>" + esc(e.signature || "") + "</td>" +
+          "</tr>";
+      }).join("");
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="2">Error: ' + esc(e.message) + "</td></tr>";
+    }
+  }
+
+  // ---- profile (edit your own visibility + signature) ----
+
+  async function loadProfile() {
+    const status = $("#profile-status");
+    status.textContent = "Loading…";
+    status.className = "muted";
+    try {
+      const p = await api("/api/profile/self");
+      $("#profile-visible").checked = !!p.visible;
+      $("#profile-signature").value = p.signature || "";
+      status.textContent = "";
+    } catch (e) {
+      status.textContent = "Error: " + e.message;
+    }
+  }
+
+  async function saveProfile() {
+    const status = $("#profile-status");
+    const btn = $("#btn-save-profile");
+    btn.disabled = true;
+    status.textContent = "Saving…";
+    status.className = "muted";
+    try {
+      const body = {
+        visible: $("#profile-visible").checked,
+        signature: $("#profile-signature").value,
+      };
+      const res = await api("/api/profile/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      $("#profile-signature").value = res.signature || "";
+      status.textContent = "Saved.";
+      toast("Profile saved");
+    } catch (e) {
+      status.textContent = "Error: " + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("#btn-refresh-directory").addEventListener("click", loadDirectory);
+  $("#btn-save-profile").addEventListener("click", saveProfile);
+
   // ---- settings ----
 
   async function loadSettings() {
@@ -571,9 +641,13 @@
         const actionLabel = m.dir === "in" ? "↩ Reply" : "↪ Follow up";
         const actionTarget = m.dir === "in" ? (m.from || m.peer) : m.peer;
         const subjBase = m.subject || "";
+        // Always prepend the prefix on each reply/follow-up (matches standard
+        // mail clients like Gmail/Outlook, where Re:Re:… is expected). Earlier
+        // the code skipped the prefix when one was already present, which made
+        // a reply-to-a-reply lose the stacking.
         const newSubj = m.dir === "in"
-          ? (subjBase.match(/^re:\s*/i) ? subjBase : "Re: " + subjBase)
-          : (subjBase.match(/^follow-up:\s*/i) ? subjBase : "Follow-up: " + subjBase);
+          ? "Re: " + subjBase
+          : "Follow-up: " + subjBase;
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
           '" data-subj="' + esc(newSubj) + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +

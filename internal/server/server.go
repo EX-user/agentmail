@@ -26,6 +26,10 @@ import (
 // -ldflags "-X github.com/agentmail/agentmail/internal/server.Version=v0.1.2".
 var Version = "dev"
 
+// MaxSignatureLen is the maximum number of characters allowed in an account's
+// directory signature. Enforced in handleProfileSelf before persisting.
+const MaxSignatureLen = 200
+
 // rateWindow is a 1-hour sliding window counter.
 type rateWindow struct {
 	count       int
@@ -120,6 +124,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/send", s.requireInitialized(s.requireAccount(s.handleSend)))
 	mux.HandleFunc("/api/inbox", s.requireInitialized(s.requireAccount(s.handleInbox)))
 	mux.HandleFunc("/api/message", s.requireInitialized(s.requireAccount(s.handleMessage)))
+	mux.HandleFunc("/api/profile/self", s.requireInitialized(s.requireAccount(s.handleProfileSelf)))
 
 	// Admin API (admin Basic auth) — requires initialization.
 	mux.HandleFunc("/admin/messages", s.requireInitialized(s.requireAdmin(s.handleAdminMessages)))
