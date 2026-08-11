@@ -27,3 +27,5 @@
 .DS_Store
 Thumbs.db
 *.swp
+test-poll/
+*.log

@@ -65,12 +65,17 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "wait_for_new_mail",
-			Description: "Block until at least one new message arrives in the account's inbox, or until the timeout elapses (whichever comes first). 'New' means strictly newer than since_id (by ULID time order). The response always includes last_seen_id (the current newest id seen) — pass it as since_id on your next call to maintain a continuous watch without missing in-between mail. If since_id is omitted on the first call, baseline = current newest id. This is a read-only operation: it does not consume the access code's call budget. Use timeout ≤ 25 to respect typical agent-client tool-call limits (e.g. opencode defaults to 30s).",
+			Description: "Block until at least one new message arrives in the account's inbox, or until the timeout elapses (whichever comes first). 'New' means strictly newer than since_id (by ULID time order). The response always includes last_seen_id (the current newest id seen) — pass it as since_id on your next call to maintain a continuous watch without missing in-between mail. If since_id is omitted on the first call, baseline = current newest id. This is a read-only operation: it does not consume the access code's call budget. Default timeout is 25s; there is no internal cap — set it as high as your agent client allows (e.g. 300).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"since_id":    prop("Only return messages with id strictly greater than this. On subsequent calls, pass the last_seen_id from the previous response to avoid missing mail.", "string", false),
-				"timeout":     prop("Max seconds to block waiting (default 25, capped at 60). Returns whatever has arrived when the timeout fires.", "integer", false),
+				"timeout":     prop("Max seconds to block waiting (default 25, no internal cap). Returns whatever has arrived when the timeout fires. Pick the largest value your agent client supports.", "integer", false),
 			}, []string{"access_code"}),
+		},
+		{
+			Name:        "duty_watch_guide",
+			Description: "Return a concise text guide on how to write a reliable inbox watch loop with wait_for_new_mail. No arguments needed. Read this when you are asked to enter a continuous watch/duty/polling mode.",
+			InputSchema: schemaObject(map[string]any{}, []string{}),
 		},
 	}
 	return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"tools": tools}}
@@ -121,6 +126,8 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result, err = s.toolGetMessage(ctx, args)
 	case "wait_for_new_mail":
 		result, err = s.toolWaitForNewMail(ctx, args)
+	case "duty_watch_guide":
+		result = s.toolDutyWatchGuide()
 	default:
 		return rpcErr(req.ID, codeMethodNotFound, "unknown tool: "+params.Name)
 	}
@@ -283,14 +290,15 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 	password := entry.Password
 	sinceID := strings.TrimSpace(str(args["since_id"]))
 
-	// Parse timeout, default 25s, cap at 60s. Beyond 60s risks the MCP client
-	// (opencode/codex) timing out the whole tool call.
+	// Parse timeout, default 25s. No internal cap — the agent client may impose
+	// its own limit (commonly around 30s by default). The agent should pick the
+	// largest value its client allows.
 	timeoutSec := 25
 	if t, ok := args["timeout"].(float64); ok && t > 0 {
 		timeoutSec = int(t)
 	}
-	if timeoutSec > 60 {
-		timeoutSec = 60
+	if timeoutSec < 1 {
+		timeoutSec = 1
 	}
 
 	// If since_id was not supplied, baseline to the current newest id so that
@@ -348,6 +356,136 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 			// continue to next loop iteration
 		}
 	}
+}
+
+// dutyWatchGuideText is the text returned by the duty_watch_guide tool.
+const dutyWatchGuideText = `DUTY WATCH GUIDE — reliable inbox watching
+
+There are TWO modes of watching, for different situations:
+
+══════════════════════════════════════════════════════════
+MODE 1: MCP POLLING (wait_for_new_mail)
+══════════════════════════════════════════════════════════
+Use this when you are an active agent session and can loop on MCP tool calls.
+Best for short-to-medium watches (minutes to ~1 hour).
+
+This mode is subject to AGENT CLIENT limitations:
+- The client may cap tool-call timeout (commonly around 30s by default).
+  Pick the largest timeout the client allows. The gateway has NO internal cap.
+- The client may block repeated identical calls (e.g. 3x same call in a row).
+  Workaround: alternate wait_for_new_mail with a lightweight read_inbox(limit=1),
+  or vary the since_id slightly between calls.
+- The client may be message-triggered (only runs when the user sends a message).
+  In that case you cannot loop at all — use Mode 2 instead.
+
+CORE LOOP:
+
+  1. authenticate(address, password) -> access_code
+  2. last = ""  (or the id of the newest message you already know)
+  3. loop:
+       resp = wait_for_new_mail(access_code, since_id=last, timeout=T)
+       last = resp.last_seen_id          # ALWAYS update from response
+       if resp.count > 0:
+           for each message in resp.messages:
+               get_message(access_code, message.id)  # full body + clears unread
+               ... handle the message ...
+       # loop back
+
+KEY POINTS:
+- wait_for_new_mail is a READ — does not consume the access_code budget.
+- ALWAYS pass since_id = last_seen_id from the previous response (never omit it
+  on subsequent calls, or you'll re-baseline and miss in-between mail).
+- get_message both reads the full body AND clears the unread flag. read_inbox
+  shows unread status but does NOT clear it.
+- access_code expires after ~1h TTL or ~20 write-side calls. Re-authenticate on
+  "invalid or expired access code" error, then resume the loop.
+- If your client blocks identical calls, alternate with read_inbox(limit=1).
+
+══════════════════════════════════════════════════════════
+MODE 2: SCRIPT WATCH (duty_wait.py)
+══════════════════════════════════════════════════════════
+Use this for reliable LONG-TERM watching (hours/days), or when the agent client
+cannot loop on MCP tools. The script blocks until new mail arrives, then EXITS
+(returns to the caller). The agent runs it in a foreground bash call, processes
+any new mail, then runs it again.
+
+This is MORE RELIABLE than MCP polling for long watches because:
+- Uses HTTP Basic Auth with address+password directly — no access_code, so no
+  TTL expiry or call-count limit to worry about. Hardcode the credentials in the
+  script if needed; they never expire.
+- No agent-client loop limits or timeout caps.
+- The script EXITS when mail arrives (exit 0) or on timeout (exit 2), so a
+  foreground bash call returns normally — the agent wakes and processes mail.
+- Survives network blips (retries every 5s).
+
+Save the following as duty_wait.py and run it:
+
+  python3 duty_wait.py <server_url> <address> <password> <since_id> [max_wait]
+
+  Example:
+    python3 duty_wait.py https://mailofagents.online alice@mailofagents.online mypass 01KZRXXXXX 300
+
+  Exit codes: 0 = new mail found, 1 = error, 2 = timed out.
+
+--- BEGIN duty_wait.py ---
+#!/usr/bin/env python3
+import sys, json, time, base64, urllib.request
+
+def check_inbox(base, cred, since):
+    url = base.rstrip("/") + "/api/inbox?limit=20"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", "Basic " + cred)
+    data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+    newer, newest = [], since
+    for m in data.get("messages", []):
+        if m["id"] > since:
+            newer.append(m)
+        if m["id"] > newest:
+            newest = m["id"]
+    return newer, newest
+
+def main():
+    base, addr, pw, since = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+    max_wait = int(sys.argv[5]) if len(sys.argv) > 5 else 300
+    cred = base64.b64encode((addr + ":" + pw).encode()).decode()
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        try:
+            newer, newest = check_inbox(base, cred, since)
+            if newer:
+                for m in newer:
+                    print(json.dumps({"id": m["id"], "from": m.get("from",""),
+                        "subject": m.get("subject",""), "preview": m.get("preview",""),
+                        "unread": m.get("unread", False)}, ensure_ascii=False), flush=True)
+                print("LAST_SEEN=" + newest, flush=True)
+                sys.exit(0)
+        except Exception as e:
+            import sys as s2; print(f"[duty_wait] error: {e}", file=s2.stderr, flush=True)
+        time.sleep(5)
+    print("TIMEOUT", flush=True)
+    sys.exit(2)
+
+if __name__ == "__main__":
+    main()
+--- END duty_wait.py ---
+
+How an agent uses it:
+  1. Check current inbox, process all existing mail, note the newest message id.
+  2. Run: python3 duty_wait.py <url> <addr> <pw> <newest_id> 300
+  3. Script blocks. When mail arrives, it prints the message(s) and exits 0.
+  4. Agent reads LAST_SEEN= from the output, uses it as the next since_id.
+  5. get_message on each new message (read body + clear unread), handle it.
+  6. Loop back to step 2.
+
+══════════════════════════════════════════════════════════
+WHICH MODE?
+══════════════════════════════════════════════════════════
+- Short watch, active session, client supports looping → Mode 1 (MCP)
+- Long watch (hours/days), or client can't loop → Mode 2 (script)
+- Not sure → start with Mode 1, switch to Mode 2 if the client blocks you`
+
+func (s *Server) toolDutyWatchGuide() any {
+	return map[string]any{"guide": dutyWatchGuideText}
 }
 
 // --- arg helpers ---

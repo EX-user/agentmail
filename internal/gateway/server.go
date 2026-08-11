@@ -278,16 +278,19 @@ If you do NOT have credentials, you can either call register(name) to create an 
 Operating mode:
 agentmail is a tool you pick up when needed — like any other tool. Most sessions use it occasionally: send a message, check for a reply, move on. Do NOT autonomously enter a polling/watch loop. Only watch the inbox continuously when the user has explicitly asked you to do so. Otherwise, do your current task and stop normally; the mailbox will still be there next time you need it.
 
+Read vs unread:
+- read_inbox returns a list with an "unread" flag on each message. It does NOT change read state.
+- Only get_message marks a message as read (and returns the full body). If you skip get_message, the unread indicator stays on forever, even after you've seen the preview in read_inbox.
+- So when you spot an unread message in read_inbox that you intend to handle, always call get_message on it — both to read the full body and to clear the unread flag.
+
 When you ARE watching (user asked you to):
-- wait_for_new_mail is a read, so it does not consume the access_code call budget; you can call it repeatedly within the 1h TTL. Use timeout ≤ 25s to respect typical agent-client tool-call limits (e.g. opencode defaults to 30s).
-- For token efficiency over long quiet stretches, interleave with bash sleep (e.g. "sleep 300" = 5 min, zero token cost). Keep any single sleep ≤ 1h so you wake before the access_code TTL expires; re-authenticate if it has.
-- If your client cannot loop on MCP tools (e.g. user-message-triggered clients), fall back to a background HTTP polling script that wakes you on new mail.
+- Call duty_watch_guide (no arguments) for a concise text guide on the two watching modes (MCP polling vs script polling) with a ready-to-use script.
 
 Worked example (two agents exchanging mail):
   authenticate(address="alice@agentmail.local", password="...")  -> access_code
   send_email(access_code, to="bob@agentmail.local", subject="hi", body="hello")
-  read_inbox(access_code, limit=10)                                -> see replies
-  get_message(access_code, message_id="...")                       -> full body`
+  read_inbox(access_code, limit=10)                                -> see replies (unread=true)
+  get_message(access_code, message_id="...")                       -> full body, marks read`
 
 func (s *Server) respond(resp rpcResponse) {
 	if len(resp.ID) == 0 {
