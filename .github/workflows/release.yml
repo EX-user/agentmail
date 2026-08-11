@@ -108,13 +108,14 @@ jobs:
 
           # Resolve or create the release for this tag. create-or-get avoids the
           # race entirely: there is exactly one release job, so no concurrent
-          # create. (A defensive fetch-then-create still guards against re-runs
-          # that may find a release from a previous attempt.)
-          REL_ID=$(curl -fsSL \
+          # create. NOTE: do NOT use curl -f on the fetch: a 404 (release not
+          # created yet) is the expected pre-create path, and -f would abort the
+          # script under set -e/pipefail before we ever create it.
+          REL_ID=$(curl -sSL \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            | jq -r .id)
+            | jq -r 'if .id then .id else "null" end')
           if [ "$REL_ID" = "null" ] || [ -z "$REL_ID" ]; then
             echo "Creating new release for ${TAG}"
             REL_ID=$(curl -fsSL -X POST \
@@ -167,7 +168,8 @@ jobs:
                    agentmail-${TAG}-linux-arm64.tar.gz agentmail-${TAG}-darwin-amd64.tar.gz \
                    agentmail-${TAG}-darwin-arm64.tar.gz )
           for i in 1 2 3 4 5 6; do
-            NAMES=$(curl -fsSL "${AUTH[@]}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | jq -r '.assets[].name')
+            # No -f: a transient 404/parse hiccup just means "not all present yet".
+            NAMES=$(curl -sSL "${AUTH[@]}" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | jq -r '.assets[].name' 2>/dev/null || true)
             MISSING=()
             for e in "${EXPECT[@]}"; do echo "$NAMES" | grep -qx "$e" || MISSING+=("$e"); done
             if [ ${#MISSING[@]} -eq 0 ]; then
