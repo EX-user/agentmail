@@ -139,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/send", s.requireInitialized(s.requireAdmin(s.handleAdminSend)))
 	mux.HandleFunc("/admin/settings", s.requireInitialized(s.requireAdmin(s.handleAdminSettings)))
 	mux.HandleFunc("/admin/set-registration", s.requireInitialized(s.requireAdmin(s.handleAdminSetRegistration)))
+	mux.HandleFunc("/admin/set-directory-listed", s.requireInitialized(s.requireAdmin(s.handleAdminSetDirectoryListed)))
 	mux.HandleFunc("/admin/set-limits", s.requireInitialized(s.requireAdmin(s.handleAdminSetLimits)))
 
 	// Admin web panel: static files under /static/*, plus the index page at "/".

@@ -40,9 +40,10 @@ var (
 	mInitialized         = []byte("initialized")
 	mDomain              = []byte("domain")
 	mListen              = []byte("listen")
-	mRegistrationEnabled = []byte("registration_enabled")
-	mSendRateLimit       = []byte("send_rate_limit")
-	mByteRateLimit       = []byte("byte_rate_limit")
+	mRegistrationEnabled  = []byte("registration_enabled")
+	mDirectoryListedEnabled = []byte("directory_listed_enabled")
+	mSendRateLimit        = []byte("send_rate_limit")
+	mByteRateLimit        = []byte("byte_rate_limit")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -242,6 +243,39 @@ func (s *Store) SetRegistrationEnabled(enabled bool) error {
 			return nil
 		}
 		return mb.Put(mRegistrationEnabled, []byte(v))
+	})
+}
+
+// IsDirectoryListedEnabled reports whether accounts are allowed to opt
+// themselves into the public directory (set Visible=true). Defaults to true
+// (no meta value = enabled), so existing installations keep working.
+func (s *Store) IsDirectoryListedEnabled() bool {
+	var v string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if raw := mb.Get(mDirectoryListedEnabled); raw != nil {
+			v = string(raw)
+		}
+		return nil
+	})
+	return v != "0" // absent or "1" = enabled
+}
+
+// SetDirectoryListedEnabled toggles whether accounts may list themselves.
+func (s *Store) SetDirectoryListedEnabled(enabled bool) error {
+	v := "1"
+	if !enabled {
+		v = "0"
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mDirectoryListedEnabled, []byte(v))
 	})
 }
 

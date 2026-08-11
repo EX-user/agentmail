@@ -82,10 +82,11 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":               "settings",
-		"registration_enabled": s.store.IsRegistrationEnabled(),
-		"send_rate_limit":      s.store.GetSendRateLimit(),
-		"byte_rate_limit":      s.store.GetByteRateLimit(),
+		"query":                  "settings",
+		"registration_enabled":   s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
+		"send_rate_limit":        s.store.GetSendRateLimit(),
+		"byte_rate_limit":        s.store.GetByteRateLimit(),
 	})
 }
 
@@ -114,6 +115,8 @@ func (s *Server) infoAccounts(w http.ResponseWriter, r *http.Request) {
 		Address   string `json:"address"`
 		IsAdmin   bool   `json:"is_admin"`
 		Disabled  bool   `json:"disabled"`
+		Visible   bool   `json:"visible"`
+		Signature string `json:"signature"`
 		CreatedAt int64  `json:"created_at"`
 	}
 	var list []accountInfo
@@ -122,6 +125,8 @@ func (s *Server) infoAccounts(w http.ResponseWriter, r *http.Request) {
 			Address:   a.Address,
 			IsAdmin:   a.IsAdmin,
 			Disabled:  a.Disabled,
+			Visible:   a.Visible,
+			Signature: a.Signature,
 			CreatedAt: a.CreatedAt,
 		})
 	}

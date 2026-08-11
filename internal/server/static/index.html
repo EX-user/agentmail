@@ -57,7 +57,7 @@
       <button id="btn-register" class="primary">+ Register new account</button>
       <div id="register-result" class="callout hidden"></div>
       <table id="accounts-table">
-        <thead><tr><th>Address</th><th>UUID</th><th>Admin</th><th>Created</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Address</th><th>Tags</th><th>Signature</th><th>UUID</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -138,6 +138,14 @@
           <span id="reg-status" class="muted">Loading…</span>
           <button id="btn-toggle-registration" class="row-action hidden"></button>
         </div>
+      </div>
+      <div class="settings-section">
+        <h3>Directory listing</h3>
+        <div class="row">
+          <span id="listed-status" class="muted">Loading…</span>
+          <button id="btn-toggle-listed" class="row-action hidden"></button>
+        </div>
+        <p class="muted">When off, accounts cannot newly opt into the public directory. Already-listed accounts stay listed.</p>
       </div>
       <div class="settings-section">
         <h3>Rate limits</h3>
