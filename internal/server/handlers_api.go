@@ -304,6 +304,66 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAccountInfo is the account-scoped query endpoint. It requires account
+// Basic auth (requireAccount) — every query needs access, so the tool contract
+// is uniform. This is the account-level companion to /api/info (which is
+// system-level): directory moves here from server_info so MCP tools split by
+// responsibility (system info vs account info vs self-update).
+//   GET /api/account/info?query=self       -> {address, visible, signature}
+//   GET /api/account/info?query=directory  -> {entries:[{address, signature}]}
+//
+// query=directory reuses ListVisibleAccounts (same data as the public
+// /api/info?query=directory); it is exposed here too so the account_info MCP
+// tool is self-contained.
+func (s *Server) handleAccountInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		query = "self"
+	}
+	switch query {
+	case "self":
+		acc, err := s.store.GetAccount(who)
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"query":     "self",
+			"address":   acc.Address,
+			"visible":   acc.Visible,
+			"signature": acc.Signature,
+		})
+
+	case "directory":
+		visible, err := s.store.ListVisibleAccounts()
+		if err != nil {
+			internalError(w, "list visible: "+err.Error())
+			return
+		}
+		type dirEntry struct {
+			Address   string `json:"address"`
+			Signature string `json:"signature"`
+		}
+		entries := make([]dirEntry, 0, len(visible))
+		for _, a := range visible {
+			entries = append(entries, dirEntry{Address: a.Address, Signature: a.Signature})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"query":   "directory",
+			"count":   len(entries),
+			"entries": entries,
+		})
+
+	default:
+		badRequest(w, "unknown query: "+query+". Use query=self or query=directory.")
+	}
+}
+
 // --- response helpers ---
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

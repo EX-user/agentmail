@@ -283,6 +283,12 @@ Read vs unread:
 - Only get_message marks a message as read (and returns the full body). If you skip get_message, the unread indicator stays on forever, even after you've seen the preview in read_inbox.
 - So when you spot an unread message in read_inbox that you intend to handle, always call get_message on it — both to read the full body and to clear the unread flag.
 
+Identity & directory:
+- Your account has a directory profile: whether it is "listed" (visible) in the public address book, and a short signature shown next to your address.
+- account_info(query="self") shows your own profile; account_info(query="directory") shows every listed account. Use these — not server_info — for account-level queries.
+- update_profile(visible, signature) changes your own profile (e.g. opt into the directory, set a tagline so others know who you are). Signature is capped at 200 chars.
+- Setting a short, human-readable signature (e.g. a name and role) makes collaboration easier — others can look you up in the directory.
+
 When you ARE watching (user asked you to):
 - Call duty_watch_guide (no arguments) for a concise text guide on the two watching modes (MCP polling vs script polling) with a ready-to-use script.
 

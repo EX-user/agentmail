@@ -79,11 +79,28 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "server_info",
-			Description: "Query the server for structured information. Pass query to select what to return: \"status\" (version/domain), \"stats\" (account/message counts), \"settings\" (registration/rate limits), \"accounts\" (full account list, admin only), \"audit\" (recent audit log, admin only), \"help\" (list all queries). Admin-only queries require access_code from an admin account. This tool is a thin pass-through — new query types are added on the server side, no gateway change needed.",
+			Description: "Query the server for SYSTEM-level structured information. Pass query to select what to return: \"status\" (version/domain), \"stats\" (account/message counts), \"settings\" (registration/rate limits), \"accounts\" (full account list, admin only), \"audit\" (recent audit log, admin only), \"help\" (list all queries). Admin-only queries require access_code from an admin account. This tool covers system-wide info; for ACCOUNT-level queries (your own profile, the public directory) use account_info instead. This tool is a thin pass-through — new query types are added on the server side, no gateway change needed.",
 			InputSchema: schemaObject(map[string]any{
 				"query":       prop("What to query: status, stats, settings, accounts, audit, or help (default: help)", "string", false),
 				"access_code": prop("Access code from authenticate. Required for admin-only queries (accounts, audit). Omit for public queries.", "string", false),
 			}, []string{}),
+		},
+		{
+			Name:        "account_info",
+			Description: "Query ACCOUNT-level information for the account bound to the access code. Pass query to select what to return: \"self\" (your own profile: address, whether you are listed in the directory, and your signature) or \"directory\" (the public address book — every account that opted to be listed, with its signature). Always requires access_code (every query is account-scoped, for a uniform contract). Use this — not server_info — for your own profile or the directory.",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate (required — identifies whose profile / which account)", "string", true),
+				"query":       prop("What to query: self (your own profile) or directory (public address book). Default: self.", "string", false),
+			}, []string{"access_code"}),
+		},
+		{
+			Name:        "update_profile",
+			Description: "Update YOUR OWN directory profile: whether you are listed in the public address book (visible/listed) and your signature (a short tagline shown next to your address). Requires access_code to identify whose profile to change. The signature is trimmed and capped at 200 characters. Changes take effect immediately in account_info query=directory.",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate (required — identifies the account whose profile is updated)", "string", true),
+				"visible":     prop("Whether to list this account in the public directory (true = listed, false = hidden)", "boolean", false),
+				"signature":   prop("A short tagline shown next to the address in the directory (trimmed, max 200 chars)", "string", false),
+			}, []string{"access_code"}),
 		},
 	}
 	return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"tools": tools}}
@@ -138,6 +155,10 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result = s.toolDutyWatchGuide()
 	case "server_info":
 		result, err = s.toolServerInfo(ctx, args)
+	case "account_info":
+		result, err = s.toolAccountInfo(ctx, args)
+	case "update_profile":
+		result, err = s.toolUpdateProfile(ctx, args)
 	default:
 		return rpcErr(req.ID, codeMethodNotFound, "unknown tool: "+params.Name)
 	}
@@ -525,6 +546,53 @@ func (s *Server) toolServerInfo(ctx context.Context, args map[string]any) (any, 
 	result, err := client.InfoRaw(authUser, authPass, query)
 	if err != nil {
 		return nil, fmt.Errorf("server_info: %w", err)
+	}
+	return result, nil
+}
+
+// toolAccountInfo is the account-scoped query tool. Every query needs an
+// access_code (uniform contract). query=self returns the caller's own profile;
+// query=directory returns the public address book. Forwards to the server's
+// /api/account/info endpoint.
+func (s *Server) toolAccountInfo(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	if err != nil {
+		return nil, err
+	}
+	query := strings.TrimSpace(str(args["query"]))
+	if query == "" {
+		query = "self"
+	}
+	if query != "self" && query != "directory" {
+		return nil, fmt.Errorf("query must be 'self' or 'directory' (got %q)", query)
+	}
+	client := s.getClient(entry.ServerURL)
+	result, err := client.AccountInfoRaw(entry.Address, entry.Password, query)
+	if err != nil {
+		return nil, fmt.Errorf("account_info: %w", err)
+	}
+	return result, nil
+}
+
+// toolUpdateProfile updates the caller's own directory profile (visibility +
+// signature). Forwards to the server's POST /api/profile/self. The server does
+// the trimming and 200-char cap; here we just pass the values through.
+func (s *Server) toolUpdateProfile(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCode(str(args["access_code"]))
+	if err != nil {
+		return nil, err
+	}
+	// visible defaults to false if omitted; signature defaults to empty.
+	visible := false
+	if v, ok := args["visible"].(bool); ok {
+		visible = v
+	}
+	signature, _ := args["signature"].(string)
+
+	client := s.getClient(entry.ServerURL)
+	result, err := client.UpdateProfile(entry.Address, entry.Password, visible, signature)
+	if err != nil {
+		return nil, fmt.Errorf("update_profile: %w", err)
 	}
 	return result, nil
 }
