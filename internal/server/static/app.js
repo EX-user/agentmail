@@ -60,6 +60,7 @@
     if (name === "accounts") loadAccounts();
     if (name === "mail") ensureAccountOptions();
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); }
+    if (name === "settings") loadSettings();
     if (name === "audit") loadAudit();
   }
 
@@ -329,6 +330,66 @@
       tbody.innerHTML = '<tr><td colspan="4">Error: ' + esc(e.message) + "</td></tr>";
     }
   }
+
+  // ---- settings ----
+
+  async function loadSettings() {
+    try {
+      const s = await api("/admin/settings");
+      const regStatus = $("#reg-status");
+      const regBtn = $("#btn-toggle-registration");
+      if (s.registration_enabled) {
+        regStatus.textContent = "Open (anyone can register)";
+        regBtn.textContent = "Disable registration";
+      } else {
+        regStatus.textContent = "Closed (only admin can register)";
+        regBtn.textContent = "Enable registration";
+      }
+      regBtn.classList.remove("hidden");
+
+      $("#send-rate-input").value = s.send_rate;
+      $("#byte-rate-input").value = Math.round(s.byte_rate / 1048576 * 100) / 100; // bytes → MB
+    } catch (e) {
+      $("#reg-status").textContent = "Error: " + e.message;
+    }
+  }
+
+  $("#btn-toggle-registration").addEventListener("click", async function () {
+    try {
+      const cur = await api("/admin/settings");
+      const next = !cur.registration_enabled;
+      await api("/admin/set-registration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      toast(next ? "Registration enabled" : "Registration disabled");
+      loadSettings();
+    } catch (e) {
+      toast("Error: " + e.message, "error");
+    }
+  });
+
+  $("#btn-save-limits").addEventListener("click", async function () {
+    const sendRate = parseInt($("#send-rate-input").value, 10);
+    const byteMB = parseFloat($("#byte-rate-input").value);
+    const byteRate = Math.round(byteMB * 1048576);
+    if (!sendRate || sendRate < 1 || !byteRate || byteRate < 1) {
+      $("#limits-status").textContent = "Invalid values";
+      return;
+    }
+    try {
+      await api("/admin/set-limits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ send_rate: sendRate, byte_rate: byteRate }),
+      });
+      $("#limits-status").textContent = "✓ Saved";
+      toast("Limits saved");
+    } catch (e) {
+      $("#limits-status").textContent = "Error: " + e.message;
+    }
+  });
 
   // ---- init ----
 

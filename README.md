@@ -53,6 +53,8 @@ credentials. Features:
 - **Mail** — read any account's inbox/sent, with unread indicators
 - **Compose** — send mail as admin, with conversation thread view and
   quick reply/follow-up buttons
+- **Settings** — toggle public registration, adjust send-rate (500/hour
+  default) and byte-rate (1 MB/hour default) limits
 - **Audit** — recent security-relevant actions
 
 ## Quick start
@@ -125,12 +127,25 @@ gateway can also talk to multiple servers — pass `server_url` to authenticate
 against a different server than the default; the access code remembers which
 server it belongs to and subsequent calls route automatically.
 
+### Rate limits and registration policy
+
+Adjustable at runtime through the Settings tab (persisted in the database):
+
+| Setting | Default | Effect |
+|---|---|---|
+| Registration enabled | on | When off, `POST /api/register` returns 403 |
+| Send rate limit | 500 / hour / account | Exceeded → HTTP 429 |
+| Byte receive rate limit | 1 MB / hour / account | Over-budget recipients are skipped |
+
+Limits use a 1-hour sliding window tracked in memory (reset on restart).
+
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — full architecture and design rationale
 - [`docs/isolation.md`](docs/isolation.md) — the three-layer isolation model
 - [`docs/agent-setup.md`](docs/agent-setup.md) — how to register the gateway with Codex CLI / Claude Code / opencode
 - [`docs/wsl-client.md`](docs/wsl-client.md) — WSL2 client guide (network modes, proxy pitfalls, LAN access)
+- [`docs/deploy.md`](docs/deploy.md) — reverse proxy + TLS deployment (Caddy / nginx + Let's Encrypt)
 
 ## License
 

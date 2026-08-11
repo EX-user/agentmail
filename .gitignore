@@ -1,4 +1,5 @@
 # Compiled binaries
+/bin/
 /agentmail-server
 /agentmail-server.exe
 /agentmail-gateway

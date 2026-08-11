@@ -35,6 +35,7 @@
       <button class="tab" data-tab="accounts">Accounts</button>
       <button class="tab" data-tab="mail">Mail</button>
       <button class="tab" data-tab="compose">Compose</button>
+      <button class="tab" data-tab="settings">Settings</button>
       <button class="tab" data-tab="audit">Audit</button>
     </nav>
   </header>
@@ -90,6 +91,33 @@
         <thead><tr><th>Time</th><th>Action</th><th>Account</th><th>Detail</th></tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="tab-panel hidden">
+      <h2>Settings</h2>
+      <div class="settings-section">
+        <h3>Registration</h3>
+        <div class="row">
+          <span id="reg-status" class="muted">Loading…</span>
+          <button id="btn-toggle-registration" class="row-action hidden"></button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Rate limits</h3>
+        <div class="row">
+          <label>Send limit:
+            <input type="number" id="send-rate-input" value="500" min="1" style="width:80px" />
+            <small class="muted">/hour per account</small>
+          </label>
+          <label>Byte limit:
+            <input type="number" id="byte-rate-input" value="1" min="1" style="width:80px" />
+            <small class="muted">MB/hour per account</small>
+          </label>
+          <button id="btn-save-limits" class="row-action">Save limits</button>
+          <span id="limits-status" class="muted"></span>
+        </div>
+      </div>
     </section>
 
     <!-- Compose -->

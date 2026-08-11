@@ -37,9 +37,12 @@ var (
 
 // Meta keys within the meta bucket.
 var (
-	mInitialized = []byte("initialized")
-	mDomain      = []byte("domain")
-	mListen      = []byte("listen")
+	mInitialized         = []byte("initialized")
+	mDomain              = []byte("domain")
+	mListen              = []byte("listen")
+	mRegistrationEnabled = []byte("registration_enabled")
+	mSendRateLimit       = []byte("send_rate_limit")
+	mByteRateLimit       = []byte("byte_rate_limit")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -205,5 +208,105 @@ func (s *Store) SetListen(listen string) error {
 			return nil
 		}
 		return mb.Put(mListen, []byte(listen))
+	})
+}
+
+// --- rate / registration settings ---
+
+// IsRegistrationEnabled reports whether public account registration is
+// allowed. Defaults to true (no meta value = enabled).
+func (s *Store) IsRegistrationEnabled() bool {
+	var v string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if raw := mb.Get(mRegistrationEnabled); raw != nil {
+			v = string(raw)
+		}
+		return nil
+	})
+	return v != "0" // absent or "1" = enabled
+}
+
+// SetRegistrationEnabled toggles public registration.
+func (s *Store) SetRegistrationEnabled(enabled bool) error {
+	v := "1"
+	if !enabled {
+		v = "0"
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mRegistrationEnabled, []byte(v))
+	})
+}
+
+// GetSendRateLimit returns the per-account send limit per hour. Default 500.
+func (s *Store) GetSendRateLimit() int {
+	v := s.getMetaInt(mSendRateLimit, 500)
+	if v <= 0 {
+		return 500
+	}
+	return v
+}
+
+// SetSendRateLimit sets the per-account send limit per hour.
+func (s *Store) SetSendRateLimit(n int) error {
+	return s.setMetaInt(mSendRateLimit, n)
+}
+
+// GetByteRateLimit returns the per-account byte receive limit per hour. Default 1MB.
+func (s *Store) GetByteRateLimit() int64 {
+	v := s.getMetaInt64(mByteRateLimit, 1048576)
+	if v <= 0 {
+		return 1048576
+	}
+	return v
+}
+
+// SetByteRateLimit sets the per-account byte receive limit per hour.
+func (s *Store) SetByteRateLimit(n int64) error {
+	return s.setMetaInt64(mByteRateLimit, n)
+}
+
+// getMetaInt / getMetaInt64 / setMetaInt / setMetaInt64 are small helpers for
+// reading/writing integer settings in the meta bucket.
+func (s *Store) getMetaInt(key []byte, def int) int {
+	return int(s.getMetaInt64(key, int64(def)))
+}
+
+func (s *Store) getMetaInt64(key []byte, def int64) int64 {
+	var v int64 = def
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if raw := mb.Get(key); raw != nil {
+			var n int64
+			if _, err := fmt.Sscanf(string(raw), "%d", &n); err == nil {
+				v = n
+			}
+		}
+		return nil
+	})
+	return v
+}
+
+func (s *Store) setMetaInt(key []byte, n int) error {
+	return s.setMetaInt64(key, int64(n))
+}
+
+func (s *Store) setMetaInt64(key []byte, n int64) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(key, []byte(fmt.Sprintf("%d", n)))
 	})
 }

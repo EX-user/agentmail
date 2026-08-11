@@ -8,9 +8,11 @@ package server
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -24,16 +26,28 @@ import (
 // -ldflags "-X github.com/agentmail/agentmail/internal/server.Version=v0.1.2".
 var Version = "dev"
 
+// rateWindow is a 1-hour sliding window counter.
+type rateWindow struct {
+	count       int
+	bytes       int64
+	windowStart time.Time
+}
+
 // Server wires the store and audit log to the HTTP router.
 type Server struct {
 	store    *store.Store
 	audit    *audit.Store
 	cfg      *config.Config
+
+	// Rate limiters (in-memory, 1-hour sliding window).
+	rateMu     sync.Mutex
+	sendRates  map[string]*rateWindow // address -> send count window
+	recvRates  map[string]*rateWindow // address -> byte receive window
 }
 
 // New builds a server with the given dependencies.
 func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
-	return &Server{store: s, audit: a, cfg: cfg}
+	return &Server{store: s, audit: a, cfg: cfg, sendRates: make(map[string]*rateWindow), recvRates: make(map[string]*rateWindow)}
 }
 
 // domain returns the effective mail domain: the value persisted in bbolt
@@ -46,6 +60,46 @@ func (s *Server) domain() string {
 // The admin local-part is fixed as "admin".
 func (s *Server) adminAddress() string {
 	return "admin@" + s.domain()
+}
+
+// --- rate limiting (1-hour sliding window, in-memory) ---
+
+// checkSendRate returns an error if the account has exceeded its hourly send
+// limit. On success it increments the counter.
+func (s *Server) checkSendRate(address string) error {
+	limit := s.store.GetSendRateLimit()
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	w := s.sendRates[address]
+	now := time.Now()
+	if w == nil || now.Sub(w.windowStart) >= time.Hour {
+		w = &rateWindow{windowStart: now}
+		s.sendRates[address] = w
+	}
+	if w.count >= limit {
+		return fmt.Errorf("send rate limit exceeded (%d/hour)", limit)
+	}
+	w.count++
+	return nil
+}
+
+// checkRecvRate returns false if the account has exceeded its hourly byte
+// receive limit for bodyLen additional bytes. On true it updates the counter.
+func (s *Server) checkRecvRate(address string, bodyLen int64) bool {
+	limit := s.store.GetByteRateLimit()
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	w := s.recvRates[address]
+	now := time.Now()
+	if w == nil || now.Sub(w.windowStart) >= time.Hour {
+		w = &rateWindow{windowStart: now}
+		s.recvRates[address] = w
+	}
+	if w.bytes+bodyLen > limit {
+		return false // would exceed
+	}
+	w.bytes += bodyLen
+	return true
 }
 
 // Handler returns the HTTP handler for the API.
@@ -76,6 +130,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/reset-password", s.requireInitialized(s.requireAdmin(s.handleAdminResetPassword)))
 	mux.HandleFunc("/admin/set-disabled", s.requireInitialized(s.requireAdmin(s.handleAdminSetDisabled)))
 	mux.HandleFunc("/admin/send", s.requireInitialized(s.requireAdmin(s.handleAdminSend)))
+	mux.HandleFunc("/admin/settings", s.requireInitialized(s.requireAdmin(s.handleAdminSettings)))
+	mux.HandleFunc("/admin/set-registration", s.requireInitialized(s.requireAdmin(s.handleAdminSetRegistration)))
+	mux.HandleFunc("/admin/set-limits", s.requireInitialized(s.requireAdmin(s.handleAdminSetLimits)))
 
 	// Admin web panel: static files under /static/*, plus the index page at "/".
 	// These are always served (the panel JS checks /api/status to decide

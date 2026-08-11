@@ -91,6 +91,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
+	if !s.store.IsRegistrationEnabled() {
+		http.Error(w, "registration disabled", http.StatusForbidden)
+		return
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -170,8 +174,28 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send rate limit (per-sender).
+	if err := s.checkSendRate(from); err != nil {
+		http.Error(w, err.Error(), http.StatusTooManyRequests)
+		return
+	}
+
+	// Byte receive rate limit (per-recipient): filter out recipients whose
+	// hourly byte budget would be exceeded.
+	bodyLen := int64(len(body.Body))
+	var validRecipients []string
+	for _, rcpt := range body.To {
+		if s.checkRecvRate(rcpt, bodyLen) {
+			validRecipients = append(validRecipients, rcpt)
+		}
+	}
+	if len(validRecipients) == 0 {
+		http.Error(w, "all recipients exceeded byte rate limit", http.StatusTooManyRequests)
+		return
+	}
+
 	fromName := localPart(from)
-	res, err := s.store.Send(from, fromName, body.To, body.Subject, body.Body)
+	res, err := s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
 	if err != nil {
 		badRequest(w, err.Error())
 		return

@@ -301,3 +301,7 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .write-status { font-size: 12px; }
 .success-note { color: var(--success); font-size: 14px; margin: 16px 0; }
 .error-text { color: var(--error); }
+
+/* Settings tab */
+.settings-section { margin-bottom: 24px; }
+.settings-section .row { gap: 16px; flex-wrap: wrap; }

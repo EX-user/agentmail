@@ -300,9 +300,26 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rate limits apply to admin too.
 	from := s.adminAddress()
+	if err := s.checkSendRate(from); err != nil {
+		http.Error(w, err.Error(), http.StatusTooManyRequests)
+		return
+	}
+	bodyLen := int64(len(body.Body))
+	var validRecipients []string
+	for _, rcpt := range body.To {
+		if s.checkRecvRate(rcpt, bodyLen) {
+			validRecipients = append(validRecipients, rcpt)
+		}
+	}
+	if len(validRecipients) == 0 {
+		http.Error(w, "all recipients exceeded byte rate limit", http.StatusTooManyRequests)
+		return
+	}
+
 	fromName := localPart(from)
-	res, err := s.store.Send(from, fromName, body.To, body.Subject, body.Body)
+	res, err := s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
 	if err != nil {
 		badRequest(w, err.Error())
 		return
@@ -312,5 +329,81 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message_id": res.MessageID,
 		"status":     "sent",
+	})
+}
+
+// handleAdminSettings returns the current system settings.
+//   GET /admin/settings -> {registration_enabled, send_rate, byte_rate}
+func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"registration_enabled": s.store.IsRegistrationEnabled(),
+		"send_rate":            s.store.GetSendRateLimit(),
+		"byte_rate":            s.store.GetByteRateLimit(),
+	})
+}
+
+// handleAdminSetRegistration toggles public registration.
+//   POST /admin/set-registration {"enabled": bool}
+func (s *Server) handleAdminSetRegistration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct{ Enabled bool `json:"enabled"` }
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetRegistrationEnabled(body.Enabled); err != nil {
+		internalError(w, "set registration: "+err.Error())
+		return
+	}
+	state := "enable"
+	if !body.Enabled {
+		state = "disable"
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionDisableAccount, "registration", "by=admin "+state)
+	writeJSON(w, http.StatusOK, map[string]any{"registration_enabled": body.Enabled})
+}
+
+// handleAdminSetLimits adjusts the rate limits.
+//   POST /admin/set-limits {"send_rate": 500, "byte_rate": 1048576}
+//   Both fields optional; only provided fields are updated.
+func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		SendRate *int   `json:"send_rate"`
+		ByteRate *int64 `json:"byte_rate"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if body.SendRate != nil {
+		if *body.SendRate < 1 {
+			badRequest(w, "send_rate must be positive")
+			return
+		}
+		if err := s.store.SetSendRateLimit(*body.SendRate); err != nil {
+			internalError(w, "set send rate: "+err.Error())
+			return
+		}
+	}
+	if body.ByteRate != nil {
+		if *body.ByteRate < 1 {
+			badRequest(w, "byte_rate must be positive")
+			return
+		}
+		if err := s.store.SetByteRateLimit(*body.ByteRate); err != nil {
+			internalError(w, "set byte rate: "+err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"send_rate": s.store.GetSendRateLimit(),
+		"byte_rate": s.store.GetByteRateLimit(),
 	})
 }
