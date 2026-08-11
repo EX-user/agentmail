@@ -96,7 +96,8 @@ func (s *Server) infoAccounts(w http.ResponseWriter, r *http.Request) {
 	// Check admin credentials via Basic Auth.
 	address, password, ok := r.BasicAuth()
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
+		// No WWW-Authenticate header: the JS panel manages auth itself, and
+		// that header would trigger the browser's native login popup.
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -141,7 +142,8 @@ func (s *Server) infoAccounts(w http.ResponseWriter, r *http.Request) {
 func (s *Server) infoAudit(w http.ResponseWriter, r *http.Request) {
 	address, password, ok := r.BasicAuth()
 	if !ok {
-		w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
+		// No WWW-Authenticate header: the JS panel manages auth itself, and
+		// that header would trigger the browser's native login popup.
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

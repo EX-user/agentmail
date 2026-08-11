@@ -307,8 +307,12 @@ func parseBasicAuth(header string) (user, pass string, ok bool) {
 	return parts[0], parts[1], true
 }
 
+// unauthorized writes a 401 WITHOUT a WWW-Authenticate header. The panel now
+// manages credentials in JS (sessionStorage + a Basic auth header on each
+// request); sending WWW-Authenticate would make the browser pop its native
+// login dialog on a 401, fighting the JS login flow. The JS api() wrapper
+// handles 401 itself (clears the session and shows the login page).
 func unauthorized(w http.ResponseWriter) {
-	w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 }
 
