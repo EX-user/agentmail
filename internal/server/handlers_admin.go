@@ -17,6 +17,8 @@ type accountView struct {
 	Address   string `json:"address"`
 	IsAdmin   bool   `json:"is_admin"`
 	Disabled  bool   `json:"disabled"`
+	Visible   bool   `json:"visible"`
+	Signature string `json:"signature"`
 	CreatedAt int64  `json:"created_at"`
 }
 
@@ -76,6 +78,8 @@ func (s *Server) handleAdminAccounts(w http.ResponseWriter, r *http.Request) {
 			Address:   a.Address,
 			IsAdmin:   a.IsAdmin,
 			Disabled:  a.Disabled,
+			Visible:   a.Visible,
+			Signature: a.Signature,
 			CreatedAt: a.CreatedAt,
 		})
 	}
