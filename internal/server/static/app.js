@@ -1,6 +1,8 @@
 // agentmail admin panel — vanilla JS, no build step.
-// All API calls rely on the browser's Basic auth cache (the native login prompt
-// shown on first visit). No credentials are stored by this script.
+// Authentication: credentials (address + password) are kept in sessionStorage
+// after login and sent as a Basic auth header on every API call. This lets the
+// panel serve both admin and regular accounts from one login page. sessionStorage
+// is used (not localStorage) so credentials do not persist across browser sessions.
 
 (function () {
   "use strict";
@@ -8,13 +10,44 @@
   // System domain from /api/status, used to construct admin address etc.
   let systemDomain = "agentmail.local";
 
+  // ---- session / auth ----
+
+  const SESSION_KEY = "agentmail_creds"; // sessionStorage: {address, password, is_admin}
+
+  function getSession() {
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); }
+    catch (_) { return null; }
+  }
+  function setSession(s) {
+    if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else sessionStorage.removeItem(SESSION_KEY);
+  }
+  // basicAuth returns the Authorization header value for the cached creds, or "".
+  function basicAuth() {
+    const s = getSession();
+    if (!s || !s.address) return "";
+    return "Basic " + btoa(unescape(encodeURIComponent(s.address + ":" + s.password)));
+  }
+
   // ---- helpers ----
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
+  // api wraps fetch with the cached Basic auth header. If a call comes back 401,
+  // the cached creds are stale/wrong: clear them and surface the login page.
   async function api(path, opts) {
-    const res = await fetch(path, opts || {});
+    opts = opts || {};
+    const headers = Object.assign({}, opts.headers || {});
+    const auth = basicAuth();
+    if (auth && !headers.Authorization) headers.Authorization = auth;
+    if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    const res = await fetch(path, Object.assign({}, opts, { headers: headers }));
+    if (res.status === 401 && getSession()) {
+      setSession(null); // creds invalid — force re-login
+      showLogin();
+      throw new Error("session expired — please log in again");
+    }
     if (!res.ok) {
       let msg = res.status + " " + res.statusText;
       try { const t = await res.text(); if (t) msg = t; } catch (_) {}
@@ -496,7 +529,7 @@
 
   // ---- init ----
 
-  // Check initialization state; show setup wizard or normal panel.
+  // Check initialization state; show setup wizard, login page, or app.
   async function init() {
     try {
       const st = await api("/api/status");
@@ -504,28 +537,91 @@
       if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
       if (!st.initialized) {
         showSetup();
+        return;
+      }
+      // Initialized: if we have cached creds, verify them; else show login.
+      if (getSession()) {
+        try {
+          const me = await api("/api/account/info?query=self");
+          // Refresh the cached role in case it changed server-side.
+          const s = getSession(); s.is_admin = !!me.is_admin; setSession(s);
+          showApp(me.is_admin);
+          activateTab("overview");
+        } catch (e) {
+          // Verification failed (401 already cleared session + showed login).
+          showLogin();
+        }
       } else {
-        showApp();
-        activateTab("overview");
+        showLogin();
       }
     } catch (e) {
-      // If /api/status itself fails, show app anyway (server may be mid-restart).
-      showApp();
-      activateTab("overview");
+      // If /api/status itself fails, show login (server may be mid-restart).
+      showLogin();
     }
   }
 
-  function showSetup() {
-    $("#setup-page").classList.remove("hidden");
+  function hideAllScreens() {
+    $("#setup-page").classList.add("hidden");
+    $("#login-page").classList.add("hidden");
     $("#app-header").classList.add("hidden");
     document.querySelector("main").classList.add("hidden");
   }
 
+  function showSetup() {
+    hideAllScreens();
+    $("#setup-page").classList.remove("hidden");
+  }
+
+  function showLogin() {
+    hideAllScreens();
+    $("#login-page").classList.remove("hidden");
+    $("#login-status").textContent = "";
+    const s = getSession();
+    $("#login-address").value = s ? s.address : "";
+    $("#login-password").value = "";
+    $("#login-address").focus();
+  }
+
+  // showApp reveals the panel. (Role-based tab rendering arrives in v0.2.8b;
+  // for now admin and regular accounts both see the full admin panel — regular
+  // accounts simply won't have permission on /admin/* and those tabs will error,
+  // which is expected and fine for this foundation release.)
   function showApp() {
-    $("#setup-page").classList.add("hidden");
+    hideAllScreens();
     $("#app-header").classList.remove("hidden");
     document.querySelector("main").classList.remove("hidden");
+    const s = getSession();
+    if (s) {
+      $("#whoami").textContent = s.address + (s.is_admin ? " (admin)" : "");
+    }
   }
+
+  $("#btn-logout").addEventListener("click", function () {
+    setSession(null);
+    showLogin();
+  });
+
+  // ---- login ----
+
+  $("#btn-login").addEventListener("click", async function () {
+    const address = $("#login-address").value.trim();
+    const password = $("#login-password").value;
+    const status = $("#login-status");
+    if (!address || !password) { status.textContent = "Address and password are required."; return; }
+    status.textContent = "Signing in…";
+    // Cache creds tentatively so api() sends them, then verify via account/info.
+    setSession({ address: address, password: password, is_admin: false });
+    try {
+      const me = await api("/api/account/info?query=self");
+      const s = getSession(); s.is_admin = !!me.is_admin; setSession(s);
+      status.textContent = "";
+      showApp();
+      activateTab("overview");
+    } catch (e) {
+      setSession(null);
+      status.textContent = "Login failed: " + e.message;
+    }
+  });
 
   $("#btn-setup").addEventListener("click", async function () {
     const domain = $("#setup-domain").value.trim();
@@ -542,8 +638,8 @@
       });
       status.textContent = "Done. Reloading…";
       toast("System initialized", "success");
-      // The admin must now log in via Basic auth. Force a reload; the browser
-      // will prompt for credentials on first /admin/* call.
+      // System is now initialized; reload so init() routes to the login page,
+      // where the admin can sign in with the password just chosen.
       setTimeout(function () { window.location.reload(); }, 1500);
     } catch (e) {
       status.textContent = "Error: " + e.message;

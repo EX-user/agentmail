@@ -28,8 +28,34 @@
     </div>
   </section>
 
+  <!-- Login page (shown when initialized but no credentials cached) -->
+  <section id="login-page" class="setup-page hidden">
+    <div class="setup-card">
+      <h1>agentmail login</h1>
+      <p class="muted">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
+      <div class="compose-form">
+        <label>Address
+          <input type="text" id="login-address" placeholder="you@agentmail.local" autocomplete="username" />
+        </label>
+        <label>Password
+          <input type="password" id="login-password" placeholder="password" autocomplete="current-password" />
+        </label>
+        <div class="row">
+          <button id="btn-login" class="primary">Log in</button>
+          <span id="login-status" class="muted"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <header id="app-header" class="hidden">
-    <h1>agentmail <small id="version-badge" class="version-badge"></small></h1>
+    <div class="header-row">
+      <h1>agentmail <small id="version-badge" class="version-badge"></small></h1>
+      <div class="header-actions">
+        <span id="whoami" class="muted"></span>
+        <button id="btn-logout" class="row-action" title="Sign out">Log out</button>
+      </div>
+    </div>
     <nav>
       <button class="tab" data-tab="overview">Overview</button>
       <button class="tab" data-tab="accounts">Accounts</button>

@@ -346,6 +346,7 @@ func (s *Server) handleAccountInfo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"query":     "self",
 			"address":   acc.Address,
+			"is_admin":  acc.IsAdmin,
 			"visible":   acc.Visible,
 			"signature": acc.Signature,
 		})
@@ -373,6 +374,75 @@ func (s *Server) handleAccountInfo(w http.ResponseWriter, r *http.Request) {
 	default:
 		badRequest(w, "unknown query: "+query+". Use query=self or query=directory.")
 	}
+}
+
+// handleContacts returns the deduplicated list of addresses the authenticated
+// account has exchanged mail with (inbox senders + sent recipients, excluding
+// self). Account Basic auth. Used by the regular-user panel's Accounts tab and
+// the Compose "to" dropdown.
+//   GET /api/contacts  -> {"contacts": ["a@...", "b@..."], "count": N}
+func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	contacts, err := s.store.ListContacts(who)
+	if err != nil {
+		internalError(w, "list contacts: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"contacts": contacts, "count": len(contacts)})
+}
+
+// handleSent lists the authenticated account's sent messages.
+//   GET /api/sent?limit=50  -> {"messages": [...], "count": N}
+func (s *Server) handleSent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	limit := queryInt(r, "limit", 50)
+	msgs, err := s.store.ReadSent(who, limit)
+	if err != nil {
+		internalError(w, "read sent: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs, "count": len(msgs)})
+}
+
+// handleChangePassword lets the authenticated account change its own password
+// by proving the old password. Account Basic auth.
+//   POST /api/password {"old_password":"...","new_password":"..."} -> {"ok":true}
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	var body struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.ChangePassword(who, body.OldPassword, body.NewPassword); err != nil {
+		if errors.Is(err, store.ErrWrongPassword) {
+			http.Error(w, "wrong password", http.StatusUnauthorized)
+			return
+		}
+		if errors.Is(err, store.ErrAccountNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		badRequest(w, err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "self password change")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // --- response helpers ---
