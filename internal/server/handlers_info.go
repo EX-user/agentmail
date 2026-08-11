@@ -1,0 +1,164 @@
+package server
+
+import (
+	"net/http"
+)
+
+// handleInfo is a general-purpose query endpoint that returns structured
+// information about the server. The "query" parameter selects what to return.
+// This is designed so that new query types can be added on the SERVER side
+// without requiring gateway changes — the gateway's server_info tool is a
+// thin pass-through that forwards the query string here.
+//
+//   GET /api/info?query=status     -> version, domain, initialized (public)
+//   GET /api/info?query=stats      -> account/message counts (public)
+//   GET /api/info?query=settings   -> registration + rate limits (public)
+//   GET /api/info?query=accounts   -> account list (admin only)
+//   GET /api/info?query=help       -> list of available queries (public)
+//
+// Auth rules:
+//   - "accounts" requires admin Basic auth.
+//   - All others are public (no auth needed).
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		query = "help"
+	}
+
+	switch query {
+	case "status":
+		s.infoStatus(w, r)
+
+	case "stats":
+		s.infoStats(w, r)
+
+	case "settings":
+		s.infoSettings(w, r)
+
+	case "accounts":
+		// Admin-only: re-authenticate as admin.
+		s.infoAccounts(w, r)
+
+	case "audit":
+		// Admin-only.
+		s.infoAudit(w, r)
+
+	case "help":
+		s.infoHelp(w, r)
+
+	default:
+		badRequest(w, "unknown query: "+query+". Use query=help to see options.")
+	}
+}
+
+func (s *Server) infoStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":       "status",
+		"version":     Version,
+		"domain":      s.domain(),
+		"initialized": s.store.IsInitialized(),
+	})
+}
+
+func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
+	accountCount, _ := s.store.CountAccounts()
+	messageCount, _ := s.store.CountMessages()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":         "stats",
+		"account_count": accountCount,
+		"message_count": messageCount,
+	})
+}
+
+func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":               "settings",
+		"registration_enabled": s.store.IsRegistrationEnabled(),
+		"send_rate_limit":      s.store.GetSendRateLimit(),
+		"byte_rate_limit":      s.store.GetByteRateLimit(),
+	})
+}
+
+// infoAccounts requires admin auth. It's mounted under /api/info but does its
+// own admin check — if the caller is not admin, it returns 403.
+func (s *Server) infoAccounts(w http.ResponseWriter, r *http.Request) {
+	// Check admin credentials via Basic Auth.
+	address, password, ok := r.BasicAuth()
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	acct, err := s.store.GetAccount(address)
+	if err != nil || bcryptCompare([]byte(acct.PasswordHash), []byte(password)) != nil || !acct.IsAdmin {
+		http.Error(w, "forbidden: admin only", http.StatusForbidden)
+		return
+	}
+
+	accounts, err := s.store.ListAccounts()
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	type accountInfo struct {
+		Address   string `json:"address"`
+		IsAdmin   bool   `json:"is_admin"`
+		Disabled  bool   `json:"disabled"`
+		CreatedAt int64  `json:"created_at"`
+	}
+	var list []accountInfo
+	for _, a := range accounts {
+		list = append(list, accountInfo{
+			Address:   a.Address,
+			IsAdmin:   a.IsAdmin,
+			Disabled:  a.Disabled,
+			CreatedAt: a.CreatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":    "accounts",
+		"count":    len(list),
+		"accounts": list,
+	})
+}
+
+// infoAudit requires admin auth.
+func (s *Server) infoAudit(w http.ResponseWriter, r *http.Request) {
+	address, password, ok := r.BasicAuth()
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Basic realm="agentmail"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	acct, err := s.store.GetAccount(address)
+	if err != nil || bcryptCompare([]byte(acct.PasswordHash), []byte(password)) != nil || !acct.IsAdmin {
+		http.Error(w, "forbidden: admin only", http.StatusForbidden)
+		return
+	}
+
+	entries, _ := s.audit.List(r.Context(), 50)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":   "audit",
+		"count":   len(entries),
+		"entries": entries,
+	})
+}
+
+func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
+	queries := []map[string]any{
+		{"query": "status", "auth": "none", "description": "Server version, domain, initialization state"},
+		{"query": "stats", "auth": "none", "description": "Account and message counts"},
+		{"query": "settings", "auth": "none", "description": "Registration toggle and rate limit values"},
+		{"query": "accounts", "auth": "admin", "description": "Full account list with admin/disabled/created flags"},
+		{"query": "audit", "auth": "admin", "description": "Recent 50 audit log entries"},
+		{"query": "help", "auth": "none", "description": "This list"},
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":   "help",
+		"queries": queries,
+	})
+}

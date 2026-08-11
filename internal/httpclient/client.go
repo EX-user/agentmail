@@ -136,6 +136,21 @@ func (c *Client) GetMessage(authUser, authPass, id string) (*MessageResponse, er
 	return &out, err
 }
 
+// InfoRaw calls /api/info?query=<query> and returns the raw JSON as a generic
+// map. For admin-only queries (accounts, audit), pass authUser/authPass; for
+// public queries, pass empty strings.
+func (c *Client) InfoRaw(authUser, authPass, query string) (map[string]any, error) {
+	var out map[string]any
+	q := url.Values{}
+	q.Set("query", query)
+	authHeader := ""
+	if authUser != "" {
+		authHeader = basicAuth(authUser, authPass)
+	}
+	err := c.do("GET", "/api/info", authHeader, q, nil, &out)
+	return out, err
+}
+
 // --- transport ---
 
 func (c *Client) do(method, path, authHeader string, q url.Values, body any, out any) error {

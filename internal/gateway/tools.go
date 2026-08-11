@@ -77,6 +77,14 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			Description: "Return a concise text guide on how to write a reliable inbox watch loop with wait_for_new_mail. No arguments needed. Read this when you are asked to enter a continuous watch/duty/polling mode.",
 			InputSchema: schemaObject(map[string]any{}, []string{}),
 		},
+		{
+			Name:        "server_info",
+			Description: "Query the server for structured information. Pass query to select what to return: \"status\" (version/domain), \"stats\" (account/message counts), \"settings\" (registration/rate limits), \"accounts\" (full account list, admin only), \"audit\" (recent audit log, admin only), \"help\" (list all queries). Admin-only queries require access_code from an admin account. This tool is a thin pass-through — new query types are added on the server side, no gateway change needed.",
+			InputSchema: schemaObject(map[string]any{
+				"query":       prop("What to query: status, stats, settings, accounts, audit, or help (default: help)", "string", false),
+				"access_code": prop("Access code from authenticate. Required for admin-only queries (accounts, audit). Omit for public queries.", "string", false),
+			}, []string{}),
+		},
 	}
 	return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{"tools": tools}}
 }
@@ -128,6 +136,8 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result, err = s.toolWaitForNewMail(ctx, args)
 	case "duty_watch_guide":
 		result = s.toolDutyWatchGuide()
+	case "server_info":
+		result, err = s.toolServerInfo(ctx, args)
 	default:
 		return rpcErr(req.ID, codeMethodNotFound, "unknown tool: "+params.Name)
 	}
@@ -486,6 +496,37 @@ WHICH MODE?
 
 func (s *Server) toolDutyWatchGuide() any {
 	return map[string]any{"guide": dutyWatchGuideText}
+}
+
+// toolServerInfo is a thin pass-through to the server's /api/info endpoint.
+// It forwards the query string and returns whatever the server sends back.
+// For admin-only queries (accounts, audit), it needs an access_code to
+// recover the admin's credentials. For public queries, no access_code needed.
+// New query types are added on the server side — no gateway change required.
+func (s *Server) toolServerInfo(ctx context.Context, args map[string]any) (any, error) {
+	query := strings.TrimSpace(str(args["query"]))
+	if query == "" {
+		query = "help"
+	}
+
+	// Try to recover credentials from access_code (may be needed for admin
+	// queries). If no access_code or it's expired, continue with empty creds
+	// — public queries will still work.
+	var authUser, authPass, serverURL string
+	if code := str(args["access_code"]); code != "" {
+		if entry, err := s.consumeCodeReadOnly(code); err == nil {
+			authUser = entry.Address
+			authPass = entry.Password
+			serverURL = entry.ServerURL
+		}
+	}
+
+	client := s.getClient(serverURL)
+	result, err := client.InfoRaw(authUser, authPass, query)
+	if err != nil {
+		return nil, fmt.Errorf("server_info: %w", err)
+	}
+	return result, nil
 }
 
 // --- arg helpers ---

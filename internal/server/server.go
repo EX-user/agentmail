@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	// Public API (no auth) — requires initialization.
 	mux.HandleFunc("/api/register", s.requireInitialized(s.handleRegister))
 	mux.HandleFunc("/api/verify-password", s.requireInitialized(s.handleVerifyPassword))
+	mux.HandleFunc("/api/info", s.handleInfo)
 
 	// Authed API (account Basic auth) — requires initialization.
 	mux.HandleFunc("/api/send", s.requireInitialized(s.requireAccount(s.handleSend)))

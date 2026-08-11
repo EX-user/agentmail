@@ -29,3 +29,5 @@ Thumbs.db
 *.swp
 test-poll/
 *.log
+ALICE_DUTY_LOG.md
+test-info/
