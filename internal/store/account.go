@@ -189,6 +189,51 @@ func (s *Store) ResetPassword(address, newPassword string) error {
 	})
 }
 
+// ErrWrongPassword is returned by ChangePassword when the old password does not
+// match the stored hash.
+var ErrWrongPassword = errors.New("wrong password")
+
+// ChangePassword verifies oldPassword against the stored hash and, on success,
+// replaces it with one derived from newPassword. Returns ErrWrongPassword if
+// the old password is incorrect, or ErrAccountNotFound if the account is gone.
+// newPassword length is enforced (>= MinPasswordLength); empty is rejected.
+const MinPasswordLength = 8
+
+func (s *Store) ChangePassword(address, oldPassword, newPassword string) error {
+	if len(newPassword) < MinPasswordLength {
+		return fmt.Errorf("new password must be at least %d characters", MinPasswordLength)
+	}
+	// Verify the old password first (do this outside the write tx so we don't
+	// hold a write lock for a bcrypt compare).
+	if err := s.VerifyPassword(address, oldPassword); err != nil {
+		if errors.Is(err, ErrAccountNotFound) {
+			return ErrAccountNotFound
+		}
+		return ErrWrongPassword
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bAccounts)
+		val := b.Get([]byte(address))
+		if val == nil {
+			return ErrAccountNotFound
+		}
+		var acc Account
+		if err := json.Unmarshal(val, &acc); err != nil {
+			return err
+		}
+		acc.PasswordHash = hash
+		newVal, err := json.Marshal(acc)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(address), newVal)
+	})
+}
+
 // SetAccountDisabled toggles an account's disabled flag. A disabled account
 // cannot authenticate (VerifyPassword returns ErrAccountDisabled), so it can
 // neither send nor read mail, but the account and its message history persist.

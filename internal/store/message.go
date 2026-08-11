@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
@@ -136,6 +137,45 @@ func (s *Store) ReadSent(address string, limit int) ([]MessageSummary, error) {
 		return nil, err
 	}
 	return s.readIndex(bSent, acc.UUID, acc.UUID, limit)
+}
+
+// ListContacts returns the deduplicated, sorted list of addresses the account
+// has exchanged mail with: senders in the account's inbox plus recipients in
+// the account's sent messages. The account's own address is excluded. Scans up
+// to the 500 most recent inbox and sent messages each to bound the work.
+func (s *Store) ListContacts(address string) ([]string, error) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return nil, err
+	}
+	const scan = 500
+	inbox, err := s.readIndex(bInbox, acc.UUID, acc.UUID, scan)
+	if err != nil {
+		return nil, err
+	}
+	sent, err := s.readIndex(bSent, acc.UUID, acc.UUID, scan)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]struct{})
+	for _, m := range inbox {
+		if m.From != "" && m.From != address {
+			set[m.From] = struct{}{}
+		}
+	}
+	for _, m := range sent {
+		for _, r := range m.To {
+			if r != "" && r != address {
+				set[r] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for a := range set {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // ReadInboxAsViewer is like ReadInbox but the unread status reflects the

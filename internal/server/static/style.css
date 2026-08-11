@@ -42,8 +42,19 @@ header {
   border-bottom: 1px solid var(--border);
   padding: 12px 20px;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.header-row {
+  display: flex;
   align-items: center;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 16px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 header h1 {
   font-size: 18px;
