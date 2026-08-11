@@ -28,6 +28,7 @@ const (
 	ActionGetMessage     Action = "get_message"
 	ActionResetPassword  Action = "reset_password"
 	ActionDisableAccount Action = "disable_account"
+	ActionProfileUpdate  Action = "profile_update"
 )
 
 // Entry is one audit record.

@@ -13,7 +13,9 @@ import (
 //   GET /api/info?query=status     -> version, domain, initialized (public)
 //   GET /api/info?query=stats      -> account/message counts (public)
 //   GET /api/info?query=settings   -> registration + rate limits (public)
+//   GET /api/info?query=directory  -> public address book of opt-in accounts (public)
 //   GET /api/info?query=accounts   -> account list (admin only)
+//   GET /api/info?query=audit      -> recent audit log (admin only)
 //   GET /api/info?query=help       -> list of available queries (public)
 //
 // Auth rules:
@@ -46,6 +48,10 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	case "audit":
 		// Admin-only.
 		s.infoAudit(w, r)
+
+	case "directory":
+		// Public: list accounts that opted into the directory.
+		s.infoDirectory(w, r)
 
 	case "help":
 		s.infoHelp(w, r)
@@ -148,11 +154,36 @@ func (s *Server) infoAudit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// infoDirectory returns the public directory: every account that has opted in
+// via Visible=true (disabled accounts are excluded). No auth required — this is
+// the public address book. Only address + signature are exposed per entry.
+func (s *Server) infoDirectory(w http.ResponseWriter, r *http.Request) {
+	visible, err := s.store.ListVisibleAccounts()
+	if err != nil {
+		internalError(w, "list visible: "+err.Error())
+		return
+	}
+	type dirEntry struct {
+		Address   string `json:"address"`
+		Signature string `json:"signature"`
+	}
+	entries := make([]dirEntry, 0, len(visible))
+	for _, a := range visible {
+		entries = append(entries, dirEntry{Address: a.Address, Signature: a.Signature})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query":   "directory",
+		"count":   len(entries),
+		"entries": entries,
+	})
+}
+
 func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
 	queries := []map[string]any{
 		{"query": "status", "auth": "none", "description": "Server version, domain, initialization state"},
 		{"query": "stats", "auth": "none", "description": "Account and message counts"},
 		{"query": "settings", "auth": "none", "description": "Registration toggle and rate limit values"},
+		{"query": "directory", "auth": "none", "description": "Public address book: accounts that opted in (Visible=true) with their signature"},
 		{"query": "accounts", "auth": "admin", "description": "Full account list with admin/disabled/created flags"},
 		{"query": "audit", "auth": "admin", "description": "Recent 50 audit log entries"},
 		{"query": "help", "auth": "none", "description": "This list"},

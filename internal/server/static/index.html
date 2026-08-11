@@ -35,6 +35,8 @@
       <button class="tab" data-tab="accounts">Accounts</button>
       <button class="tab" data-tab="mail">Mail</button>
       <button class="tab" data-tab="compose">Compose</button>
+      <button class="tab" data-tab="directory">Directory</button>
+      <button class="tab" data-tab="profile">My Profile</button>
       <button class="tab" data-tab="settings">Settings</button>
       <button class="tab" data-tab="audit">Audit</button>
     </nav>
@@ -81,6 +83,40 @@
       <div class="mail-grid">
         <div id="mail-list" class="pane">Pick an account and click Load.</div>
         <div id="mail-detail" class="pane">Select a message to view its body.</div>
+      </div>
+    </section>
+
+    <!-- Directory -->
+    <section id="tab-directory" class="tab-panel hidden">
+      <h2>Directory</h2>
+      <p class="muted">Public address book. Accounts that have opted in (Visible) appear here with their signature. Anyone can query this via <code>/api/info?query=directory</code>.</p>
+      <button id="btn-refresh-directory" class="row-action">Refresh</button>
+      <table id="directory-table">
+        <thead><tr><th>Address</th><th>Signature</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- My Profile -->
+    <section id="tab-profile" class="tab-panel hidden">
+      <h2>My Profile</h2>
+      <p class="muted">Control your visibility in the public directory and set a signature. These are saved to your own account.</p>
+      <div class="settings-section">
+        <div class="row">
+          <label style="flex:0 0 auto">
+            <input type="checkbox" id="profile-visible" />
+            Visible in public directory
+          </label>
+        </div>
+        <div class="row">
+          <label>Signature
+            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" maxlength="200" style="width:320px" />
+          </label>
+        </div>
+        <div class="row">
+          <button id="btn-save-profile" class="primary">Save profile</button>
+          <span id="profile-status" class="muted"></span>
+        </div>
       </div>
     </section>
 

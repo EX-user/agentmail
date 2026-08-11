@@ -252,6 +252,58 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleProfileSelf updates the authenticated account's directory visibility
+// and signature. Uses account Basic auth (like handleSend).
+//   GET  /api/profile/self  -> {"address","visible","signature"}
+//   POST /api/profile/self  {"visible": bool, "signature": string}
+//   -> {"ok": true, "visible": bool, "signature": string}
+//
+// signature is trimmed and capped at 200 characters (MaxSignatureLen).
+func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
+	who := accountFrom(r.Context())
+	if r.Method == http.MethodGet {
+		acc, err := s.store.GetAccount(who)
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"address":   acc.Address,
+			"visible":   acc.Visible,
+			"signature": acc.Signature,
+		})
+		return
+	}
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		Visible   bool   `json:"visible"`
+		Signature string `json:"signature"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	sig := strings.TrimSpace(body.Signature)
+	if len(sig) > MaxSignatureLen {
+		badRequest(w, fmt.Sprintf("signature too long (max %d chars)", MaxSignatureLen))
+		return
+	}
+	if err := s.store.UpdateProfile(who, body.Visible, sig); err != nil {
+		internalError(w, "update profile: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionProfileUpdate, who,
+		fmt.Sprintf("visible=%v sig_len=%d", body.Visible, len(sig)))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":        true,
+		"visible":   body.Visible,
+		"signature": sig,
+	})
+}
+
 // --- response helpers ---
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
