@@ -158,16 +158,19 @@ func (s *Store) ListContacts(address string) ([]string, error) {
 		return nil, err
 	}
 	set := make(map[string]struct{})
-	for _, m := range inbox {
-		if m.From != "" && m.From != address {
-			set[m.From] = struct{}{}
+	addAddrs := func(raw string) {
+		for _, a := range normalizeContactAddrs(raw) {
+			if a != address {
+				set[a] = struct{}{}
+			}
 		}
+	}
+	for _, m := range inbox {
+		addAddrs(m.From)
 	}
 	for _, m := range sent {
 		for _, r := range m.To {
-			if r != "" && r != address {
-				set[r] = struct{}{}
-			}
+			addAddrs(r)
 		}
 	}
 	out := make([]string, 0, len(set))
@@ -176,6 +179,35 @@ func (s *Store) ListContacts(address string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// normalizeContactAddrs cleans one raw address pulled from a message's From/To
+// and returns zero or more clean addresses. Historically some messages stored a
+// JSON-array-shaped string (e.g. `["admin@x.local"]`) inside the To slice,
+// which leaked as a bogus contact. If raw parses as a JSON string array, its
+// elements are returned (recursively, so a nested array-string also cleans up).
+// Otherwise the value is kept only if it looks like a single mail address
+// (contains "@"). Empty/whitespace/invalid entries are dropped.
+func normalizeContactAddrs(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if strings.HasPrefix(raw, "[") {
+		var arr []string
+		if err := json.Unmarshal([]byte(raw), &arr); err == nil {
+			var out []string
+			for _, e := range arr {
+				out = append(out, normalizeContactAddrs(e)...)
+			}
+			return out
+		}
+		return nil // array-shaped but not valid JSON: drop the bogus entry
+	}
+	if !strings.Contains(raw, "@") {
+		return nil
+	}
+	return []string{raw}
 }
 
 // ReadInboxAsViewer is like ReadInbox but the unread status reflects the
