@@ -333,12 +333,13 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminSettings returns the current system settings.
-//   GET /admin/settings -> {registration_enabled, send_rate, byte_rate}
+//   GET /admin/settings -> {registration_enabled, directory_listed_enabled, send_rate, byte_rate}
 func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"registration_enabled": s.store.IsRegistrationEnabled(),
-		"send_rate":            s.store.GetSendRateLimit(),
-		"byte_rate":            s.store.GetByteRateLimit(),
+		"registration_enabled":    s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
+		"send_rate":               s.store.GetSendRateLimit(),
+		"byte_rate":               s.store.GetByteRateLimit(),
 	})
 }
 
@@ -362,8 +363,34 @@ func (s *Server) handleAdminSetRegistration(w http.ResponseWriter, r *http.Reque
 	if !body.Enabled {
 		state = "disable"
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionDisableAccount, "registration", "by=admin "+state)
+	_ = s.audit.Record(r.Context(), audit.ActionSetRegistration, "registration", "by=admin "+state)
 	writeJSON(w, http.StatusOK, map[string]any{"registration_enabled": body.Enabled})
+}
+
+// handleAdminSetDirectoryListed toggles whether accounts may opt themselves
+// into the public directory. When disabled, existing listed accounts stay
+// listed, but no new false→true transitions are allowed.
+//   POST /admin/set-directory-listed {"enabled": bool}
+func (s *Server) handleAdminSetDirectoryListed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct{ Enabled bool `json:"enabled"` }
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetDirectoryListedEnabled(body.Enabled); err != nil {
+		internalError(w, "set directory listed: "+err.Error())
+		return
+	}
+	state := "enable"
+	if !body.Enabled {
+		state = "disable"
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSetDirectoryListed, "directory_listed", "by=admin "+state)
+	writeJSON(w, http.StatusOK, map[string]any{"directory_listed_enabled": body.Enabled})
 }
 
 // handleAdminSetLimits adjusts the rate limits.
