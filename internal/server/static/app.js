@@ -134,6 +134,11 @@
   // ---- accounts ----
 
   async function loadAccounts() {
+    const s = getSession();
+    if (s && !s.is_admin) {
+      await loadAccountsRegular(s.address);
+      return;
+    }
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
     try {
@@ -178,6 +183,59 @@
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="5">Error: ' + esc(e.message) + "</td></tr>";
     }
+  }
+
+  // loadAccountsRegular renders the regular-user Accounts view: themselves
+  // (with a change-password button) plus the people they've exchanged mail with
+  // (from /api/contacts). No admin/disabled/uuid columns — those are sensitive
+  // and not relevant to a personal view.
+  async function loadAccountsRegular(selfAddr) {
+    // The "+ Register new account" button is admin-only.
+    const regBtn = $("#btn-register");
+    if (regBtn) regBtn.classList.add("hidden");
+    const tbody = $("#accounts-table tbody");
+    tbody.textContent = "";
+    var rows = [];
+    // Self row with a change-password button.
+    rows.push(
+      "<tr>" +
+      '<td class="addr-cell"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
+      '<td class="actions-cell"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
+      "</tr>"
+    );
+    try {
+      const data = await api("/api/contacts");
+      (data.contacts || []).forEach(function (c) {
+        rows.push("<tr><td class=\"addr-cell\">" + esc(c) + "</td><td></td></tr>");
+      });
+    } catch (e) {
+      // contacts failure is non-fatal; just show self.
+    }
+    tbody.innerHTML = rows.join("");
+    const btn = $("#btn-change-pw");
+    if (btn) btn.addEventListener("click", openChangePassword);
+  }
+
+  function openChangePassword() {
+    const oldPw = prompt("Change your password\n\nCurrent password:");
+    if (oldPw === null) return;
+    const newPw = prompt("New password (min 8 chars):");
+    if (newPw === null) return;
+    if (newPw.length < 8) { toast("New password must be at least 8 chars", "error"); return; }
+    api("/api/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ old_password: oldPw, new_password: newPw }),
+    }).then(function () {
+      toast("Password changed — please log in again");
+      // Credentials changed: update the cached password so the next login works
+      // seamlessly, then force re-login to confirm the new password.
+      const s = getSession();
+      if (s) { s.password = newPw; setSession(s); }
+      setTimeout(function () { setSession(null); showLogin(); }, 1500);
+    }).catch(function (e) {
+      toast("Change failed: " + e.message, "error");
+    });
   }
 
   async function resetPassword(address) {
@@ -265,6 +323,18 @@
   async function ensureAccountOptions() {
     const sel = $("#mail-account");
     if (sel.dataset.loaded === "1") return;
+    const s = getSession();
+    // Regular users only ever see their own mail: lock the selector to self
+    // and disable it (no global account picker).
+    if (s && !s.is_admin) {
+      sel.innerHTML = "";
+      const o = document.createElement("option");
+      o.value = s.address; o.textContent = s.address;
+      sel.appendChild(o);
+      sel.disabled = true;
+      sel.dataset.loaded = "1";
+      return;
+    }
     try {
       const data = await api("/admin/accounts");
       sel.innerHTML = "";
@@ -296,9 +366,17 @@
     if (!account) { list.textContent = "No account selected."; return; }
     list.textContent = "Loading…";
     try {
-      const path = folder === "sent"
-        ? "/admin/sent?account=" + encodeURIComponent(account) + "&limit=" + limit
-        : "/admin/messages?account=" + encodeURIComponent(account) + "&limit=" + limit;
+      const s = getSession();
+      const isRegular = s && !s.is_admin;
+      // Regular accounts read their own mail via /api/inbox and /api/sent;
+      // admins read any account via /admin/messages and /admin/sent.
+      const path = isRegular
+        ? (folder === "sent"
+            ? "/api/sent?limit=" + limit
+            : "/api/inbox?limit=" + limit)
+        : (folder === "sent"
+            ? "/admin/sent?account=" + encodeURIComponent(account) + "&limit=" + limit
+            : "/admin/messages?account=" + encodeURIComponent(account) + "&limit=" + limit);
       const data = await api(path);
       const msgs = data.messages || [];
       if (!msgs.length) { list.textContent = "No messages."; return; }
@@ -582,10 +660,21 @@
     $("#login-address").focus();
   }
 
-  // showApp reveals the panel. (Role-based tab rendering arrives in v0.2.8b;
-  // for now admin and regular accounts both see the full admin panel — regular
-  // accounts simply won't have permission on /admin/* and those tabs will error,
-  // which is expected and fine for this foundation release.)
+  // Tabs only admins see. Regular accounts get a personal view (Overview,
+  // Accounts, Mail, Compose, Directory, My Profile) but no global Settings or
+  // Audit. These tabs call /admin/* which a regular account can't access, so
+  // hiding them avoids confusing 403s.
+  const ADMIN_ONLY_TABS = ["settings", "audit"];
+
+  function applyRole(isAdmin) {
+    $$(".tab").forEach(function (b) {
+      const tab = b.dataset.tab;
+      const adminOnly = ADMIN_ONLY_TABS.indexOf(tab) !== -1;
+      b.classList.toggle("hidden", adminOnly && !isAdmin);
+    });
+  }
+
+  // showApp reveals the panel and applies role-based tab visibility.
   function showApp() {
     hideAllScreens();
     $("#app-header").classList.remove("hidden");
@@ -593,6 +682,7 @@
     const s = getSession();
     if (s) {
       $("#whoami").textContent = s.address + (s.is_admin ? " (admin)" : "");
+      applyRole(!!s.is_admin);
     }
   }
 
@@ -654,8 +744,13 @@
   async function ensureComposeAccounts() {
     const input = $("#compose-to");
     if (input.dataset.listLoaded === "1") return;
+    const s = getSession();
+    const isRegular = s && !s.is_admin;
     try {
-      const data = await api("/admin/accounts");
+      // Admins get every account; regular users get their contacts.
+      const data = isRegular
+        ? { contacts: (await api("/api/contacts")).contacts || [] }
+        : await api("/admin/accounts");
       let dl = $("#compose-accounts");
       if (!dl) {
         dl = document.createElement("datalist");
@@ -664,14 +759,15 @@
         input.setAttribute("list", "compose-accounts");
       }
       dl.innerHTML = "";
-      (data.accounts || []).forEach(function (a) {
+      const items = isRegular ? data.contacts : (data.accounts || []);
+      items.forEach(function (a) {
         const o = document.createElement("option");
-        o.value = a.address;
+        o.value = isRegular ? a : a.address;
         dl.appendChild(o);
       });
       input.dataset.listLoaded = "1";
     } catch (e) {
-      // Non-fatal: the admin can still type addresses manually.
+      // Non-fatal: the user can still type addresses manually.
     }
   }
 
@@ -692,7 +788,9 @@
 
     status.textContent = "Sending…";
     try {
-      const res = await api("/admin/send", {
+      const sender = getSession();
+      const sendPath = (sender && !sender.is_admin) ? "/api/send" : "/admin/send";
+      const res = await api(sendPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: to, subject: subject, body: bodyText }),
@@ -730,14 +828,19 @@
     threadEl.textContent = "Loading…";
 
     try {
-      // admin's sent messages (all), filter to those addressed to `to`.
-      // /admin/sent?account=admin@... returns what admin sent.
-      // And admin's own inbox contains replies from `to`.
-      const adminAddr = "admin@" + systemDomain; // the compose sender
-      const [sentRes, inboxRes] = await Promise.all([
-        api("/admin/sent?account=" + encodeURIComponent(adminAddr) + "&limit=50"),
-        api("/admin/messages?account=" + encodeURIComponent(adminAddr) + "&limit=50"),
-      ]);
+      const cur = getSession();
+      const isRegular = cur && !cur.is_admin;
+      // For admins: read admin's own sent + inbox via /admin/*. For regular
+      // accounts: read their own sent + inbox via /api/sent + /api/inbox.
+      const [sentRes, inboxRes] = isRegular
+        ? await Promise.all([
+            api("/api/sent?limit=50"),
+            api("/api/inbox?limit=50"),
+          ])
+        : await Promise.all([
+            api("/admin/sent?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
+            api("/admin/messages?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
+          ]);
 
       // sent: admin -> to (match recipient in `to`)
       const sent = (sentRes.messages || []).filter(function (m) {
