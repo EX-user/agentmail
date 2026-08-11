@@ -82,7 +82,7 @@
       stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
         '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>";
-      const a = await api("/admin/audit?limit=5");
+      const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
         recent.textContent = "No activity yet.";
         return;
