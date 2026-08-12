@@ -1087,10 +1087,25 @@
     const isRegular = s && !s.is_admin;
     var items = [];
     try {
-      const data = isRegular
-        ? { contacts: (await api("/api/contacts")).contacts || [] }
-        : await api("/admin/accounts");
-      items = isRegular ? data.contacts : (data.accounts || []).map(function (a) { return a.address; });
+      if (isRegular) {
+        // Regular accounts: To dropdown = directory (public listed accounts)
+        // ∪ their own contacts, deduped. Mirrors what the Accounts tab shows
+        // them (contacts + listed). Admins still see every account.
+        const [dirRes, conRes] = await Promise.all([
+          api("/api/info?query=directory").catch(function () { return { entries: [] }; }),
+          api("/api/contacts").catch(function () { return { contacts: [] }; }),
+        ]);
+        const seen = {};
+        (dirRes.entries || []).forEach(function (a) {
+          if (a.address && !seen[a.address]) { seen[a.address] = 1; items.push(a.address); }
+        });
+        (conRes.contacts || []).forEach(function (c) {
+          if (c && !seen[c]) { seen[c] = 1; items.push(c); }
+        });
+      } else {
+        const data = await api("/admin/accounts");
+        items = (data.accounts || []).map(function (a) { return a.address; });
+      }
     } catch (e) {
       // Non-fatal: the user can still type addresses manually.
     }
