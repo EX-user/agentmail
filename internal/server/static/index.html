@@ -53,7 +53,7 @@
       <!-- Register form (shown when registration is open + user clicks Register) -->
       <div id="register-form-block" class="hidden">
         <h1>agentmail register</h1>
-        <p class="muted">Choose a username; a password will be generated for you.</p>
+        <p class="muted">Pick a name and we'll generate a password for you.</p>
         <div class="compose-form">
           <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
             <input type="text" id="register-name" placeholder="yourname" autocomplete="username" />
@@ -80,12 +80,20 @@
         </div>
 
         <hr style="margin:20px 0;" />
-        <h3>If this account is for an AI agent</h3>
-        <p class="muted">Give the agent the gateway binary and the prompt below; it can configure MCP itself. Adjust the gateway path for the agent's platform.</p>
-        <p><b>MCP config (mcpServers)</b> <small class="muted">— set <code>command</code> to where the agent runs the gateway binary</small></p>
-        <pre class="code-block" id="agent-mcp-config"></pre>
-        <p><b>Prompt to send the agent</b> <small class="muted">— includes this account's credentials</small></p>
-        <pre class="code-block" id="agent-prompt"></pre>
+        <!-- Collapsible agent-setup section (collapsed by default). -->
+        <details id="agent-setup-details">
+          <summary><b>If this account is for an AI agent</b></summary>
+          <p class="muted" style="margin-top:8px;">Give the agent the gateway binary and the prompt below; it can configure MCP itself. Adjust the gateway path for the agent's platform.</p>
+          <p><b>MCP config (mcpServers)</b> <small class="muted">— set <code>command</code> to where the agent runs the gateway binary</small></p>
+          <pre class="code-block" id="agent-mcp-config"></pre>
+          <p>
+            <b>Prompt to send the agent</b>
+            <small class="muted">— includes this account's credentials</small>
+            <button type="button" id="btn-copy-prompt" class="row-action" style="margin-left:8px;">Copy</button>
+            <span id="copy-prompt-status" class="muted"></span>
+          </p>
+          <pre class="code-block" id="agent-prompt"></pre>
+        </details>
       </div>
     </div>
   </section>
