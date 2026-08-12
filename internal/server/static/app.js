@@ -162,7 +162,7 @@
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="6">No accounts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">No accounts.</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -180,8 +180,7 @@
         return "<tr" + rowCls + ">" +
           '<td class="addr-cell">' + esc(a.address) + "</td>" +
           "<td>" + tags.trim() + "</td>" +
-          "<td>" + esc(a.signature || "") + "</td>" +
-          "<td><code>" + esc(a.uuid) + "</code></td>" +
+          '<td class="sig-cell">' + esc(a.signature || "") + "</td>" +
           "<td>" + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
@@ -245,6 +244,17 @@
     $("#compose-to").value = address || "";
     activateTab("compose");
     loadComposeThread();
+  }
+
+  // composeReply jumps to Compose with To = the sender and Subject = "Re: " +
+  // the original subject (without stacking Re: if it already starts with one).
+  function composeReply(toAddress, subject) {
+    $("#compose-to").value = toAddress || "";
+    var subj = (subject || "").trim();
+    $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
+    activateTab("compose");
+    loadComposeThread();
+    $("#compose-body").focus();
   }
 
   function openChangePassword() {
@@ -546,7 +556,12 @@
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
+      const replyBtn = $("#btn-inbox-reply");
+      if (replyBtn) replyBtn.addEventListener("click", function () {
+        composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
+      });
     } catch (e) {
       detail.textContent = "Error: " + e.message;
     }
@@ -592,7 +607,7 @@
       tbody.innerHTML = entries.map(function (e) {
         return "<tr>" +
           '<td class="addr-cell">' + esc(e.address) + "</td>" +
-          "<td>" + esc(e.signature || "") + "</td>" +
+          '<td class="sig-cell">' + esc(e.signature || "") + "</td>" +
           '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">Compose</button></td>' +
           "</tr>";
       }).join("");

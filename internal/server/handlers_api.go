@@ -218,8 +218,18 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "read inbox: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d", len(msgs)))
-	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs, "count": len(msgs)})
+	unread := 0
+	for _, m := range msgs {
+		if m.Unread {
+			unread++
+		}
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d", len(msgs), unread))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages":     msgs,
+		"count":        len(msgs),
+		"unread_count": unread,
+	})
 }
 
 // handleMessage fetches one message by id, if the authenticated account can
