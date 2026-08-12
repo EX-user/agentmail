@@ -74,12 +74,14 @@ jobs:
           fi
 
       # Hand the package off to the release job as a workflow artifact. No race
-      # here: each matrix job uploads a uniquely-named artifact.
+      # here: each matrix job uploads a uniquely-named artifact. The path is
+      # version-agnostic (do NOT pin to a major version like v0.2.* — it breaks
+      # the first release of a new major, e.g. v0.3.0, with "no files found").
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: agentmail-v0.2.*-*
+          path: agentmail-v*.*
           if-no-files-found: error
 
   release:
