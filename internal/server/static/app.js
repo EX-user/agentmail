@@ -369,12 +369,16 @@
     try {
       const data = await api("/admin/accounts");
       sel.innerHTML = "";
+      // "All accounts" pseudo-option: iterate every account on Load.
+      const all = document.createElement("option");
+      all.value = "__all__"; all.textContent = "All accounts";
+      sel.appendChild(all);
       (data.accounts || []).forEach(function (a) {
         const o = document.createElement("option");
         o.value = a.address; o.textContent = a.address;
         sel.appendChild(o);
       });
-      if (!sel.options.length) {
+      if (sel.options.length <= 1) {
         const o = document.createElement("option");
         o.value = ""; o.textContent = "(no accounts)";
         sel.appendChild(o);
@@ -399,17 +403,43 @@
     try {
       const s = getSession();
       const isRegular = s && !s.is_admin;
-      // Regular accounts read their own mail via /api/inbox and /api/sent;
-      // admins read any account via /admin/messages and /admin/sent.
-      const path = isRegular
-        ? (folder === "sent"
-            ? "/api/sent?limit=" + limit
-            : "/api/inbox?limit=" + limit)
-        : (folder === "sent"
-            ? "/admin/sent?account=" + encodeURIComponent(account) + "&limit=" + limit
-            : "/admin/messages?account=" + encodeURIComponent(account) + "&limit=" + limit);
-      const data = await api(path);
-      const msgs = data.messages || [];
+
+      // Build the set of (account, folder) queries to run.
+      // - account="__all__": iterate every account (admin only).
+      // - folder="all": mix inbox + sent for the selected account.
+      var accounts = [];
+      if (account === "__all__") {
+        const all = await api("/admin/accounts");
+        accounts = (all.accounts || []).map(function (a) { return a.address; });
+      } else {
+        accounts = [account];
+      }
+      const folders = folder === "all" ? ["inbox", "sent"] : [folder];
+
+      // Fire all queries, then merge by time (newest first).
+      var requests = [];
+      accounts.forEach(function (acc) {
+        folders.forEach(function (f) {
+          requests.push({ acc: acc, f: f });
+        });
+      });
+      const results = await Promise.all(requests.map(function (r) {
+        const path = isRegular
+          ? (r.f === "sent" ? "/api/sent?limit=" + limit : "/api/inbox?limit=" + limit)
+          : (r.f === "sent"
+              ? "/admin/sent?account=" + encodeURIComponent(r.acc) + "&limit=" + limit
+              : "/admin/messages?account=" + encodeURIComponent(r.acc) + "&limit=" + limit);
+        return api(path).then(function (d) { return d.messages || []; })
+          .catch(function () { return []; });
+      }));
+      var msgs = [];
+      results.forEach(function (arr) { msgs = msgs.concat(arr); });
+      msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
+      // De-duplicate by id (a message can appear in both inbox and sent views).
+      var seen = {}, dedup = [];
+      msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
+      msgs = dedup;
+
       if (!msgs.length) { list.textContent = "No messages."; return; }
       list.innerHTML = "";
       msgs.forEach(function (m) {
