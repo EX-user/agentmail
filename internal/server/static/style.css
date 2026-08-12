@@ -122,7 +122,18 @@ tr.row-disabled td { opacity: 0.5; }
 td.actions-cell { white-space: nowrap; }
 td.actions-cell button { margin-right: 4px; }
 td.actions-cell button:last-child { margin-right: 0; }
-td.addr-cell { word-break: break-all; max-width: 280px; }
+/* Address column: wide, single-line, horizontal-scroll on overflow (long
+   addresses stay readable instead of wrapping). Applies to Accounts + Directory. */
+td.addr-cell {
+  white-space: nowrap;
+  overflow-x: auto;
+  max-width: 360px;
+}
+td.addr-cell::-webkit-scrollbar { height: 6px; }
+/* Keep the old break-all as a fallback for very narrow viewports. */
+@media (max-width: 520px) {
+  td.addr-cell { white-space: normal; word-break: break-all; }
+}
 
 .compose-form { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
 .compose-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
