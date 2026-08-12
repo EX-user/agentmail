@@ -216,18 +216,28 @@
     if (regBtn) regBtn.classList.add("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
+    // Rows match the 5-column header (Address, Tags, Signature, Created,
+    // Actions) so the Change-password button lands in the Actions column
+    // instead of drifting under Tags.
     var rows = [];
-    // Self row with a change-password button.
     rows.push(
       "<tr>" +
       '<td class="addr-cell"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
+      '<td><span class="badge-listed">you</span></td>' +
+      "<td></td>" +
+      "<td></td>" +
       '<td class="actions-cell"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
       "</tr>"
     );
     try {
       const data = await api("/api/contacts");
       (data.contacts || []).forEach(function (c) {
-        rows.push("<tr><td class=\"addr-cell\">" + esc(c) + "</td><td></td></tr>");
+        rows.push(
+          "<tr>" +
+          '<td class="addr-cell">' + esc(c) + "</td>" +
+          "<td></td><td></td><td></td><td></td>" +
+          "</tr>"
+        );
       });
     } catch (e) {
       // contacts failure is non-fatal; just show self.
@@ -332,31 +342,16 @@
     }
   }
 
-  $("#btn-register").addEventListener("click", async function () {
-    const name = prompt("Local-part for the new account (ASCII letters/digits/-/_):");
-    if (!name) return;
-    const box = $("#register-result");
-    box.classList.add("hidden");
-    try {
-      // Public endpoint — no admin auth needed, but works fine with it cached.
-      const res = await api("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      box.className = "callout success";
-      box.innerHTML =
-        "<b>Created:</b> " + esc(res.address) + "<br>" +
-        "<b>Password (shown once):</b> <code>" + esc(res.password) + "</code><br>" +
-        "<small>Copy this now; it will not be shown again.</small>";
-      box.classList.remove("hidden");
-      toast("Account created");
-      loadAccounts();
-    } catch (e) {
-      box.className = "callout error";
-      box.textContent = "Error: " + e.message;
-      box.classList.remove("hidden");
-    }
+  // The Accounts-tab "+ Register new account" button opens the login-page
+  // register flow (the single source of truth for registration since v0.2.12).
+  // An older in-tab prompt()-based register handler used to bind this same
+  // button; it was removed because it double-fired alongside the login-page
+  // handler and caused "account already exists" + a confusing "local-part"
+  // prompt. Registration now lives only on the login page.
+  $("#btn-register").addEventListener("click", function () {
+    setSession(null); // signing out to reach the login page
+    showLogin();
+    showRegisterForm();
   });
 
   // ---- mail ----
@@ -866,17 +861,28 @@
   function showLoginForm() {
     $("#login-form-block").classList.remove("hidden");
     $("#register-form-block").classList.add("hidden");
+    const sb = $("#register-success-block");
+    if (sb) sb.classList.add("hidden");
   }
 
   function showRegisterForm() {
     $("#login-form-block").classList.add("hidden");
     $("#register-form-block").classList.remove("hidden");
+    const sb = $("#register-success-block");
+    if (sb) sb.classList.add("hidden");
     $("#register-name").value = "";
     $("#register-status").textContent = "";
-    const rb = $("#register-result-block");
-    if (rb) { rb.classList.add("hidden"); rb.textContent = ""; }
     updateRegisterPreview();
     $("#register-name").focus();
+  }
+
+  function showRegisterSuccess(address, password) {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.add("hidden");
+    const sb = $("#register-success-block");
+    $("#register-success-address").textContent = address;
+    $("#register-success-password").textContent = password;
+    sb.classList.remove("hidden");
   }
 
   // Show the register link only when the server allows registration.
@@ -952,21 +958,18 @@
   // ---- register (on the login page) ----
 
   $("#link-show-register").addEventListener("click", function (e) { e.preventDefault(); showRegisterForm(); });
-  $("#link-show-login").addEventListener("click", function (e) { e.preventDefault(); showLoginForm(); });
   $("#btn-register-cancel").addEventListener("click", showLoginForm);
   $("#register-name").addEventListener("input", updateRegisterPreview);
 
-  $("#btn-register").addEventListener("click", async function () {
+  $("#btn-register-submit").addEventListener("click", async function () {
     const name = ($("#register-name").value || "").trim();
     const status = $("#register-status");
-    const box = $("#register-result-block");
-    if (!name) { status.textContent = "Account name is required."; return; }
+    if (!name) { status.textContent = "Please choose a username."; return; }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
-      status.textContent = "Name must be ASCII letters, digits, '-' or '_'.";
+      status.textContent = "Username must be ASCII letters, digits, '-' or '_'.";
       return;
     }
     status.textContent = "Registering…";
-    box.classList.add("hidden");
     try {
       const res = await api("/api/register", {
         method: "POST",
@@ -974,23 +977,22 @@
         body: JSON.stringify({ name: name }),
       });
       status.textContent = "";
-      // Show the generated credentials and a one-click "log in with this account".
-      box.innerHTML =
-        "<p>Account created. Save these credentials — the password is shown only once.</p>" +
-        "<p><b>Address:</b> <code>" + esc(res.address) + "</code></p>" +
-        "<p><b>Password:</b> <code>" + esc(res.password) + "</code></p>" +
-        '<p><button class="primary" id="btn-register-login">Log in with this account</button></p>';
-      box.classList.remove("hidden");
-      $("#btn-register-login").addEventListener("click", function () {
-        $("#login-address").value = res.address;
-        $("#login-password").value = res.password;
-        showLoginForm();
-        $("#btn-login").click();
-      });
+      showRegisterSuccess(res.address, res.password);
     } catch (e) {
       status.textContent = "Registration failed: " + e.message;
     }
   });
+
+  // Success-screen buttons.
+  $("#btn-register-login").addEventListener("click", function () {
+    const addr = $("#register-success-address").textContent;
+    const pw = $("#register-success-password").textContent;
+    $("#login-address").value = addr;
+    $("#login-password").value = pw;
+    showLoginForm();
+    $("#btn-login").click();
+  });
+  $("#btn-register-another").addEventListener("click", showRegisterForm);
 
   $("#btn-setup").addEventListener("click", async function () {
     const domain = $("#setup-domain").value.trim();
