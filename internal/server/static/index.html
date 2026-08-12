@@ -209,7 +209,11 @@
       <h2>Compose <small>(as admin)</small></h2>
       <div class="compose-form">
         <label>To
-          <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" />
+          <div class="to-field">
+            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" autocomplete="off" />
+            <button type="button" id="btn-compose-dropdown" class="to-dropdown-btn" title="Pick a recipient">▾</button>
+            <div id="compose-dropdown" class="compose-dropdown hidden"></div>
+          </div>
         </label>
         <label>Subject
           <input type="text" id="compose-subject" placeholder="subject" />

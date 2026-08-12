@@ -841,35 +841,64 @@
 
   // ---- compose ----
 
-  // Fill the To field's datalist with known accounts for convenience.
+  // Populate the Compose To-field dropdown with known recipients (admins get
+  // every account; regular accounts get their contacts). Builds a custom
+  // dropdown (not a native datalist) so clicking a recipient clears the input
+  // and fills it — the behavior admin requested.
   async function ensureComposeAccounts() {
     const input = $("#compose-to");
     if (input.dataset.listLoaded === "1") return;
     const s = getSession();
     const isRegular = s && !s.is_admin;
+    var items = [];
     try {
-      // Admins get every account; regular users get their contacts.
       const data = isRegular
         ? { contacts: (await api("/api/contacts")).contacts || [] }
         : await api("/admin/accounts");
-      let dl = $("#compose-accounts");
-      if (!dl) {
-        dl = document.createElement("datalist");
-        dl.id = "compose-accounts";
-        document.body.appendChild(dl);
-        input.setAttribute("list", "compose-accounts");
-      }
-      dl.innerHTML = "";
-      const items = isRegular ? data.contacts : (data.accounts || []);
-      items.forEach(function (a) {
-        const o = document.createElement("option");
-        o.value = isRegular ? a : a.address;
-        dl.appendChild(o);
-      });
-      input.dataset.listLoaded = "1";
+      items = isRegular ? data.contacts : (data.accounts || []).map(function (a) { return a.address; });
     } catch (e) {
       // Non-fatal: the user can still type addresses manually.
     }
+    input.dataset.recipients = JSON.stringify(items);
+    input.dataset.listLoaded = "1";
+
+    // Toggle the dropdown from the picker button.
+    const btn = $("#btn-compose-dropdown");
+    const panel = $("#compose-dropdown");
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (panel.classList.contains("hidden")) openComposeDropdown();
+      else panel.classList.add("hidden");
+    });
+    // Close when clicking outside, or when a recipient is picked.
+    document.addEventListener("click", function (e) {
+      if (panel.classList.contains("hidden")) return;
+      if (!e.target.closest(".to-field")) panel.classList.add("hidden");
+    });
+  }
+
+  function openComposeDropdown() {
+    const input = $("#compose-to");
+    const panel = $("#compose-dropdown");
+    var items = [];
+    try { items = JSON.parse(input.dataset.recipients || "[]"); } catch (_) {}
+    if (!items.length) {
+      panel.innerHTML = '<div class="dd-empty">No recipients yet.</div>';
+    } else {
+      panel.innerHTML = items.map(function (a) {
+        return '<div class="dd-item" data-addr="' + esc(a) + '">' + esc(a) + "</div>";
+      }).join("");
+      $$(".dd-item", panel).forEach(function (el) {
+        el.addEventListener("click", function () {
+          // "Click clears the input then fills" — admin's requested behavior.
+          input.value = el.dataset.addr;
+          panel.classList.add("hidden");
+          input.focus();
+          loadComposeThread();
+        });
+      });
+    }
+    panel.classList.remove("hidden");
   }
 
   $("#btn-send").addEventListener("click", async function () {
