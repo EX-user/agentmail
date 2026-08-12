@@ -225,11 +225,13 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 			unread++
 		}
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d", len(msgs), unread))
+	total, _ := s.store.CountInbox(who)
+	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d total=%d", len(msgs), unread, total))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages":     msgs,
 		"count":        len(msgs),
 		"unread_count": unread,
+		"total_count":  total,
 	})
 }
 

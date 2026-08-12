@@ -133,6 +133,30 @@ func (s *Store) ReadInboxPaged(address string, limit, offset int) ([]MessageSumm
 	return s.readIndex(bInbox, acc.UUID, acc.UUID, limit, offset)
 }
 
+// CountInbox returns the total number of messages in the account's inbox
+// (independent of paging). Used to compute total pages for the Inbox UI.
+func (s *Store) CountInbox(address string) (int, error) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	prefix := indexKey(acc.UUID, "")
+	prefixStr := string(prefix)
+	count := 0
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bInbox)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
 // ReadSent returns the account's sent messages (used by the admin UI later).
 func (s *Store) ReadSent(address string, limit int) ([]MessageSummary, error) {
 	if limit <= 0 {
