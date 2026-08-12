@@ -162,7 +162,7 @@
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="6">No accounts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">No accounts.</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -181,7 +181,6 @@
           '<td class="addr-cell">' + esc(a.address) + "</td>" +
           "<td>" + tags.trim() + "</td>" +
           '<td class="sig-cell">' + esc(a.signature || "") + "</td>" +
-          "<td><code>" + esc(a.uuid) + "</code></td>" +
           "<td>" + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
