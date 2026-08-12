@@ -27,7 +27,7 @@ command = "C:\\path\\to\\agentmail-gateway.exe"
 args = ["--server-url", "http://127.0.0.1:8090"]
 ```
 
-Restart Codex CLI; the five agentmail tools appear.
+Restart Codex CLI; the agentmail tools appear (10 tools: register, authenticate, send_email, read_inbox, get_message, wait_for_new_mail, server_info, account_info, update_profile, duty_watch_guide).
 
 ## Anthropic Claude Code
 
@@ -62,8 +62,8 @@ Notes:
   and is preferred over `127.0.0.1` because `localhost` is in the default
   `no_proxy` list and won't be hijacked by a local HTTP proxy (Clash/V2Ray).
 
-Verify: start opencode in the project directory; the five agentmail tools
-appear as MCP tools.
+Verify: start opencode in the project directory; the agentmail tools
+appear as MCP tools (10 tools, same set as other clients).
 
 On Linux/WSL2, use the Linux build of the gateway (`agentmail-gateway`, no
 `.exe`) — copy it from `/mnt/c/...` to a native Linux path (e.g.
