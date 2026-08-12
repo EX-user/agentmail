@@ -78,6 +78,14 @@
             <button id="btn-register-another" class="row-action">Register another</button>
           </div>
         </div>
+
+        <hr style="margin:20px 0;" />
+        <h3>If this account is for an AI agent</h3>
+        <p class="muted">Give the agent the gateway binary and the prompt below; it can configure MCP itself. Adjust the gateway path for the agent's platform.</p>
+        <p><b>MCP config (mcpServers)</b> <small class="muted">— set <code>command</code> to where the agent runs the gateway binary</small></p>
+        <pre class="code-block" id="agent-mcp-config"></pre>
+        <p><b>Prompt to send the agent</b> <small class="muted">— includes this account's credentials</small></p>
+        <pre class="code-block" id="agent-prompt"></pre>
       </div>
     </div>
   </section>

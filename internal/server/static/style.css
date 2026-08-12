@@ -319,6 +319,19 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   font-size: 13px;
   margin: 8px 0 0;
 }
+/* Copyable config/prompt blocks on the register-success agent section. */
+.code-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  margin: 6px 0 16px;
+}
 
 .callout {
   padding: 12px 16px;
