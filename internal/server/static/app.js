@@ -521,16 +521,20 @@
       const data = await api("/api/inbox?limit=" + INBOX_PAGE_SIZE + "&offset=" + offset);
       const msgs = data.messages || [];
       const unreadCount = data.unread_count || 0;
+      const total = data.total_count || 0;
+      const totalPages = Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE));
       if (!msgs.length && inboxPage === 0) {
         list.textContent = "No messages.";
-        updateInboxPager(0, true);
+        updateInboxPager(1, 1);
         status.textContent = unreadCount ? (unreadCount + " unread") : "";
         return;
       }
       if (!msgs.length) {
-        // Past the end: step back a page.
+        // Past the end (e.g. mail was deleted): clamp to last page.
+        const last = totalPages - 1;
+        if (inboxPage > last) { inboxPage = last; loadInbox(inboxPage); return; }
         list.textContent = "No more messages.";
-        updateInboxPager(0, inboxPage === 0);
+        updateInboxPager(totalPages, inboxPage + 1);
         status.textContent = "";
         return;
       }
@@ -547,30 +551,44 @@
         item.addEventListener("click", function () { showInboxDetail(m.id, item, false); });
         list.appendChild(item);
       });
-      // If we got a full page, a next page may exist; prev enabled if not page 0.
-      updateInboxPager(msgs.length, inboxPage === 0);
-      status.textContent = msgs.length + " on this page" + (unreadCount ? " · " + unreadCount + " unread" : "");
+      updateInboxPager(totalPages, inboxPage + 1);
+      status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
     } catch (e) {
       list.textContent = "Error: " + e.message;
       status.textContent = "";
     }
   }
 
-  // updateInboxPager enables/disables prev/next and shows the page number.
-  // gotFullPage = whether a full page was returned (so a next page may exist).
-  function updateInboxPager(gotFullPage, isFirstPage) {
+  // updateInboxPager enables/disables prev/next and sets the page input +
+  // "of N" label. totalPages is computed from total_count; currentPage is 1-based.
+  function updateInboxPager(totalPages, currentPage) {
+    if (totalPages < 1) totalPages = 1;
+    if (currentPage < 1) currentPage = 1;
+    if (currentPage > totalPages) currentPage = totalPages;
     const prev = $("#btn-inbox-prev");
     const next = $("#btn-inbox-next");
-    const info = $("#inbox-page-info");
-    prev.disabled = isFirstPage;
-    // Show Next only if this page was full (likely more messages).
-    next.disabled = !gotFullPage;
-    info.textContent = "Page " + (inboxPage + 1);
+    const input = $("#inbox-page-input");
+    const totalLabel = $("#inbox-page-total");
+    prev.disabled = currentPage <= 1;
+    next.disabled = currentPage >= totalPages;
+    input.max = String(totalPages);
+    input.value = String(currentPage);
+    totalLabel.textContent = "of " + totalPages;
   }
 
   $("#btn-load-inbox").addEventListener("click", function () { loadInbox(0); });
   $("#btn-inbox-prev").addEventListener("click", function () { if (inboxPage > 0) loadInbox(inboxPage - 1); });
   $("#btn-inbox-next").addEventListener("click", function () { loadInbox(inboxPage + 1); });
+  // Jump-to-page: on Enter or blur, clamp and load the typed page (1-based).
+  $("#inbox-page-input").addEventListener("change", function () {
+    const input = $("#inbox-page-input");
+    let p = parseInt(input.value, 10);
+    const max = parseInt(input.max, 10) || 1;
+    if (isNaN(p) || p < 1) p = 1;
+    if (p > max) p = max;
+    input.value = String(p);
+    loadInbox(p - 1); // loadInbox is 0-based
+  });
 
   async function showInboxDetail(id, item) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });

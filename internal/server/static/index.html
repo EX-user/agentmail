@@ -149,7 +149,9 @@
       </div>
       <div class="row inbox-pager">
         <button id="btn-inbox-prev" class="row-action" disabled>← Prev</button>
-        <span id="inbox-page-info" class="muted">Page 1</span>
+        <span class="muted">Page</span>
+        <input type="number" id="inbox-page-input" value="1" min="1" max="1" style="width:64px" />
+        <span id="inbox-page-total" class="muted">of 1</span>
         <button id="btn-inbox-next" class="row-action" disabled>Next →</button>
       </div>
     </section>
