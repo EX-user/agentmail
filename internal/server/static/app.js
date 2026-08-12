@@ -1293,7 +1293,11 @@
   // manually then tabbing away).
   $("#compose-to").addEventListener("change", loadComposeThread);
 
-  // Toggle a thread item's full body (lazy-load via /admin/message on first expand).
+  // Toggle a thread item's full body (lazy-load the message on first expand).
+  // Admins read via /admin/message (any account's mail); regular accounts read
+  // their own mail via /api/message. The thread only shows mail to/from the
+  // current user, so /api/message works for both roles for the viewer's own
+  // messages — and regular accounts CANNOT call /admin/* (401 → session reset).
   async function toggleThreadItem(item) {
     const full = $(".thread-full", item);
     const toggle = $(".thread-toggle", item);
@@ -1305,7 +1309,11 @@
       if (!loaded) {
         full.textContent = "Loading…";
         try {
-          const m = await api("/admin/message?id=" + encodeURIComponent(mid));
+          const cur = getSession();
+          const path = (cur && !cur.is_admin)
+            ? "/api/message?id=" + encodeURIComponent(mid)
+            : "/admin/message?id=" + encodeURIComponent(mid);
+          const m = await api(path);
           full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>";
           item.dataset.loaded = "1";
         } catch (e) {
