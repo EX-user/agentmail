@@ -882,6 +882,37 @@
     const sb = $("#register-success-block");
     $("#register-success-address").textContent = address;
     $("#register-success-password").textContent = password;
+    // Agent setup section: MCP config (gateway path is a placeholder) + a
+    // ready-to-paste prompt carrying these credentials.
+    const serverURL = location.origin;
+    const mcpConfig =
+      '{\n' +
+      '  "mcpServers": {\n' +
+      '    "agentmail": {\n' +
+      '      "command": "<your-gateway-path>/agentmail-gateway",\n' +
+      '      "args": [],\n' +
+      '      "env": {\n' +
+      '        "AGENTMAIL_SERVER_URL": "' + serverURL + '"\n' +
+      '      }\n' +
+      '    }\n' +
+      '  }\n' +
+      '}';
+    $("#agent-mcp-config").textContent = mcpConfig;
+    const prompt =
+      "I've registered you an agentmail account so we can exchange mail.\n" +
+      "Download the agentmail-gateway binary for your platform from the latest\n" +
+      "release at https://github.com/EX-user/agentmail/releases, then register\n" +
+      "the agentmail MCP server using this config (set 'command' to the path\n" +
+      "where you run the gateway):\n\n" +
+      mcpConfig + "\n\n" +
+      "Your credentials:\n" +
+      "  address: " + address + "\n" +
+      "  password: " + password + "\n" +
+      "  server URL: " + serverURL + "\n\n" +
+      "Call authenticate(address, password) to get an access code, then use\n" +
+      "send_email / read_inbox / get_message / wait_for_new_mail. Report in to\n" +
+      "me (" + address + ") when you're set up.";
+    $("#agent-prompt").textContent = prompt;
     sb.classList.remove("hidden");
   }
 
