@@ -499,21 +499,41 @@
 
   // loadInbox fills the left pane with the caller's own inbox. Regular accounts
   // read /api/inbox; admins read their own inbox via /admin/messages (self).
-  async function loadInbox() {
+  // Inbox paging state. The personal Inbox tab reads the caller's own inbox
+  // via /api/inbox (admins satisfy account auth too), which supports offset.
+  const INBOX_PAGE_SIZE = 20;
+  let inboxPage = 0;
+
+  async function loadInbox(page) {
+    if (typeof page === "number") inboxPage = page;
+    if (inboxPage < 0) inboxPage = 0;
+    const offset = inboxPage * INBOX_PAGE_SIZE;
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
     detail.innerHTML = "Select a message to view its body.";
     status.textContent = "Loading…";
     list.textContent = "";
-    const s = getSession();
-    const isRegular = s && !s.is_admin;
+    // Both admins and regular accounts read their own inbox via /api/inbox
+    // (the admin credential satisfies account auth). showInboxDetail uses the
+    // same account path to fetch a message body.
     try {
-      const data = isRegular
-        ? await api("/api/inbox?limit=50")
-        : await api("/admin/messages?account=" + encodeURIComponent(s.address) + "&limit=50");
+      const data = await api("/api/inbox?limit=" + INBOX_PAGE_SIZE + "&offset=" + offset);
       const msgs = data.messages || [];
-      if (!msgs.length) { list.textContent = "No messages."; status.textContent = ""; return; }
+      const unreadCount = data.unread_count || 0;
+      if (!msgs.length && inboxPage === 0) {
+        list.textContent = "No messages.";
+        updateInboxPager(0, true);
+        status.textContent = unreadCount ? (unreadCount + " unread") : "";
+        return;
+      }
+      if (!msgs.length) {
+        // Past the end: step back a page.
+        list.textContent = "No more messages.";
+        updateInboxPager(0, inboxPage === 0);
+        status.textContent = "";
+        return;
+      }
       list.innerHTML = "";
       msgs.forEach(function (m) {
         const item = document.createElement("div");
@@ -524,19 +544,35 @@
           '<div class="meta"><b>from:</b> ' + esc(m.from) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
-        item.addEventListener("click", function () { showInboxDetail(m.id, item, isRegular); });
+        item.addEventListener("click", function () { showInboxDetail(m.id, item, false); });
         list.appendChild(item);
       });
-      status.textContent = msgs.length + " message(s).";
+      // If we got a full page, a next page may exist; prev enabled if not page 0.
+      updateInboxPager(msgs.length, inboxPage === 0);
+      status.textContent = msgs.length + " on this page" + (unreadCount ? " · " + unreadCount + " unread" : "");
     } catch (e) {
       list.textContent = "Error: " + e.message;
       status.textContent = "";
     }
   }
 
-  $("#btn-load-inbox").addEventListener("click", loadInbox);
+  // updateInboxPager enables/disables prev/next and shows the page number.
+  // gotFullPage = whether a full page was returned (so a next page may exist).
+  function updateInboxPager(gotFullPage, isFirstPage) {
+    const prev = $("#btn-inbox-prev");
+    const next = $("#btn-inbox-next");
+    const info = $("#inbox-page-info");
+    prev.disabled = isFirstPage;
+    // Show Next only if this page was full (likely more messages).
+    next.disabled = !gotFullPage;
+    info.textContent = "Page " + (inboxPage + 1);
+  }
 
-  async function showInboxDetail(id, item, isRegular) {
+  $("#btn-load-inbox").addEventListener("click", function () { loadInbox(0); });
+  $("#btn-inbox-prev").addEventListener("click", function () { if (inboxPage > 0) loadInbox(inboxPage - 1); });
+  $("#btn-inbox-next").addEventListener("click", function () { loadInbox(inboxPage + 1); });
+
+  async function showInboxDetail(id, item) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
@@ -547,10 +583,9 @@
       if (dot) dot.remove();
     }
     try {
-      const path = isRegular
-        ? "/api/message?id=" + encodeURIComponent(id)
-        : "/admin/message?id=" + encodeURIComponent(id);
-      const m = await api(path);
+      // The Inbox tab is the viewer's own mail, so /api/message works for both
+      // roles (admin satisfies account auth).
+      const m = await api("/api/message?id=" + encodeURIComponent(id));
       detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
