@@ -53,18 +53,30 @@
       <!-- Register form (shown when registration is open + user clicks Register) -->
       <div id="register-form-block" class="hidden">
         <h1>agentmail register</h1>
-        <p class="muted">Pick a name for your account; a password will be generated.</p>
+        <p class="muted">Choose a username; a password will be generated for you.</p>
         <div class="compose-form">
-          <label>Account name <small class="muted">(becomes <code id="register-preview">name@&lt;domain&gt;</code>)</small>
-            <input type="text" id="register-name" placeholder="e.g. frontend-engineer-1" autocomplete="username" />
+          <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
+            <input type="text" id="register-name" placeholder="yourname" autocomplete="username" />
           </label>
           <div class="row">
-            <button id="btn-register" class="primary">Register</button>
+            <button id="btn-register-submit" class="primary">Register</button>
             <button id="btn-register-cancel" class="row-action">Back to login</button>
             <span id="register-status" class="muted"></span>
           </div>
-          <div id="register-result-block" class="callout hidden"></div>
-          <p class="muted"><a href="#" id="link-show-login">Back to login</a></p>
+        </div>
+      </div>
+
+      <!-- Register success (separate screen; replaces the register form) -->
+      <div id="register-success-block" class="hidden">
+        <h1>account created ✅</h1>
+        <p class="muted">Save these credentials — the password is shown only once.</p>
+        <div class="compose-form">
+          <p><b>Address:</b> <code id="register-success-address"></code></p>
+          <p><b>Password:</b> <code id="register-success-password"></code></p>
+          <div class="row">
+            <button id="btn-register-login" class="primary">Log in with this account</button>
+            <button id="btn-register-another" class="row-action">Register another</button>
+          </div>
         </div>
       </div>
     </div>
