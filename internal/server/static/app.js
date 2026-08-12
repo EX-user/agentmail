@@ -800,11 +800,48 @@
   function showLogin() {
     hideAllScreens();
     $("#login-page").classList.remove("hidden");
+    showLoginForm();
     $("#login-status").textContent = "";
     const s = getSession();
     $("#login-address").value = s ? s.address : "";
     $("#login-password").value = "";
     $("#login-address").focus();
+    // Reveal/hide the "register" link based on whether registration is open.
+    refreshRegisterLink();
+  }
+
+  function showLoginForm() {
+    $("#login-form-block").classList.remove("hidden");
+    $("#register-form-block").classList.add("hidden");
+  }
+
+  function showRegisterForm() {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.remove("hidden");
+    $("#register-name").value = "";
+    $("#register-status").textContent = "";
+    const rb = $("#register-result-block");
+    if (rb) { rb.classList.add("hidden"); rb.textContent = ""; }
+    updateRegisterPreview();
+    $("#register-name").focus();
+  }
+
+  // Show the register link only when the server allows registration.
+  async function refreshRegisterLink() {
+    const link = $("#link-show-register");
+    if (!link) return;
+    try {
+      const st = await api("/api/info?query=settings");
+      link.parentElement.style.display = st.registration_enabled ? "" : "none";
+    } catch (_) {
+      link.parentElement.style.display = "none";
+    }
+  }
+
+  // Live preview of the full address the chosen name will produce.
+  function updateRegisterPreview() {
+    const name = ($("#register-name").value || "").trim();
+    $("#register-preview").textContent = (name || "name") + "@" + systemDomain;
   }
 
   // Tabs only admins see. Mail is the global account-management view (query any
@@ -856,6 +893,49 @@
     } catch (e) {
       setSession(null);
       status.textContent = "Login failed: " + e.message;
+    }
+  });
+
+  // ---- register (on the login page) ----
+
+  $("#link-show-register").addEventListener("click", function (e) { e.preventDefault(); showRegisterForm(); });
+  $("#link-show-login").addEventListener("click", function (e) { e.preventDefault(); showLoginForm(); });
+  $("#btn-register-cancel").addEventListener("click", showLoginForm);
+  $("#register-name").addEventListener("input", updateRegisterPreview);
+
+  $("#btn-register").addEventListener("click", async function () {
+    const name = ($("#register-name").value || "").trim();
+    const status = $("#register-status");
+    const box = $("#register-result-block");
+    if (!name) { status.textContent = "Account name is required."; return; }
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      status.textContent = "Name must be ASCII letters, digits, '-' or '_'.";
+      return;
+    }
+    status.textContent = "Registering…";
+    box.classList.add("hidden");
+    try {
+      const res = await api("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name }),
+      });
+      status.textContent = "";
+      // Show the generated credentials and a one-click "log in with this account".
+      box.innerHTML =
+        "<p>Account created. Save these credentials — the password is shown only once.</p>" +
+        "<p><b>Address:</b> <code>" + esc(res.address) + "</code></p>" +
+        "<p><b>Password:</b> <code>" + esc(res.password) + "</code></p>" +
+        '<p><button class="primary" id="btn-register-login">Log in with this account</button></p>';
+      box.classList.remove("hidden");
+      $("#btn-register-login").addEventListener("click", function () {
+        $("#login-address").value = res.address;
+        $("#login-password").value = res.password;
+        showLoginForm();
+        $("#btn-login").click();
+      });
+    } catch (e) {
+      status.textContent = "Registration failed: " + e.message;
     }
   });
 
