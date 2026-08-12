@@ -499,21 +499,41 @@
 
   // loadInbox fills the left pane with the caller's own inbox. Regular accounts
   // read /api/inbox; admins read their own inbox via /admin/messages (self).
-  async function loadInbox() {
+  // Inbox paging state. The personal Inbox tab reads the caller's own inbox
+  // via /api/inbox (admins satisfy account auth too), which supports offset.
+  const INBOX_PAGE_SIZE = 20;
+  let inboxPage = 0;
+
+  async function loadInbox(page) {
+    if (typeof page === "number") inboxPage = page;
+    if (inboxPage < 0) inboxPage = 0;
+    const offset = inboxPage * INBOX_PAGE_SIZE;
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
     detail.innerHTML = "Select a message to view its body.";
     status.textContent = "Loading…";
     list.textContent = "";
-    const s = getSession();
-    const isRegular = s && !s.is_admin;
+    // Both admins and regular accounts read their own inbox via /api/inbox
+    // (the admin credential satisfies account auth). showInboxDetail uses the
+    // same account path to fetch a message body.
     try {
-      const data = isRegular
-        ? await api("/api/inbox?limit=50")
-        : await api("/admin/messages?account=" + encodeURIComponent(s.address) + "&limit=50");
+      const data = await api("/api/inbox?limit=" + INBOX_PAGE_SIZE + "&offset=" + offset);
       const msgs = data.messages || [];
-      if (!msgs.length) { list.textContent = "No messages."; status.textContent = ""; return; }
+      const unreadCount = data.unread_count || 0;
+      if (!msgs.length && inboxPage === 0) {
+        list.textContent = "No messages.";
+        updateInboxPager(0, true);
+        status.textContent = unreadCount ? (unreadCount + " unread") : "";
+        return;
+      }
+      if (!msgs.length) {
+        // Past the end: step back a page.
+        list.textContent = "No more messages.";
+        updateInboxPager(0, inboxPage === 0);
+        status.textContent = "";
+        return;
+      }
       list.innerHTML = "";
       msgs.forEach(function (m) {
         const item = document.createElement("div");
@@ -524,19 +544,35 @@
           '<div class="meta"><b>from:</b> ' + esc(m.from) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
-        item.addEventListener("click", function () { showInboxDetail(m.id, item, isRegular); });
+        item.addEventListener("click", function () { showInboxDetail(m.id, item, false); });
         list.appendChild(item);
       });
-      status.textContent = msgs.length + " message(s).";
+      // If we got a full page, a next page may exist; prev enabled if not page 0.
+      updateInboxPager(msgs.length, inboxPage === 0);
+      status.textContent = msgs.length + " on this page" + (unreadCount ? " · " + unreadCount + " unread" : "");
     } catch (e) {
       list.textContent = "Error: " + e.message;
       status.textContent = "";
     }
   }
 
-  $("#btn-load-inbox").addEventListener("click", loadInbox);
+  // updateInboxPager enables/disables prev/next and shows the page number.
+  // gotFullPage = whether a full page was returned (so a next page may exist).
+  function updateInboxPager(gotFullPage, isFirstPage) {
+    const prev = $("#btn-inbox-prev");
+    const next = $("#btn-inbox-next");
+    const info = $("#inbox-page-info");
+    prev.disabled = isFirstPage;
+    // Show Next only if this page was full (likely more messages).
+    next.disabled = !gotFullPage;
+    info.textContent = "Page " + (inboxPage + 1);
+  }
 
-  async function showInboxDetail(id, item, isRegular) {
+  $("#btn-load-inbox").addEventListener("click", function () { loadInbox(0); });
+  $("#btn-inbox-prev").addEventListener("click", function () { if (inboxPage > 0) loadInbox(inboxPage - 1); });
+  $("#btn-inbox-next").addEventListener("click", function () { loadInbox(inboxPage + 1); });
+
+  async function showInboxDetail(id, item) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
@@ -547,10 +583,9 @@
       if (dot) dot.remove();
     }
     try {
-      const path = isRegular
-        ? "/api/message?id=" + encodeURIComponent(id)
-        : "/admin/message?id=" + encodeURIComponent(id);
-      const m = await api(path);
+      // The Inbox tab is the viewer's own mail, so /api/message works for both
+      // roles (admin satisfies account auth).
+      const m = await api("/api/message?id=" + encodeURIComponent(id));
       detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
@@ -800,11 +835,48 @@
   function showLogin() {
     hideAllScreens();
     $("#login-page").classList.remove("hidden");
+    showLoginForm();
     $("#login-status").textContent = "";
     const s = getSession();
     $("#login-address").value = s ? s.address : "";
     $("#login-password").value = "";
     $("#login-address").focus();
+    // Reveal/hide the "register" link based on whether registration is open.
+    refreshRegisterLink();
+  }
+
+  function showLoginForm() {
+    $("#login-form-block").classList.remove("hidden");
+    $("#register-form-block").classList.add("hidden");
+  }
+
+  function showRegisterForm() {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.remove("hidden");
+    $("#register-name").value = "";
+    $("#register-status").textContent = "";
+    const rb = $("#register-result-block");
+    if (rb) { rb.classList.add("hidden"); rb.textContent = ""; }
+    updateRegisterPreview();
+    $("#register-name").focus();
+  }
+
+  // Show the register link only when the server allows registration.
+  async function refreshRegisterLink() {
+    const link = $("#link-show-register");
+    if (!link) return;
+    try {
+      const st = await api("/api/info?query=settings");
+      link.parentElement.style.display = st.registration_enabled ? "" : "none";
+    } catch (_) {
+      link.parentElement.style.display = "none";
+    }
+  }
+
+  // Live preview of the full address the chosen name will produce.
+  function updateRegisterPreview() {
+    const name = ($("#register-name").value || "").trim();
+    $("#register-preview").textContent = (name || "name") + "@" + systemDomain;
   }
 
   // Tabs only admins see. Mail is the global account-management view (query any
@@ -856,6 +928,49 @@
     } catch (e) {
       setSession(null);
       status.textContent = "Login failed: " + e.message;
+    }
+  });
+
+  // ---- register (on the login page) ----
+
+  $("#link-show-register").addEventListener("click", function (e) { e.preventDefault(); showRegisterForm(); });
+  $("#link-show-login").addEventListener("click", function (e) { e.preventDefault(); showLoginForm(); });
+  $("#btn-register-cancel").addEventListener("click", showLoginForm);
+  $("#register-name").addEventListener("input", updateRegisterPreview);
+
+  $("#btn-register").addEventListener("click", async function () {
+    const name = ($("#register-name").value || "").trim();
+    const status = $("#register-status");
+    const box = $("#register-result-block");
+    if (!name) { status.textContent = "Account name is required."; return; }
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      status.textContent = "Name must be ASCII letters, digits, '-' or '_'.";
+      return;
+    }
+    status.textContent = "Registering…";
+    box.classList.add("hidden");
+    try {
+      const res = await api("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name }),
+      });
+      status.textContent = "";
+      // Show the generated credentials and a one-click "log in with this account".
+      box.innerHTML =
+        "<p>Account created. Save these credentials — the password is shown only once.</p>" +
+        "<p><b>Address:</b> <code>" + esc(res.address) + "</code></p>" +
+        "<p><b>Password:</b> <code>" + esc(res.password) + "</code></p>" +
+        '<p><button class="primary" id="btn-register-login">Log in with this account</button></p>';
+      box.classList.remove("hidden");
+      $("#btn-register-login").addEventListener("click", function () {
+        $("#login-address").value = res.address;
+        $("#login-password").value = res.password;
+        showLoginForm();
+        $("#btn-login").click();
+      });
+    } catch (e) {
+      status.textContent = "Registration failed: " + e.message;
     }
   });
 

@@ -241,6 +241,8 @@ h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
 
 .row { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
 .row label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.inbox-pager { justify-content: center; gap: 12px; margin-top: 12px; }
+.inbox-pager button:disabled { opacity: 0.45; cursor: not-allowed; }
 .row select, .row input[type="number"] {
   background: var(--panel);
   color: var(--text);

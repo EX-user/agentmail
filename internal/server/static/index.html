@@ -31,18 +31,40 @@
   <!-- Login page (shown when initialized but no credentials cached) -->
   <section id="login-page" class="setup-page hidden">
     <div class="setup-card">
-      <h1>agentmail login</h1>
-      <p class="muted">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
-      <div class="compose-form">
-        <label>Address
-          <input type="text" id="login-address" placeholder="you@agentmail.local" autocomplete="username" />
-        </label>
-        <label>Password
-          <input type="password" id="login-password" placeholder="password" autocomplete="current-password" />
-        </label>
-        <div class="row">
-          <button id="btn-login" class="primary">Log in</button>
-          <span id="login-status" class="muted"></span>
+      <!-- Login form -->
+      <div id="login-form-block">
+        <h1>agentmail login</h1>
+        <p class="muted">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
+        <div class="compose-form">
+          <label>Address
+            <input type="text" id="login-address" placeholder="you@agentmail.local" autocomplete="username" />
+          </label>
+          <label>Password
+            <input type="password" id="login-password" placeholder="password" autocomplete="current-password" />
+          </label>
+          <div class="row">
+            <button id="btn-login" class="primary">Log in</button>
+            <span id="login-status" class="muted"></span>
+          </div>
+          <p class="muted"><a href="#" id="link-show-register">Register a new account</a></p>
+        </div>
+      </div>
+
+      <!-- Register form (shown when registration is open + user clicks Register) -->
+      <div id="register-form-block" class="hidden">
+        <h1>agentmail register</h1>
+        <p class="muted">Pick a name for your account; a password will be generated.</p>
+        <div class="compose-form">
+          <label>Account name <small class="muted">(becomes <code id="register-preview">name@&lt;domain&gt;</code>)</small>
+            <input type="text" id="register-name" placeholder="e.g. frontend-engineer-1" autocomplete="username" />
+          </label>
+          <div class="row">
+            <button id="btn-register" class="primary">Register</button>
+            <button id="btn-register-cancel" class="row-action">Back to login</button>
+            <span id="register-status" class="muted"></span>
+          </div>
+          <div id="register-result-block" class="callout hidden"></div>
+          <p class="muted"><a href="#" id="link-show-login">Back to login</a></p>
         </div>
       </div>
     </div>
@@ -124,6 +146,11 @@
       <div class="mail-grid">
         <div id="inbox-list" class="pane">Click "Load inbox" to fetch your messages.</div>
         <div id="inbox-detail" class="pane">Select a message to view its body.</div>
+      </div>
+      <div class="row inbox-pager">
+        <button id="btn-inbox-prev" class="row-action" disabled>← Prev</button>
+        <span id="inbox-page-info" class="muted">Page 1</span>
+        <button id="btn-inbox-next" class="row-action" disabled>Next →</button>
       </div>
     </section>
 

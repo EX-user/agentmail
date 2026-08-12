@@ -117,6 +117,12 @@ func (s *Store) Send(from, fromName string, to []string, subject, body string) (
 // with the given address. limit<=0 defaults to 20. Unread status reflects the
 // inbox owner's view (the account itself).
 func (s *Store) ReadInbox(address string, limit int) ([]MessageSummary, error) {
+	return s.ReadInboxPaged(address, limit, 0)
+}
+
+// ReadInboxPaged returns up to limit inbox messages for the account, skipping
+// the first offset (newest-first). offset<0 is treated as 0.
+func (s *Store) ReadInboxPaged(address string, limit, offset int) ([]MessageSummary, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -124,7 +130,7 @@ func (s *Store) ReadInbox(address string, limit int) ([]MessageSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.readIndex(bInbox, acc.UUID, acc.UUID, limit)
+	return s.readIndex(bInbox, acc.UUID, acc.UUID, limit, offset)
 }
 
 // ReadSent returns the account's sent messages (used by the admin UI later).
@@ -136,7 +142,7 @@ func (s *Store) ReadSent(address string, limit int) ([]MessageSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.readIndex(bSent, acc.UUID, acc.UUID, limit)
+	return s.readIndex(bSent, acc.UUID, acc.UUID, limit, 0)
 }
 
 // ListContacts returns the deduplicated, sorted list of addresses the account
@@ -149,11 +155,11 @@ func (s *Store) ListContacts(address string) ([]string, error) {
 		return nil, err
 	}
 	const scan = 500
-	inbox, err := s.readIndex(bInbox, acc.UUID, acc.UUID, scan)
+	inbox, err := s.readIndex(bInbox, acc.UUID, acc.UUID, scan, 0)
 	if err != nil {
 		return nil, err
 	}
-	sent, err := s.readIndex(bSent, acc.UUID, acc.UUID, scan)
+	sent, err := s.readIndex(bSent, acc.UUID, acc.UUID, scan, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -225,16 +231,16 @@ func (s *Store) ReadInboxAsViewer(owner, viewer string, limit int) ([]MessageSum
 	viewerAcc, err := s.GetAccount(viewer)
 	if err != nil {
 		// viewer unknown: fall back to owner's view
-		return s.readIndex(bInbox, ownerAcc.UUID, ownerAcc.UUID, limit)
+		return s.readIndex(bInbox, ownerAcc.UUID, ownerAcc.UUID, limit, 0)
 	}
-	return s.readIndex(bInbox, ownerAcc.UUID, viewerAcc.UUID, limit)
+	return s.readIndex(bInbox, ownerAcc.UUID, viewerAcc.UUID, limit, 0)
 }
 
 // readIndex scans an index bucket (inbox or sent) for the given account UUID,
 // newest first, and resolves each referenced message to a summary. indexOwner
 // selects whose inbox/sent to read; viewerUuid selects whose unread state to
 // report (often the same, but different for admin viewing another's inbox).
-func (s *Store) readIndex(bucket []byte, indexOwner, viewerUuid string, limit int) ([]MessageSummary, error) {
+func (s *Store) readIndex(bucket []byte, indexOwner, viewerUuid string, limit, offset int) ([]MessageSummary, error) {
 	prefix := indexKey(indexOwner, "")
 	prefixStr := string(prefix)
 	var ids []string
@@ -252,9 +258,19 @@ func (s *Store) readIndex(bucket []byte, indexOwner, viewerUuid string, limit in
 	if err != nil {
 		return nil, err
 	}
+	// Newest-first: bbolt cursor returns ascending ULID order; reverse so the
+	// newest message is first.
 	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
 		ids[i], ids[j] = ids[j], ids[i]
 	}
+	// Apply offset pagination (skip the first `offset` newest, then take limit).
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(ids) {
+		return []MessageSummary{}, nil
+	}
+	ids = ids[offset:]
 	if len(ids) > limit {
 		ids = ids[:limit]
 	}

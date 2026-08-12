@@ -213,7 +213,8 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	who := accountFrom(r.Context())
 	limit := queryInt(r, "limit", 20)
-	msgs, err := s.store.ReadInbox(who, limit)
+	offset := queryInt(r, "offset", 0)
+	msgs, err := s.store.ReadInboxPaged(who, limit, offset)
 	if err != nil {
 		internalError(w, "read inbox: "+err.Error())
 		return
