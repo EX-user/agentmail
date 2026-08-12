@@ -332,6 +332,9 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   overflow-x: auto;
   margin: 6px 0 16px;
 }
+/* Collapsible agent-setup section on the register-success page. */
+#agent-setup-details > summary { cursor: pointer; padding: 4px 0; }
+#agent-setup-details[open] > summary { margin-bottom: 4px; }
 
 .callout {
   padding: 12px 16px;

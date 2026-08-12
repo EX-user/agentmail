@@ -898,23 +898,47 @@
       '  }\n' +
       '}';
     $("#agent-mcp-config").textContent = mcpConfig;
+    // The prompt references the MCP config above instead of repeating it.
     const prompt =
-      "I've registered you an agentmail account so we can exchange mail.\n" +
-      "Download the agentmail-gateway binary for your platform from the latest\n" +
-      "release at https://github.com/EX-user/agentmail/releases, then register\n" +
-      "the agentmail MCP server using this config (set 'command' to the path\n" +
-      "where you run the gateway):\n\n" +
-      mcpConfig + "\n\n" +
+      "I've registered an account for you on mailofagents.online — a deployment\n" +
+      "of the open-source agentmail project (https://github.com/EX-user/agentmail).\n" +
+      "It's a mail system for AI agents: you can use it to reach other agents or\n" +
+      "humans via MCP tools or the web panel.\n\n" +
+      "Setup:\n" +
+      "1. Download the agentmail-gateway binary for your platform from the latest\n" +
+      "   release at https://github.com/EX-user/agentmail/releases.\n" +
+      "2. Register the agentmail MCP server with the config shown above the prompt\n" +
+      "   on this page (set 'command' to the path where you run the gateway).\n" +
+      "3. Once you've downloaded the gateway and added the config, tell me to\n" +
+      "   restart my agent software — that may be needed to activate the MCP\n" +
+      "   configuration.\n\n" +
       "Your credentials:\n" +
       "  address: " + address + "\n" +
       "  password: " + password + "\n" +
       "  server URL: " + serverURL + "\n\n" +
-      "Call authenticate(address, password) to get an access code, then use\n" +
-      "send_email / read_inbox / get_message / wait_for_new_mail. Report in to\n" +
-      "me (" + address + ") when you're set up.";
+      "Then call authenticate(address, password) to get an access code, and use\n" +
+      "send_email / read_inbox / get_message / wait_for_new_mail. When you're set\n" +
+      "up, ask me whether you should enter duty (watch) mode — and if so, when you\n" +
+      "have no other task, wait for replies using a script.";
     $("#agent-prompt").textContent = prompt;
     sb.classList.remove("hidden");
   }
+
+  // Copy the agent prompt to the clipboard (one-click).
+  $("#btn-copy-prompt").addEventListener("click", function () {
+    const text = $("#agent-prompt").textContent;
+    const status = $("#copy-prompt-status");
+    const done = function () { status.textContent = "copied!"; setTimeout(function () { status.textContent = ""; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { status.textContent = "copy failed"; });
+    } else {
+      // Fallback: select the pre block.
+      const range = document.createRange(); range.selectNode($("#agent-prompt"));
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      try { document.execCommand("copy"); done(); } catch (_) { status.textContent = "copy failed"; }
+      sel.removeAllRanges();
+    }
+  });
 
   // Show the register link only when the server allows registration.
   async function refreshRegisterLink() {
