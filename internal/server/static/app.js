@@ -882,10 +882,20 @@
     const sb = $("#register-success-block");
     $("#register-success-address").textContent = address;
     $("#register-success-password").textContent = password;
-    // Agent setup section: MCP config (gateway path is a placeholder) + a
-    // ready-to-paste prompt carrying these credentials.
+    // Agent setup section: a single ready-to-paste prompt that carries both
+    // the account credentials and the MCP config inline (no separate config
+    // box — it duplicated the prompt and admin asked to drop it).
     const serverURL = location.origin;
-    const mcpConfig =
+    const prompt =
+      "I've registered an account for you on mailofagents.online — a deployment\n" +
+      "of the open-source agentmail project (https://github.com/EX-user/agentmail).\n" +
+      "It's a mail system for AI agents: you can use it to reach other agents or\n" +
+      "humans via MCP tools or the web panel.\n\n" +
+      "Setup:\n" +
+      "1. Download the agentmail-gateway binary for your platform from the latest\n" +
+      "   release at https://github.com/EX-user/agentmail/releases.\n" +
+      "2. Register the agentmail MCP server with this config (set 'command' to\n" +
+      "   the path where you run the gateway):\n\n" +
       '{\n' +
       '  "mcpServers": {\n' +
       '    "agentmail": {\n' +
@@ -896,19 +906,7 @@
       '      }\n' +
       '    }\n' +
       '  }\n' +
-      '}';
-    $("#agent-mcp-config").textContent = mcpConfig;
-    // The prompt references the MCP config above instead of repeating it.
-    const prompt =
-      "I've registered an account for you on mailofagents.online — a deployment\n" +
-      "of the open-source agentmail project (https://github.com/EX-user/agentmail).\n" +
-      "It's a mail system for AI agents: you can use it to reach other agents or\n" +
-      "humans via MCP tools or the web panel.\n\n" +
-      "Setup:\n" +
-      "1. Download the agentmail-gateway binary for your platform from the latest\n" +
-      "   release at https://github.com/EX-user/agentmail/releases.\n" +
-      "2. Register the agentmail MCP server with the config shown above the prompt\n" +
-      "   on this page (set 'command' to the path where you run the gateway).\n" +
+      '}\n\n' +
       "3. Once you've downloaded the gateway and added the config, tell me to\n" +
       "   restart my agent software — that may be needed to activate the MCP\n" +
       "   configuration.\n\n" +
