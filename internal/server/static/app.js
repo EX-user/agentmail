@@ -91,6 +91,7 @@
     $("#tab-" + name).classList.remove("hidden");
     if (name === "overview") loadOverview();
     if (name === "accounts") loadAccounts();
+    if (name === "inbox") loadInbox();
     if (name === "mail") ensureAccountOptions();
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); }
     if (name === "directory") loadDirectory();
@@ -441,6 +442,73 @@
     }
   }
 
+  // ---- inbox (personal, all users) ----
+
+  // loadInbox fills the left pane with the caller's own inbox. Regular accounts
+  // read /api/inbox; admins read their own inbox via /admin/messages (self).
+  async function loadInbox() {
+    const list = $("#inbox-list");
+    const detail = $("#inbox-detail");
+    const status = $("#inbox-status");
+    detail.innerHTML = "Select a message to view its body.";
+    status.textContent = "Loading…";
+    list.textContent = "";
+    const s = getSession();
+    const isRegular = s && !s.is_admin;
+    try {
+      const data = isRegular
+        ? await api("/api/inbox?limit=50")
+        : await api("/admin/messages?account=" + encodeURIComponent(s.address) + "&limit=50");
+      const msgs = data.messages || [];
+      if (!msgs.length) { list.textContent = "No messages."; status.textContent = ""; return; }
+      list.innerHTML = "";
+      msgs.forEach(function (m) {
+        const item = document.createElement("div");
+        item.className = "mail-item" + (m.unread ? " unread" : "");
+        item.innerHTML =
+          (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
+          '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
+          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          " · <small>" + fmtTime(m.received_at) + "</small></div>" +
+          '<div class="prev">' + esc(m.preview || "") + "</div>";
+        item.addEventListener("click", function () { showInboxDetail(m.id, item, isRegular); });
+        list.appendChild(item);
+      });
+      status.textContent = msgs.length + " message(s).";
+    } catch (e) {
+      list.textContent = "Error: " + e.message;
+      status.textContent = "";
+    }
+  }
+
+  $("#btn-load-inbox").addEventListener("click", loadInbox);
+
+  async function showInboxDetail(id, item, isRegular) {
+    $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
+    if (item) item.classList.add("selected");
+    const detail = $("#inbox-detail");
+    detail.textContent = "Loading…";
+    if (item) {
+      item.classList.remove("unread");
+      const dot = $(".unread-dot", item);
+      if (dot) dot.remove();
+    }
+    try {
+      const path = isRegular
+        ? "/api/message?id=" + encodeURIComponent(id)
+        : "/admin/message?id=" + encodeURIComponent(id);
+      const m = await api(path);
+      detail.innerHTML =
+        '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
+        '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
+        '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
+        '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
+    } catch (e) {
+      detail.textContent = "Error: " + e.message;
+    }
+  }
+
   // ---- audit ----
 
   async function loadAudit() {
@@ -677,11 +745,10 @@
     $("#login-address").focus();
   }
 
-  // Tabs only admins see. Regular accounts get a personal view (Overview,
-  // Accounts, Mail, Compose, Directory, My Profile) but no global Settings or
-  // Audit. These tabs call /admin/* which a regular account can't access, so
-  // hiding them avoids confusing 403s.
-  const ADMIN_ONLY_TABS = ["settings", "audit"];
+  // Tabs only admins see. Mail is the global account-management view (query any
+  // account); regular accounts use the personal Inbox tab instead. Settings and
+  // Audit are admin-only system controls.
+  const ADMIN_ONLY_TABS = ["mail", "settings", "audit"];
 
   function applyRole(isAdmin) {
     $$(".tab").forEach(function (b) {

@@ -59,6 +59,7 @@
     <nav>
       <button class="tab" data-tab="overview">Overview</button>
       <button class="tab" data-tab="accounts">Accounts</button>
+      <button class="tab" data-tab="inbox">Inbox</button>
       <button class="tab" data-tab="mail">Mail</button>
       <button class="tab" data-tab="compose">Compose</button>
       <button class="tab" data-tab="directory">Directory</button>
@@ -109,6 +110,19 @@
       <div class="mail-grid">
         <div id="mail-list" class="pane">Pick an account and click Load.</div>
         <div id="mail-detail" class="pane">Select a message to view its body.</div>
+      </div>
+    </section>
+
+    <!-- Inbox (personal inbox, all users) -->
+    <section id="tab-inbox" class="tab-panel hidden">
+      <h2>Inbox <small class="muted">— your incoming mail</small></h2>
+      <div class="row">
+        <button id="btn-load-inbox" class="primary">Load inbox</button>
+        <span id="inbox-status" class="muted"></span>
+      </div>
+      <div class="mail-grid">
+        <div id="inbox-list" class="pane">Click "Load inbox" to fetch your messages.</div>
+        <div id="inbox-detail" class="pane">Select a message to view its body.</div>
       </div>
     </section>
 
