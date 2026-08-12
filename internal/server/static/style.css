@@ -122,7 +122,18 @@ tr.row-disabled td { opacity: 0.5; }
 td.actions-cell { white-space: nowrap; }
 td.actions-cell button { margin-right: 4px; }
 td.actions-cell button:last-child { margin-right: 0; }
-td.addr-cell { word-break: break-all; max-width: 280px; }
+/* Address column: wide, single-line, horizontal-scroll on overflow (long
+   addresses stay readable instead of wrapping). Applies to Accounts + Directory. */
+td.addr-cell {
+  white-space: nowrap;
+  overflow-x: auto;
+  max-width: 360px;
+}
+td.addr-cell::-webkit-scrollbar { height: 6px; }
+/* Keep the old break-all as a fallback for very narrow viewports. */
+@media (max-width: 520px) {
+  td.addr-cell { white-space: normal; word-break: break-all; }
+}
 
 .compose-form { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
 .compose-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
@@ -144,6 +155,49 @@ td.addr-cell { word-break: break-all; max-width: 280px; }
 .compose-form input[type="password"]:focus,
 .compose-form textarea:focus { outline: none; border-color: var(--accent); }
 .muted { color: var(--muted); font-size: 13px; }
+
+/* Compose To field with a dropdown picker button. */
+.to-field { position: relative; display: flex; align-items: stretch; gap: 0; }
+.to-field input[type="text"] { flex: 1 1 auto; }
+.to-dropdown-btn {
+  flex: 0 0 auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.to-dropdown-btn:hover { background: var(--border); }
+.compose-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 2px;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+.compose-dropdown .dd-item {
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compose-dropdown .dd-item:hover, .compose-dropdown .dd-item.active {
+  background: var(--border);
+}
+.compose-dropdown .dd-empty { padding: 6px 10px; font-size: 13px; color: var(--muted); }
 
 /* Compose thread view */
 .thread-list { margin-top: 8px; max-height: 420px; overflow-y: auto; }

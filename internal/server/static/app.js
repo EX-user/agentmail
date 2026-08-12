@@ -91,6 +91,7 @@
     $("#tab-" + name).classList.remove("hidden");
     if (name === "overview") loadOverview();
     if (name === "accounts") loadAccounts();
+    if (name === "inbox") loadInbox();
     if (name === "mail") ensureAccountOptions();
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); }
     if (name === "directory") loadDirectory();
@@ -182,13 +183,17 @@
           "<td>" + esc(a.signature || "") + "</td>" +
           "<td><code>" + esc(a.uuid) + "</code></td>" +
           "<td>" + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell"><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
       // Wire each reset button.
       $$("[data-reset]", tbody).forEach(function (btn) {
         btn.addEventListener("click", function () { resetPassword(btn.dataset.reset); });
+      });
+      // Wire compose buttons (jump to Compose, prefill To).
+      $$("[data-compose]", tbody).forEach(function (btn) {
+        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
       });
       // Wire disable/enable buttons.
       $$("[data-disable]", tbody).forEach(function (btn) {
@@ -231,6 +236,15 @@
     tbody.innerHTML = rows.join("");
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);
+  }
+
+  // composeTo switches to the Compose tab and prefills the To field with the
+  // given address, then loads that thread. Used by the Compose buttons on the
+  // Accounts and Directory tables.
+  function composeTo(address) {
+    $("#compose-to").value = address || "";
+    activateTab("compose");
+    loadComposeThread();
   }
 
   function openChangePassword() {
@@ -355,12 +369,16 @@
     try {
       const data = await api("/admin/accounts");
       sel.innerHTML = "";
+      // "All accounts" pseudo-option: iterate every account on Load.
+      const all = document.createElement("option");
+      all.value = "__all__"; all.textContent = "All accounts";
+      sel.appendChild(all);
       (data.accounts || []).forEach(function (a) {
         const o = document.createElement("option");
         o.value = a.address; o.textContent = a.address;
         sel.appendChild(o);
       });
-      if (!sel.options.length) {
+      if (sel.options.length <= 1) {
         const o = document.createElement("option");
         o.value = ""; o.textContent = "(no accounts)";
         sel.appendChild(o);
@@ -385,17 +403,43 @@
     try {
       const s = getSession();
       const isRegular = s && !s.is_admin;
-      // Regular accounts read their own mail via /api/inbox and /api/sent;
-      // admins read any account via /admin/messages and /admin/sent.
-      const path = isRegular
-        ? (folder === "sent"
-            ? "/api/sent?limit=" + limit
-            : "/api/inbox?limit=" + limit)
-        : (folder === "sent"
-            ? "/admin/sent?account=" + encodeURIComponent(account) + "&limit=" + limit
-            : "/admin/messages?account=" + encodeURIComponent(account) + "&limit=" + limit);
-      const data = await api(path);
-      const msgs = data.messages || [];
+
+      // Build the set of (account, folder) queries to run.
+      // - account="__all__": iterate every account (admin only).
+      // - folder="all": mix inbox + sent for the selected account.
+      var accounts = [];
+      if (account === "__all__") {
+        const all = await api("/admin/accounts");
+        accounts = (all.accounts || []).map(function (a) { return a.address; });
+      } else {
+        accounts = [account];
+      }
+      const folders = folder === "all" ? ["inbox", "sent"] : [folder];
+
+      // Fire all queries, then merge by time (newest first).
+      var requests = [];
+      accounts.forEach(function (acc) {
+        folders.forEach(function (f) {
+          requests.push({ acc: acc, f: f });
+        });
+      });
+      const results = await Promise.all(requests.map(function (r) {
+        const path = isRegular
+          ? (r.f === "sent" ? "/api/sent?limit=" + limit : "/api/inbox?limit=" + limit)
+          : (r.f === "sent"
+              ? "/admin/sent?account=" + encodeURIComponent(r.acc) + "&limit=" + limit
+              : "/admin/messages?account=" + encodeURIComponent(r.acc) + "&limit=" + limit);
+        return api(path).then(function (d) { return d.messages || []; })
+          .catch(function () { return []; });
+      }));
+      var msgs = [];
+      results.forEach(function (arr) { msgs = msgs.concat(arr); });
+      msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
+      // De-duplicate by id (a message can appear in both inbox and sent views).
+      var seen = {}, dedup = [];
+      msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
+      msgs = dedup;
+
       if (!msgs.length) { list.textContent = "No messages."; return; }
       list.innerHTML = "";
       msgs.forEach(function (m) {
@@ -441,6 +485,73 @@
     }
   }
 
+  // ---- inbox (personal, all users) ----
+
+  // loadInbox fills the left pane with the caller's own inbox. Regular accounts
+  // read /api/inbox; admins read their own inbox via /admin/messages (self).
+  async function loadInbox() {
+    const list = $("#inbox-list");
+    const detail = $("#inbox-detail");
+    const status = $("#inbox-status");
+    detail.innerHTML = "Select a message to view its body.";
+    status.textContent = "Loading…";
+    list.textContent = "";
+    const s = getSession();
+    const isRegular = s && !s.is_admin;
+    try {
+      const data = isRegular
+        ? await api("/api/inbox?limit=50")
+        : await api("/admin/messages?account=" + encodeURIComponent(s.address) + "&limit=50");
+      const msgs = data.messages || [];
+      if (!msgs.length) { list.textContent = "No messages."; status.textContent = ""; return; }
+      list.innerHTML = "";
+      msgs.forEach(function (m) {
+        const item = document.createElement("div");
+        item.className = "mail-item" + (m.unread ? " unread" : "");
+        item.innerHTML =
+          (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
+          '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
+          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          " · <small>" + fmtTime(m.received_at) + "</small></div>" +
+          '<div class="prev">' + esc(m.preview || "") + "</div>";
+        item.addEventListener("click", function () { showInboxDetail(m.id, item, isRegular); });
+        list.appendChild(item);
+      });
+      status.textContent = msgs.length + " message(s).";
+    } catch (e) {
+      list.textContent = "Error: " + e.message;
+      status.textContent = "";
+    }
+  }
+
+  $("#btn-load-inbox").addEventListener("click", loadInbox);
+
+  async function showInboxDetail(id, item, isRegular) {
+    $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
+    if (item) item.classList.add("selected");
+    const detail = $("#inbox-detail");
+    detail.textContent = "Loading…";
+    if (item) {
+      item.classList.remove("unread");
+      const dot = $(".unread-dot", item);
+      if (dot) dot.remove();
+    }
+    try {
+      const path = isRegular
+        ? "/api/message?id=" + encodeURIComponent(id)
+        : "/admin/message?id=" + encodeURIComponent(id);
+      const m = await api(path);
+      detail.innerHTML =
+        '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
+        '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
+        '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
+        '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
+    } catch (e) {
+      detail.textContent = "Error: " + e.message;
+    }
+  }
+
   // ---- audit ----
 
   async function loadAudit() {
@@ -470,22 +581,26 @@
 
   async function loadDirectory() {
     const tbody = $("#directory-table tbody");
-    tbody.innerHTML = '<tr><td colspan="2">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3">Loading…</td></tr>';
     try {
       const data = await api("/api/info?query=directory");
       const entries = data.entries || [];
       if (!entries.length) {
-        tbody.innerHTML = '<tr><td colspan="2">No visible accounts yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3">No visible accounts yet.</td></tr>';
         return;
       }
       tbody.innerHTML = entries.map(function (e) {
         return "<tr>" +
-          "<td>" + esc(e.address) + "</td>" +
+          '<td class="addr-cell">' + esc(e.address) + "</td>" +
           "<td>" + esc(e.signature || "") + "</td>" +
+          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">Compose</button></td>' +
           "</tr>";
       }).join("");
+      $$("[data-compose]", tbody).forEach(function (btn) {
+        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
+      });
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="2">Error: ' + esc(e.message) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="3">Error: ' + esc(e.message) + "</td></tr>";
     }
   }
 
@@ -677,11 +792,10 @@
     $("#login-address").focus();
   }
 
-  // Tabs only admins see. Regular accounts get a personal view (Overview,
-  // Accounts, Mail, Compose, Directory, My Profile) but no global Settings or
-  // Audit. These tabs call /admin/* which a regular account can't access, so
-  // hiding them avoids confusing 403s.
-  const ADMIN_ONLY_TABS = ["settings", "audit"];
+  // Tabs only admins see. Mail is the global account-management view (query any
+  // account); regular accounts use the personal Inbox tab instead. Settings and
+  // Audit are admin-only system controls.
+  const ADMIN_ONLY_TABS = ["mail", "settings", "audit"];
 
   function applyRole(isAdmin) {
     $$(".tab").forEach(function (b) {
@@ -757,35 +871,64 @@
 
   // ---- compose ----
 
-  // Fill the To field's datalist with known accounts for convenience.
+  // Populate the Compose To-field dropdown with known recipients (admins get
+  // every account; regular accounts get their contacts). Builds a custom
+  // dropdown (not a native datalist) so clicking a recipient clears the input
+  // and fills it — the behavior admin requested.
   async function ensureComposeAccounts() {
     const input = $("#compose-to");
     if (input.dataset.listLoaded === "1") return;
     const s = getSession();
     const isRegular = s && !s.is_admin;
+    var items = [];
     try {
-      // Admins get every account; regular users get their contacts.
       const data = isRegular
         ? { contacts: (await api("/api/contacts")).contacts || [] }
         : await api("/admin/accounts");
-      let dl = $("#compose-accounts");
-      if (!dl) {
-        dl = document.createElement("datalist");
-        dl.id = "compose-accounts";
-        document.body.appendChild(dl);
-        input.setAttribute("list", "compose-accounts");
-      }
-      dl.innerHTML = "";
-      const items = isRegular ? data.contacts : (data.accounts || []);
-      items.forEach(function (a) {
-        const o = document.createElement("option");
-        o.value = isRegular ? a : a.address;
-        dl.appendChild(o);
-      });
-      input.dataset.listLoaded = "1";
+      items = isRegular ? data.contacts : (data.accounts || []).map(function (a) { return a.address; });
     } catch (e) {
       // Non-fatal: the user can still type addresses manually.
     }
+    input.dataset.recipients = JSON.stringify(items);
+    input.dataset.listLoaded = "1";
+
+    // Toggle the dropdown from the picker button.
+    const btn = $("#btn-compose-dropdown");
+    const panel = $("#compose-dropdown");
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      if (panel.classList.contains("hidden")) openComposeDropdown();
+      else panel.classList.add("hidden");
+    });
+    // Close when clicking outside, or when a recipient is picked.
+    document.addEventListener("click", function (e) {
+      if (panel.classList.contains("hidden")) return;
+      if (!e.target.closest(".to-field")) panel.classList.add("hidden");
+    });
+  }
+
+  function openComposeDropdown() {
+    const input = $("#compose-to");
+    const panel = $("#compose-dropdown");
+    var items = [];
+    try { items = JSON.parse(input.dataset.recipients || "[]"); } catch (_) {}
+    if (!items.length) {
+      panel.innerHTML = '<div class="dd-empty">No recipients yet.</div>';
+    } else {
+      panel.innerHTML = items.map(function (a) {
+        return '<div class="dd-item" data-addr="' + esc(a) + '">' + esc(a) + "</div>";
+      }).join("");
+      $$(".dd-item", panel).forEach(function (el) {
+        el.addEventListener("click", function () {
+          // "Click clears the input then fills" — admin's requested behavior.
+          input.value = el.dataset.addr;
+          panel.classList.add("hidden");
+          input.focus();
+          loadComposeThread();
+        });
+      });
+    }
+    panel.classList.remove("hidden");
   }
 
   $("#btn-send").addEventListener("click", async function () {

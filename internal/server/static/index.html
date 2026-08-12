@@ -59,6 +59,7 @@
     <nav>
       <button class="tab" data-tab="overview">Overview</button>
       <button class="tab" data-tab="accounts">Accounts</button>
+      <button class="tab" data-tab="inbox">Inbox</button>
       <button class="tab" data-tab="mail">Mail</button>
       <button class="tab" data-tab="compose">Compose</button>
       <button class="tab" data-tab="directory">Directory</button>
@@ -99,6 +100,7 @@
           <select id="mail-folder">
             <option value="inbox">Inbox</option>
             <option value="sent">Sent</option>
+            <option value="all">All (mixed)</option>
           </select>
         </label>
         <label>Limit:
@@ -112,13 +114,26 @@
       </div>
     </section>
 
+    <!-- Inbox (personal inbox, all users) -->
+    <section id="tab-inbox" class="tab-panel hidden">
+      <h2>Inbox <small class="muted">— your incoming mail</small></h2>
+      <div class="row">
+        <button id="btn-load-inbox" class="primary">Load inbox</button>
+        <span id="inbox-status" class="muted"></span>
+      </div>
+      <div class="mail-grid">
+        <div id="inbox-list" class="pane">Click "Load inbox" to fetch your messages.</div>
+        <div id="inbox-detail" class="pane">Select a message to view its body.</div>
+      </div>
+    </section>
+
     <!-- Directory -->
     <section id="tab-directory" class="tab-panel hidden">
       <h2>Directory</h2>
       <p class="muted">Public address book. Accounts that have opted in (Visible) appear here with their signature. Anyone can query this via <code>/api/info?query=directory</code>.</p>
       <button id="btn-refresh-directory" class="row-action">Refresh</button>
       <table id="directory-table">
-        <thead><tr><th>Address</th><th>Signature</th></tr></thead>
+        <thead><tr><th>Address</th><th>Signature</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -195,7 +210,11 @@
       <h2>Compose <small>(as admin)</small></h2>
       <div class="compose-form">
         <label>To
-          <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" />
+          <div class="to-field">
+            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" autocomplete="off" />
+            <button type="button" id="btn-compose-dropdown" class="to-dropdown-btn" title="Pick a recipient">▾</button>
+            <div id="compose-dropdown" class="compose-dropdown hidden"></div>
+          </div>
         </label>
         <label>Subject
           <input type="text" id="compose-subject" placeholder="subject" />
