@@ -127,7 +127,10 @@ td.addr-cell { word-break: break-all; max-width: 280px; }
 .compose-form { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
 .compose-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .compose-form input[type="text"],
+.compose-form input[type="password"],
 .compose-form textarea {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
@@ -138,6 +141,7 @@ td.addr-cell { word-break: break-all; max-width: 280px; }
 }
 .compose-form textarea { font-family: ui-monospace, "SF Mono", Consolas, monospace; resize: vertical; }
 .compose-form input[type="text"]:focus,
+.compose-form input[type="password"]:focus,
 .compose-form textarea:focus { outline: none; border-color: var(--accent); }
 .muted { color: var(--muted); font-size: 13px; }
 
