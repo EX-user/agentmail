@@ -183,13 +183,17 @@
           "<td>" + esc(a.signature || "") + "</td>" +
           "<td><code>" + esc(a.uuid) + "</code></td>" +
           "<td>" + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell"><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
       // Wire each reset button.
       $$("[data-reset]", tbody).forEach(function (btn) {
         btn.addEventListener("click", function () { resetPassword(btn.dataset.reset); });
+      });
+      // Wire compose buttons (jump to Compose, prefill To).
+      $$("[data-compose]", tbody).forEach(function (btn) {
+        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
       });
       // Wire disable/enable buttons.
       $$("[data-disable]", tbody).forEach(function (btn) {
@@ -232,6 +236,15 @@
     tbody.innerHTML = rows.join("");
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);
+  }
+
+  // composeTo switches to the Compose tab and prefills the To field with the
+  // given address, then loads that thread. Used by the Compose buttons on the
+  // Accounts and Directory tables.
+  function composeTo(address) {
+    $("#compose-to").value = address || "";
+    activateTab("compose");
+    loadComposeThread();
   }
 
   function openChangePassword() {
@@ -538,22 +551,26 @@
 
   async function loadDirectory() {
     const tbody = $("#directory-table tbody");
-    tbody.innerHTML = '<tr><td colspan="2">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3">Loading…</td></tr>';
     try {
       const data = await api("/api/info?query=directory");
       const entries = data.entries || [];
       if (!entries.length) {
-        tbody.innerHTML = '<tr><td colspan="2">No visible accounts yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3">No visible accounts yet.</td></tr>';
         return;
       }
       tbody.innerHTML = entries.map(function (e) {
         return "<tr>" +
-          "<td>" + esc(e.address) + "</td>" +
+          '<td class="addr-cell">' + esc(e.address) + "</td>" +
           "<td>" + esc(e.signature || "") + "</td>" +
+          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">Compose</button></td>' +
           "</tr>";
       }).join("");
+      $$("[data-compose]", tbody).forEach(function (btn) {
+        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
+      });
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="2">Error: ' + esc(e.message) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="3">Error: ' + esc(e.message) + "</td></tr>";
     }
   }
 
