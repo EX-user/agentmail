@@ -407,6 +407,38 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .settings-section .row { gap: 16px; flex-wrap: wrap; }
 
 /* ============================================================
+   One-click agent register modal (v0.4.2)
+   Overlay + centered card; glass style consistent with the
+   portal redesign. Closes via ×, overlay click, or Esc.
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8, 10, 16, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px 26px; width: 100%; max-width: 640px; max-height: 88vh;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal-x {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px;
+}
+.modal-x:hover { color: var(--text); background: var(--panel-2); }
+/* Scrollable prompt block, clamped by the modal's max-height. */
+.modal-code { flex: 1 1 auto; overflow-y: auto; min-height: 120px; max-height: 42vh; }
+@media (max-width: 520px) {
+  .modal-card { padding: 18px; max-height: 92vh; }
+  .modal-code { max-height: 34vh; }
+}
+
+/* ============================================================
    Guest portal (public landing page) — v0.4.2 redesign
    "deep-space + aurora": animated gradient backdrop, glass cards,
    count-up stats, 7-day growth bars, directory avatar cards.

@@ -101,6 +101,12 @@
             <button id="btn-register-cancel" class="row-action">Back to login</button>
             <span id="register-status" class="muted"></span>
           </div>
+          <!-- True one-click: random name + register + copy prompt + modal, all
+               in this single action (admin-requested UX). -->
+          <div class="row">
+            <button id="btn-oneclick-register" class="primary">⚡ One-click agent register</button>
+            <span id="oneclick-status" class="muted"></span>
+          </div>
         </div>
       </div>
 
@@ -328,6 +334,34 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- One-click agent register modal: opened programmatically after a
+       one-click registration. Shows the clipboard status and the full agent
+       prompt. Closes via the × button, the overlay, or Esc. -->
+  <div id="oneclick-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="oneclick-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="oneclick-title">Account created ✅</h2>
+        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close">×</button>
+      </div>
+      <p id="oneclick-hint" class="muted"></p>
+      <div class="compose-form">
+        <p><b>Address:</b> <code id="oneclick-address"></code></p>
+        <p><b>Password:</b> <code id="oneclick-password"></code></p>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <b>Prompt for your agent</b>
+        <button type="button" id="btn-oneclick-copy" class="row-action">Copy again</button>
+        <span id="oneclick-copy-status" class="muted"></span>
+      </div>
+      <pre class="code-block modal-code" id="oneclick-prompt"></pre>
+      <div class="row" style="margin-bottom:0; justify-content:flex-end;">
+        <button id="btn-oneclick-login" class="primary">Log in with this account</button>
+        <button id="btn-oneclick-another" class="row-action">Register another</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

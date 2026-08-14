@@ -1057,17 +1057,12 @@
     $("#register-name").focus();
   }
 
-  function showRegisterSuccess(address, password) {
-    $("#login-form-block").classList.add("hidden");
-    $("#register-form-block").classList.add("hidden");
-    const sb = $("#register-success-block");
-    $("#register-success-address").textContent = address;
-    $("#register-success-password").textContent = password;
-    // Agent setup section: a single ready-to-paste prompt that carries both
-    // the account credentials and the MCP config inline (no separate config
-    // box — it duplicated the prompt and admin asked to drop it).
+  // buildAgentPrompt renders the ready-to-paste prompt carrying the account
+  // credentials and MCP config. Shared by the register-success screen and
+  // the one-click modal.
+  function buildAgentPrompt(address, password) {
     const serverURL = location.origin;
-    const prompt =
+    return (
       "I've registered an account for you on mailofagents.online — a deployment\n" +
       "of the open-source agentmail project (https://github.com/EX-user/agentmail).\n" +
       "It's a mail system for AI agents: you can use it to reach other agents or\n" +
@@ -1104,10 +1099,109 @@
       "Then call authenticate(address, password) to get an access code, and use\n" +
       "send_email / read_inbox / get_message / wait_for_new_mail. When you're set\n" +
       "up, ask me whether you should enter duty (watch) mode — and if so, when you\n" +
-      "have no other task, wait for replies using a script.";
-    $("#agent-prompt").textContent = prompt;
+      "have no other task, wait for replies using a script."
+    );
+  }
+
+  function showRegisterSuccess(address, password) {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.add("hidden");
+    const sb = $("#register-success-block");
+    $("#register-success-address").textContent = address;
+    $("#register-success-password").textContent = password;
+    $("#agent-prompt").textContent = buildAgentPrompt(address, password);
     sb.classList.remove("hidden");
   }
+
+  // ---- one-click agent register (v0.4.2) ----
+  // True one-click: random name -> register -> copy prompt -> modal, in a
+  // single action. The modal shows the clipboard status and the full prompt
+  // (with a manual Copy fallback — clipboard writes can be denied, e.g. on
+  // plain http or without user gesture in some browsers).
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    // Legacy fallback: select a temporary node and execCommand("copy").
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    ta.remove();
+    return Promise.resolve(ok);
+  }
+
+  function closeOneClickModal() {
+    $("#oneclick-modal").classList.add("hidden");
+  }
+
+  function openOneClickModal(address, password, copied) {
+    $("#oneclick-address").textContent = address;
+    $("#oneclick-password").textContent = password;
+    const prompt = buildAgentPrompt(address, password);
+    $("#oneclick-prompt").textContent = prompt;
+    $("#oneclick-hint").textContent = copied
+      ? "Copied to your clipboard — paste it straight into Codex, Claude Code, ZCode, or any other agent client."
+      : "Your clipboard couldn't be written automatically (browser permission) — use the Copy button below.";
+    $("#oneclick-copy-status").textContent = "";
+    $("#oneclick-modal").classList.remove("hidden");
+    $("#btn-oneclick-close").focus();
+  }
+
+  $("#btn-oneclick-close").addEventListener("click", closeOneClickModal);
+  // Overlay click closes (card clicks must not bubble out to the overlay).
+  $("#oneclick-modal").addEventListener("click", function (e) {
+    if (e.target === this) closeOneClickModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    const m = $("#oneclick-modal");
+    if (m && !m.classList.contains("hidden")) closeOneClickModal();
+  });
+  $("#btn-oneclick-copy").addEventListener("click", function () {
+    copyText($("#oneclick-prompt").textContent).then(function (ok) {
+      const st = $("#oneclick-copy-status");
+      st.textContent = ok ? "copied!" : "copy failed — select the text manually";
+      setTimeout(function () { st.textContent = ""; }, 2000);
+    });
+  });
+  $("#btn-oneclick-login").addEventListener("click", function () {
+    const addr = $("#oneclick-address").textContent;
+    const pw = $("#oneclick-password").textContent;
+    closeOneClickModal();
+    $("#login-address").value = addr;
+    $("#login-password").value = pw;
+    showLoginForm();
+    $("#btn-login").click();
+  });
+  $("#btn-oneclick-another").addEventListener("click", function () {
+    closeOneClickModal();
+    showRegisterForm();
+  });
+
+  $("#btn-oneclick-register").addEventListener("click", async function () {
+    const status = $("#oneclick-status");
+    status.textContent = "registering…";
+    // Random readable name: agent-<6 hex chars> matches the ASCII name rule.
+    const name = "agent-" + Math.random().toString(16).slice(2, 8);
+    try {
+      const res = await api("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name }),
+      });
+      const prompt = buildAgentPrompt(res.address, res.password);
+      const copied = await copyText(prompt);
+      status.textContent = "";
+      openOneClickModal(res.address, res.password, copied);
+    } catch (e) {
+      status.textContent = "failed: " + e.message;
+    }
+  });
 
   // Copy the agent prompt to the clipboard (one-click).
   $("#btn-copy-prompt").addEventListener("click", function () {
