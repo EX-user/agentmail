@@ -246,16 +246,10 @@ const showcaseBodyLimit = 200
 // n is clamped to 1..50. Bodies are truncated to showcaseBodyLimit runes.
 // Only from/subject/body/ts are exposed — never the recipients.
 func (s *Server) infoShowcase(w http.ResponseWriter, r *http.Request) {
-	// Global admin toggle: when the showcase is off, serve an empty list (the
-	// frontend also hides its section, but the endpoint must not leak).
-	if !s.store.IsShowcaseEnabled() {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"query": "showcase",
-			"count": 0,
-			"items": []any{},
-		})
-		return
-	}
+	// NOTE: showcase_enabled deliberately does NOT gate this endpoint. Per
+	// admin's clarification the toggle only controls the Compose "public"
+	// checkbox visibility; the portal showcase keeps serving public mail
+	// regardless (it hides itself client-side when there is no data).
 	n := queryInt(r, "n", 10)
 	if n < 1 {
 		n = 1

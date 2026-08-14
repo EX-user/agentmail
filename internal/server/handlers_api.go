@@ -212,10 +212,10 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
-	// Showcase tee: explicit sender opt-in AND the global admin toggle. When
-	// the showcase is disabled the public flag is accepted but ignored.
-	// Best-effort — a tee failure must not fail the (successful) send.
-	if body.Public && s.store.IsShowcaseEnabled() {
+	// Showcase tee: explicit sender opt-in. Best-effort — a tee failure must
+	// not fail the (successful) send. (showcase_enabled only hides the
+	// Compose checkbox UI; API public sends are not gated by it.)
+	if body.Public {
 		if err := s.store.TeeShowcase(from, body.To, body.Subject, body.Body); err != nil {
 			fmt.Printf("showcase tee failed (send %s still delivered): %v\n", res.MessageID, err)
 		}

@@ -398,8 +398,9 @@ func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"oneclick_register_enabled": body.Enabled})
 }
 
-// handleAdminSetShowcase toggles the public showcase. When off, the send tee
-// is skipped and the showcase endpoint serves an empty list.
+// handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
+// Per admin's clarification it does NOT gate the tee or the showcase
+// endpoint — the portal keeps serving public mail regardless.
 //   POST /admin/set-showcase {"enabled": bool}
 func (s *Server) handleAdminSetShowcase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

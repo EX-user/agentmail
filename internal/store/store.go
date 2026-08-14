@@ -296,9 +296,9 @@ func (s *Store) SetOneclickRegisterEnabled(enabled bool) error {
 	return s.setMetaBool(mOneclickRegisterEnabled, enabled)
 }
 
-// IsShowcaseEnabled reports whether the public showcase (opt-in public
-// message samples) is offered. Defaults to true. When off, the tee is
-// skipped and the showcase endpoint serves an empty list.
+// IsShowcaseEnabled reports whether the Compose "public showcase" checkbox
+// is offered in the panel. Defaults to true. Purely a UI hint per admin's
+// clarification: it does NOT gate the tee or the showcase endpoint.
 func (s *Store) IsShowcaseEnabled() bool {
 	return s.metaBool(mShowcaseEnabled, true)
 }
