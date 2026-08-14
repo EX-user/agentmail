@@ -848,6 +848,8 @@
     $("#portal-page").classList.add("hidden");
     $("#app-header").classList.add("hidden");
     document.querySelector("main").classList.add("hidden");
+    // Portal decorations are body-level; drop them whenever we leave a view.
+    $$(".portal-particle").forEach(function (el) { el.remove(); });
   }
 
   function showSetup() {
@@ -876,7 +878,13 @@
       api("/api/info?query=settings").catch(function () { return null; }),
     ]);
 
-    // Stats row: account/message totals + growth buckets when available.
+    // Live badge: today's mail count in the hero chip.
+    if (growthRes && typeof growthRes.today === "number") {
+      $("#portal-live").textContent = growthRes.today + " mails today";
+    }
+
+    // Stats column: account/message totals + growth buckets, with a count-up
+    // animation. Reduced-motion users get the final value immediately.
     const statsEl = $("#portal-stats");
     if (statsRes) {
       const cards = [
@@ -885,31 +893,36 @@
       ];
       if (growthRes) {
         cards.push(
-          { num: growthRes.today, label: "today" },
+          { num: growthRes.today, label: "today", hot: true },
           { num: growthRes.week, label: "last 7 days" }
         );
       }
       statsEl.innerHTML = cards.map(function (c) {
-        return '<div class="stat"><span class="num">' + esc(c.num) + "</span><span>" + esc(c.label) + "</span></div>";
+        return '<div class="portal-stat"><span class="num' + (c.hot ? " hot" : "") + '" data-count="' +
+          esc(c.num) + '">0</span><span class="label">' + esc(c.label) + "</span></div>";
       }).join("");
+      animateCountUps(statsEl);
     } else {
       statsEl.textContent = "Stats unavailable right now.";
     }
 
-    // Directory table: who's here (accounts that opted in).
-    const tbody = $("#portal-directory-table tbody");
+    // Growth chart: 7 daily bars when the server sends a days array; falls
+    // back to a today/week split so the card still works on older servers.
+    renderGrowthChart(growthRes);
+
+    // Directory cards: who's here (accounts that opted in). Long addresses
+    // and signatures wrap (overflow-wrap) instead of overflowing the page.
+    const dirEl = $("#portal-directory");
     const entries = (dirRes && dirRes.entries) || [];
     if (!dirRes) {
-      tbody.innerHTML = '<tr><td colspan="2" class="muted">Directory unavailable right now.</td></tr>';
+      dirEl.innerHTML = '<p class="muted">Directory unavailable right now.</p>';
     } else if (!entries.length) {
       $("#portal-directory-note").style.display = "";
-      tbody.innerHTML = '<tr><td colspan="2" class="muted">No listed accounts yet.</td></tr>';
+      dirEl.innerHTML = '<p class="muted">No listed accounts yet.</p>';
     } else {
-      tbody.innerHTML = entries.map(function (e) {
-        return "<tr>" +
-          '<td class="addr-cell">' + esc(e.address) + "</td>" +
-          '<td class="sig-cell">' + esc(e.signature || "") + "</td>" +
-          "</tr>";
+      dirEl.innerHTML = entries.map(function (e) {
+        return '<div class="dir-card">' + portalAvatar(e.address) +
+          '<div><div class="addr">' + esc(e.address) + "</div><div class=\"sig\">" + esc(e.signature || "") + "</div></div></div>";
       }).join("");
     }
 
@@ -918,71 +931,112 @@
     const regOpen = !!(setRes && setRes.registration_enabled);
     const regBtn = $("#btn-portal-register");
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
-    const quickBtn = $("#btn-portal-quick");
-    if (quickBtn) quickBtn.style.display = regOpen ? "" : "none";
+
+    spawnPortalParticles();
   }
 
   // randomAgentName generates a readable random local-part for one-click
-  // registration, e.g. "agent-7k3m9x".
+  // registration, e.g. "agent-7k3m9x" (no ambiguous chars).
   function randomAgentName() {
-    var chars = "abcdefghjkmnpqrstuvwxyz23456789"; // no ambiguous chars
+    var chars = "abcdefghjkmnpqrstuvwxyz23456789";
     var suffix = "";
     for (var i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
     return "agent-" + suffix;
   }
 
-  // quickRegister is the portal's one-click agent registration: pick a random
-  // name, create the account, copy the full agent setup prompt to the
-  // clipboard, then show the success screen. Name collisions auto-retry;
-  // the per-IP register rate limit (429) surfaces as a friendly message.
-  async function quickRegister() {
-    const btn = $("#btn-portal-quick");
-    const status = $("#portal-quick-status");
-    btn.disabled = true;
-    status.textContent = "Creating account…";
-    var last = null;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      const name = randomAgentName();
-      try {
-        const res = await api("/api/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name }),
-        });
-        // Account created. Put the ready-to-send prompt on the clipboard so
-        // the next paste hands it to the agent. The click's transient
-        // activation usually survives this short round-trip; if the browser
-        // refuses, the success screen's Copy button is the fallback.
-        const prompt = buildAgentPrompt(res.address, res.password);
-        var copied = false;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          try {
-            await navigator.clipboard.writeText(prompt);
-            copied = true;
-          } catch (_) { copied = false; }
-        }
-        // The success block lives inside the login page — switch screens
-        // first, then reveal it (mirrors the portal Register handler).
-        showLogin();
-        showRegisterSuccess(res.address, res.password);
-        const hint = $("#copy-prompt-status");
-        if (hint) hint.textContent = copied ? "prompt copied to clipboard — paste it to your agent" : "clipboard blocked — use the Copy button";
-        status.textContent = "";
-        btn.disabled = false;
-        return;
-      } catch (e) {
-        last = e;
-        // 409 name collision: retry with a fresh random name. Anything else
-        // (429 rate limit, registration closed, network) is not retried.
-        if (!/already exists/i.test(e.message || "")) break;
-      }
+  // ---- portal helpers ----
+
+  // animateCountUps plays a short ease-out count-up on every [data-count] in
+  // the given root. Skipped entirely under prefers-reduced-motion. rAF can
+  // stay suspended in hidden/throttled tabs, so a timeout fallback shows the
+  // final value if no frame ever arrives.
+  function animateCountUps(root) {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $$(".num[data-count]", root).forEach(function (el) {
+      const target = parseInt(el.dataset.count, 10);
+      if (isNaN(target)) return;
+      if (reduce || !window.requestAnimationFrame) { el.textContent = String(target); return; }
+      let t0 = null;
+      let frames = false;
+      const step = function (t) {
+        frames = true;
+        if (t0 === null) t0 = t;
+        const p = Math.min((t - t0) / 900, 1);
+        el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+      setTimeout(function () { if (!frames) el.textContent = String(target); }, 400);
+    });
+  }
+
+  // renderGrowthChart draws the 7-day bar chart. Preferred input is
+  // growth.days = [{date, count}, ...]; without it we degrade to a
+  // today/week two-bar view so the card never looks broken.
+  function renderGrowthChart(growthRes) {
+    const barsEl = $("#portal-growth-bars");
+    const lblsEl = $("#portal-growth-lbls");
+    const unitEl = $("#portal-growth-unit");
+    let days = (growthRes && growthRes.days) || [];
+    if (!days.length && growthRes) {
+      days = [
+        { date: "today", count: growthRes.today },
+        { date: "week", count: growthRes.week },
+      ];
+      if (unitEl) unitEl.textContent = "messages · today / 7 days";
     }
-    const msg = /too many/i.test((last && last.message) || "")
-      ? "Too many registrations from your address — try again in a while."
-      : "Register failed: " + ((last && last.message) || "unknown error");
-    status.textContent = msg;
-    toast(msg, "error");
-    btn.disabled = false;
+    if (!days.length) {
+      barsEl.innerHTML = "";
+      lblsEl.innerHTML = "";
+      if (unitEl) unitEl.textContent = "growth unavailable right now";
+      return;
+    }
+    const max = Math.max.apply(null, days.map(function (d) { return d.count || 0; }).concat([1]));
+    barsEl.innerHTML = days.map(function (d, i) {
+      const h = Math.max(Math.round((d.count || 0) / max * 100), 3);
+      return '<div class="bar" style="height:' + h + "%;animation-delay:" + (i * 70) + 'ms">' +
+        '<span class="tip">' + esc(d.count == null ? "0" : d.count) + "</span></div>";
+    }).join("");
+    lblsEl.innerHTML = days.map(function (d) {
+      // Label: short weekday for ISO dates, raw text otherwise.
+      let lbl = String(d.date || "");
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(lbl);
+      if (m) {
+        const dt = new Date(+m[1], +m[2] - 1, +m[3]);
+        if (!isNaN(dt.getTime())) lbl = dt.toLocaleDateString(undefined, { weekday: "short" });
+      }
+      return "<span>" + esc(lbl) + "</span>";
+    }).join("");
+  }
+
+  // portalAvatar builds a deterministic gradient avatar from the address:
+  // a simple string hash picks the hue, the first two chars are the initials.
+  function portalAvatar(addr) {
+    let h = 0;
+    for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) % 360;
+    const ini = (addr.split("@")[0] || "?").slice(0, 2).toUpperCase();
+    return '<div class="avatar" style="background:linear-gradient(135deg,hsl(' + h + ',65%,50%),hsl(' +
+      ((h + 40) % 360) + ',65%,38%))">' + esc(ini) + "</div>";
+  }
+
+  // spawnPortalParticles adds a handful of slow-floating glyphs for the
+  // "living system" feel. Decorative only; skipped for reduced-motion users
+  // and never spawned twice (portal re-entry cleans up old ones first).
+  function spawnPortalParticles() {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $$(".portal-particle").forEach(function (el) { el.remove(); });
+    if (reduce) return;
+    const glyphs = ["✉", "✉", "@", "✦", "@"];
+    for (let i = 0; i < 14; i++) {
+      const s = document.createElement("span");
+      s.className = "portal-particle";
+      s.textContent = glyphs[i % glyphs.length];
+      s.style.left = Math.random() * 100 + "vw";
+      s.style.animationDuration = (14 + Math.random() * 22) + "s";
+      s.style.animationDelay = (-Math.random() * 30) + "s";
+      s.style.fontSize = (10 + Math.random() * 8) + "px";
+      document.body.appendChild(s);
+    }
   }
 
   function showLogin() {
@@ -1019,7 +1073,7 @@
   // buildAgentPrompt returns the ready-to-paste agent setup prompt for an
   // account: intro, gateway download, inline MCP config, credentials, and
   // curl examples (no MCP needed). Shared by the manual register flow and
-  // the portal's one-click register.
+  // the one-click register.
   function buildAgentPrompt(address, password) {
     const serverURL = location.origin;
     return "I've registered an account for you on mailofagents.online — a deployment\n" +
@@ -1072,6 +1126,108 @@
     $("#agent-prompt").textContent = buildAgentPrompt(address, password);
     sb.classList.remove("hidden");
   }
+
+  // ---- one-click agent register (v0.4.2) ----
+  // True one-click: random name -> register -> copy prompt -> modal, in a
+  // single action. The modal shows the clipboard status and the full prompt
+  // (with a manual Copy fallback — clipboard writes can be denied, e.g. on
+  // plain http or without user gesture in some browsers).
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    // Legacy fallback: select a temporary node and execCommand("copy").
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    ta.remove();
+    return Promise.resolve(ok);
+  }
+
+  function closeOneClickModal() {
+    $("#oneclick-modal").classList.add("hidden");
+  }
+
+  function openOneClickModal(address, password, copied) {
+    $("#oneclick-address").textContent = address;
+    $("#oneclick-password").textContent = password;
+    const prompt = buildAgentPrompt(address, password);
+    $("#oneclick-prompt").textContent = prompt;
+    $("#oneclick-hint").textContent = copied
+      ? "Copied to your clipboard — paste it straight into Codex, Claude Code, ZCode, or any other agent client."
+      : "Your clipboard couldn't be written automatically (browser permission) — use the Copy button below.";
+    $("#oneclick-copy-status").textContent = "";
+    $("#oneclick-modal").classList.remove("hidden");
+    $("#btn-oneclick-close").focus();
+  }
+
+  $("#btn-oneclick-close").addEventListener("click", closeOneClickModal);
+  // Overlay click closes (card clicks must not bubble out to the overlay).
+  $("#oneclick-modal").addEventListener("click", function (e) {
+    if (e.target === this) closeOneClickModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    const m = $("#oneclick-modal");
+    if (m && !m.classList.contains("hidden")) closeOneClickModal();
+  });
+  $("#btn-oneclick-copy").addEventListener("click", function () {
+    copyText($("#oneclick-prompt").textContent).then(function (ok) {
+      const st = $("#oneclick-copy-status");
+      st.textContent = ok ? "copied!" : "copy failed — select the text manually";
+      setTimeout(function () { st.textContent = ""; }, 2000);
+    });
+  });
+  $("#btn-oneclick-login").addEventListener("click", function () {
+    const addr = $("#oneclick-address").textContent;
+    const pw = $("#oneclick-password").textContent;
+    closeOneClickModal();
+    $("#login-address").value = addr;
+    $("#login-password").value = pw;
+    showLoginForm();
+    $("#btn-login").click();
+  });
+  $("#btn-oneclick-another").addEventListener("click", function () {
+    closeOneClickModal();
+    showRegisterForm();
+  });
+
+  $("#btn-oneclick-register").addEventListener("click", async function () {
+    const status = $("#oneclick-status");
+    status.textContent = "registering…";
+    // Register logic merged from Devi's v0.4.1 quickRegister: random name
+    // with 409 collision auto-retry (up to 3 fresh names) and a friendly
+    // 429 message for the per-IP rate limit; presentation is Felix's modal.
+    var last = null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      const name = randomAgentName();
+      try {
+        const res = await api("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name }),
+        });
+        const prompt = buildAgentPrompt(res.address, res.password);
+        const copied = await copyText(prompt);
+        status.textContent = "";
+        openOneClickModal(res.address, res.password, copied);
+        return;
+      } catch (e) {
+        last = e;
+        // 409 name collision: retry with a fresh random name. Anything else
+        // (429 rate limit, registration closed, network) is not retried.
+        if (!/already exists/i.test(e.message || "")) break;
+      }
+    }
+    status.textContent = /too many/i.test((last && last.message) || "")
+      ? "Too many registrations from your address — try again in a while."
+      : "failed: " + ((last && last.message) || "unknown error");
+  });
 
   // Copy the agent prompt to the clipboard (one-click).
   $("#btn-copy-prompt").addEventListener("click", function () {
@@ -1169,10 +1325,10 @@
   $("#btn-register-cancel").addEventListener("click", showLoginForm);
 
   // Portal entry points: login goes to the classic form; register opens the
-  // register form directly (inside the login page, which hosts it).
+  // register form directly (inside the login page, which hosts it — the
+  // one-click button lives on that form).
   $("#btn-portal-login").addEventListener("click", showLogin);
   $("#btn-portal-register").addEventListener("click", function () { showLogin(); showRegisterForm(); });
-  $("#btn-portal-quick").addEventListener("click", quickRegister);
   $("#link-back-portal").addEventListener("click", function (e) { e.preventDefault(); showPortal(); });
   $("#register-name").addEventListener("input", updateRegisterPreview);
 
