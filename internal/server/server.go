@@ -47,11 +47,20 @@ type Server struct {
 	rateMu     sync.Mutex
 	sendRates  map[string]*rateWindow // address -> send count window
 	recvRates  map[string]*rateWindow // address -> byte receive window
+
+	// regLimit throttles registration attempts per client IP (the threshold
+	// itself lives in the store so admins can tune it live).
+	regLimit *regLimiter
 }
 
 // New builds a server with the given dependencies.
 func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
-	return &Server{store: s, audit: a, cfg: cfg, sendRates: make(map[string]*rateWindow), recvRates: make(map[string]*rateWindow)}
+	return &Server{
+		store: s, audit: a, cfg: cfg,
+		sendRates: make(map[string]*rateWindow),
+		recvRates: make(map[string]*rateWindow),
+		regLimit:  newRegLimiter(time.Hour),
+	}
 }
 
 // domain returns the effective mail domain: the value persisted in bbolt

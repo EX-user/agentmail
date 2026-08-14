@@ -44,6 +44,7 @@ var (
 	mDirectoryListedEnabled = []byte("directory_listed_enabled")
 	mSendRateLimit        = []byte("send_rate_limit")
 	mByteRateLimit        = []byte("byte_rate_limit")
+	mRegisterIPRateLimit  = []byte("register_ip_rate_limit")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -305,6 +306,23 @@ func (s *Store) GetByteRateLimit() int64 {
 // SetByteRateLimit sets the per-account byte receive limit per hour.
 func (s *Store) SetByteRateLimit(n int64) error {
 	return s.setMetaInt64(mByteRateLimit, n)
+}
+
+// GetRegisterIPRateLimit returns the per-IP registration attempt limit per
+// hour. Default 5 — the portal offers friction-free registration, so
+// scripted mass account creation needs a stopper. 0 disables the limit.
+func (s *Store) GetRegisterIPRateLimit() int {
+	v := s.getMetaInt(mRegisterIPRateLimit, 5)
+	if v < 0 {
+		return 5
+	}
+	return v
+}
+
+// SetRegisterIPRateLimit sets the per-IP registration attempt limit per
+// hour (0 disables).
+func (s *Store) SetRegisterIPRateLimit(n int) error {
+	return s.setMetaInt(mRegisterIPRateLimit, n)
 }
 
 // getMetaInt / getMetaInt64 / setMetaInt / setMetaInt64 are small helpers for

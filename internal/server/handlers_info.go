@@ -91,11 +91,12 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":                  "settings",
-		"registration_enabled":   s.store.IsRegistrationEnabled(),
+		"query":                    "settings",
+		"registration_enabled":     s.store.IsRegistrationEnabled(),
 		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
-		"send_rate_limit":        s.store.GetSendRateLimit(),
-		"byte_rate_limit":        s.store.GetByteRateLimit(),
+		"send_rate_limit":          s.store.GetSendRateLimit(),
+		"byte_rate_limit":          s.store.GetByteRateLimit(),
+		"register_rate_limit":      s.store.GetRegisterIPRateLimit(),
 	})
 }
 
