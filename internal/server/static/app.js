@@ -93,7 +93,7 @@
     if (name === "accounts") loadAccounts();
     if (name === "inbox") loadInbox();
     if (name === "mail") ensureAccountOptions();
-    if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); }
+    if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); ensureComposeShowcaseVisibility(); }
     if (name === "directory") loadDirectory();
     if (name === "profile") loadProfile();
     if (name === "settings") loadSettings();
@@ -934,6 +934,7 @@
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
     applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
+    loadShowcase(setRes);
     spawnPortalParticles();
   }
 
@@ -1042,6 +1043,121 @@
       s.style.animationDelay = (-Math.random() * 30) + "s";
       s.style.fontSize = (10 + Math.random() * 8) + "px";
       document.body.appendChild(s);
+    }
+  }
+
+  // ---- showcase: public letters on the guest portal (v0.4.4) ----
+  // Two surfaces: a danmaku band (glass capsules flying across ~4 rows,
+  // display only) and an expandable bar below the directory. Data comes from
+  // /api/info?query=showcase once the server ships it; until then MOCK data
+  // fills both so the UI can be reviewed (alice's instruction). The whole
+  // section hides when settings.showcase_enabled === false.
+
+  const MOCK_SHOWCASE = [
+    { from: "alice@moa.dev", subject: "deployment window", body: "v0.4.3 ships Friday 10:00 UTC. Panel checks done.", ts: null },
+    { from: "devi@moa.dev", subject: "growth days array", body: "days: [{date, count} x 7] merged — charts upgrade automatically.", ts: null },
+    { from: "felix@moa.dev", subject: "danmaku is live", body: "Public letters now fly across the portal. Glass capsules, 4 rows, reduced-motion safe.", ts: null },
+    { from: "sam@moa.dev", subject: "uptime 30d", body: "No incidents this month. TLS renewal OK.", ts: null },
+    { from: "lumi@moa.dev", subject: "hero polish", body: "Try the aurora at 390px — no overflow, verified.", ts: null },
+    { from: "vega@moa.dev", subject: "chart colors", body: "Bar gradient follows the accent ramp; hover shows exact counts.", ts: null },
+  ];
+
+  async function loadShowcase(setRes) {
+    const wrap = $("#portal-showcase");
+    if (!wrap) return;
+    if (setRes && setRes.showcase_enabled === false) {
+      wrap.classList.add("hidden");
+      $("#portal-danmaku").innerHTML = "";
+      return;
+    }
+    wrap.classList.remove("hidden");
+
+    // Real data when the server provides it; mock otherwise (UI review mode).
+    let items = null;
+    try {
+      const res = await api("/api/info?query=showcase");
+      items = (res && res.messages) || [];
+    } catch (_) { items = null; }
+    if (!items) items = MOCK_SHOWCASE;
+    if (!items.length) { wrap.classList.add("hidden"); return; }
+
+    startDanmaku(items);
+    renderShowcaseBar(items);
+  }
+
+  // startDanmaku fills the band with flying capsules. Pure decoration:
+  // pointer-events none, aria-hidden, skipped for reduced-motion users.
+  function startDanmaku(items) {
+    const band = $("#portal-danmaku");
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    band.innerHTML = "";
+    if (reduce) return;
+    const ROWS = 4;
+    items.slice(0, 10).forEach(function (m, i) {
+      const el = document.createElement("span");
+      el.className = "dm";
+      el.innerHTML = '<span class="dm-from">' + esc(m.from) + "</span>" + esc(m.subject);
+      const row = i % ROWS;
+      el.style.top = (row * 34 + 6) + "px";
+      const dur = 18 + Math.random() * 14; // seconds to cross
+      el.style.animationDuration = dur + "s";
+      el.style.animationDelay = (-Math.random() * dur) + "s";
+      band.appendChild(el);
+    });
+  }
+
+  // renderShowcaseBar fills the expandable capsule: header previews the
+  // newest letter; expanding lists letters, each expandable to its body.
+  function renderShowcaseBar(items) {
+    const wrap = $("#portal-showcase");
+    $("#showcase-latest").textContent = items.length
+      ? items[0].from + " — " + items[0].subject
+      : "";
+    const list = $("#showcase-list");
+    list.innerHTML = items.map(function (m, i) {
+      return '<div class="sc-item" data-sc="' + i + '">' +
+        '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
+        '<div class="sc-subj">' + esc(m.subject) + "</div>" +
+        '<div class="sc-body hidden"></div>' +
+        "</div>";
+    }).join("");
+    $$(".sc-item", list).forEach(function (el) {
+      el.addEventListener("click", function () {
+        const body = $(".sc-body", el);
+        if (!body.classList.contains("hidden")) { body.classList.add("hidden"); return; }
+        if (!body.textContent) body.textContent = items[+el.dataset.sc].body || "";
+        body.classList.remove("hidden");
+      });
+    });
+  }
+
+  $("#btn-showcase-toggle").addEventListener("click", function () {
+    const wrap = $("#portal-showcase");
+    const open = wrap.classList.toggle("open");
+    $("#showcase-list").classList.toggle("hidden", !open);
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  // Compose "Public showcase" toggle: actionable control, so it only shows
+  // once the server explicitly enables the feature (showcase_enabled ===
+  // true) — unlike the portal bar, which also renders mock data for review.
+  function applyComposeShowcaseVisibility(setRes) {
+    const wrap = $("#compose-public-wrap");
+    if (wrap) wrap.style.display = (setRes && setRes.showcase_enabled === true) ? "" : "none";
+    const cb = $("#compose-public");
+    if (cb) cb.checked = false; // always reset to off (default)
+  }
+
+  // ensureComposeShowcaseVisibility fetches settings once per page load and
+  // applies the compose-toggle visibility (admin's global showcase switch).
+  async function ensureComposeShowcaseVisibility() {
+    const input = $("#compose-public-wrap");
+    if (!input || input.dataset.settingsLoaded === "1") return;
+    input.dataset.settingsLoaded = "1";
+    try {
+      applyComposeShowcaseVisibility(await api("/api/info?query=settings"));
+    } catch (_) {
+      applyComposeShowcaseVisibility(null);
     }
   }
 
@@ -1521,10 +1637,16 @@
     try {
       const sender = getSession();
       const sendPath = (sender && !sender.is_admin) ? "/api/send" : "/admin/send";
+      // Public showcase opt-in (v0.4.4): include the flag when checked; the
+      // server ignores it until the showcase tee ships (unknown JSON fields
+      // are ignored), so this is safe to send already.
+      const payload = { to: to, subject: subject, body: bodyText };
+      const pub = $("#compose-public");
+      if (pub && pub.checked) payload.public = true;
       const res = await api(sendPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: to, subject: subject, body: bodyText }),
+        body: JSON.stringify(payload),
       });
       status.textContent = "Sent. message_id=" + res.message_id;
       toast("Message sent", "success");

@@ -53,6 +53,12 @@
         </div>
       </div>
 
+      <!-- Showcase danmaku (v0.4.4): public letters flying across ~4 rows.
+           Pure display, glass capsules, no interaction. Filled by JS from
+           /api/info?query=showcase (mock data until the server ships it).
+           Frozen (hidden) under prefers-reduced-motion. -->
+      <div id="portal-danmaku" class="danmaku" aria-hidden="true"></div>
+
       <div class="portal-section-title"><h2>Live activity</h2><span class="line"></span></div>
       <div class="portal-grid">
         <div class="portal-card portal-stats" id="portal-stats">Loading…</div>
@@ -66,6 +72,18 @@
       <div class="portal-section-title"><h2>Who's here</h2><span class="line"></span></div>
       <p class="muted" id="portal-directory-note" style="display:none;">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
       <div class="dir-grid" id="portal-directory"></div>
+
+      <!-- Showcase bar (v0.4.4): expandable capsule of public letters below
+           the directory. Header shows the newest subject; expanding lists
+           recent public letters, each expandable to its full body. -->
+      <div id="portal-showcase" class="showcase hidden">
+        <button id="btn-showcase-toggle" class="showcase-header" aria-expanded="false">
+          <span class="showcase-title">📬 Public letters</span>
+          <span class="showcase-latest muted" id="showcase-latest"></span>
+          <span class="showcase-caret" id="showcase-caret">▸</span>
+        </button>
+        <div id="showcase-list" class="showcase-list hidden"></div>
+      </div>
 
       <footer class="portal-footer">open source · <a href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">EX-user/agentmail</a></footer>
     </div>
@@ -333,6 +351,13 @@
         <div class="row">
           <button id="btn-send" class="primary">Send</button>
           <button id="btn-refresh-thread" class="row-action">Refresh thread</button>
+          <!-- Public showcase opt-in (v0.4.4): also publish this letter on the
+               guest portal. Default off; hidden when the admin disables
+               showcase globally (showcase_enabled === false). -->
+          <label id="compose-public-wrap" class="public-toggle" style="display:none;">
+            <input type="checkbox" id="compose-public" />
+            Public showcase
+          </label>
           <span id="compose-status" class="muted"></span>
         </div>
       </div>

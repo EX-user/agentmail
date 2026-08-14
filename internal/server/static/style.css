@@ -623,4 +623,71 @@ nav .tab { flex: 0 0 auto; }
 @media (prefers-reduced-motion: reduce) {
   .aurora::before, .aurora::after, .glow3, .portal-particle, .bar, .pulse-dot { animation: none !important; }
   .btn, .dir-card { transition: none !important; }
+  /* Danmaku is pure decoration — hide it rather than freeze mid-flight. */
+  .danmaku { display: none !important; }
 }
+
+/* ============================================================
+   Showcase (v0.4.4): public letters on the guest portal.
+   1) danmaku — glass capsules flying across ~4 rows, display only
+   2) showcase bar — expandable capsule below the directory
+   Data comes from /api/info?query=showcase (mocked until the server
+   ships it); hidden entirely when settings.showcase_enabled === false.
+   ============================================================ */
+.danmaku {
+  position: relative; height: 148px; margin: 8px 0 4px;
+  overflow: hidden; pointer-events: none;
+}
+.danmaku .dm {
+  position: absolute; left: 100%; white-space: nowrap; max-width: 70vw;
+  overflow: hidden; text-overflow: ellipsis;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 14px; border-radius: 999px; font-size: 13px;
+  background: rgba(22, 27, 41, 0.6); border: 1px solid var(--border);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  animation: dm-fly linear infinite;
+}
+.danmaku .dm .dm-from {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px; color: var(--muted);
+}
+@media (prefers-color-scheme: light) { .danmaku .dm { background: rgba(255,255,255,.65); } }
+@keyframes dm-fly { from { transform: translateX(0); } to { transform: translateX(calc(-100vw - 100%)); } }
+
+/* Showcase bar */
+.showcase { margin-top: 26px; }
+.showcase-header {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  background: rgba(22, 27, 41, 0.72); border: 1px solid var(--border); border-radius: 999px;
+  padding: 10px 20px; cursor: pointer; color: var(--text); font-size: 14px; font-family: inherit;
+  backdrop-filter: blur(10px); transition: border-color .18s ease;
+  text-align: left;
+}
+.showcase-header:hover { border-color: var(--accent); }
+.showcase-title { font-weight: 600; flex: 0 0 auto; }
+.showcase-latest { flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.showcase-caret { flex: 0 0 auto; color: var(--muted); transition: transform .2s ease; }
+.showcase.open .showcase-caret { transform: rotate(90deg); }
+.showcase-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+@media (prefers-color-scheme: light) { .showcase-header { background: rgba(255,255,255,.75); } }
+
+.sc-item {
+  background: rgba(22, 27, 41, 0.72); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 16px; cursor: pointer; backdrop-filter: blur(10px);
+}
+.sc-item .sc-meta { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; color: var(--muted); }
+.sc-item .sc-subj { font-weight: 600; font-size: 14px; margin: 2px 0; }
+.sc-item .sc-body {
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--text);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  background: var(--panel-2); border-radius: 8px; padding: 10px; margin-top: 8px;
+  max-height: 300px; overflow-y: auto;
+}
+@media (prefers-color-scheme: light) { .sc-item { background: rgba(255,255,255,.75); } }
+
+/* Compose public-showcase toggle (v0.4.4) */
+.public-toggle {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
+  cursor: pointer; user-select: none;
+}
+.public-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
