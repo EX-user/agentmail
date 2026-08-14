@@ -105,13 +105,15 @@ func (c *Client) VerifyPassword(address, password string) error {
 }
 
 // Send posts a message as authUser. authUser:authPass is sent as Basic auth;
-// the server treats the authed user as the sender.
-func (c *Client) Send(authUser, authPass string, to []string, subject, body string) (*SendResponse, error) {
+// the server treats the authed user as the sender. public=true additionally
+// writes a showcase copy (portal sample) — explicit sender opt-in.
+func (c *Client) Send(authUser, authPass string, to []string, subject, body string, public bool) (*SendResponse, error) {
 	var out SendResponse
 	err := c.do("POST", "/api/send", basicAuth(authUser, authPass), nil, map[string]any{
 		"to":      to,
 		"subject": subject,
 		"body":    body,
+		"public":  public,
 	}, &out)
 	return &out, err
 }

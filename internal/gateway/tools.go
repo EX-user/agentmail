@@ -38,12 +38,13 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "send_email",
-			Description: "Send a plain-text email from the account bound to the access code.",
+			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected.",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          prop("Recipient address(es), comma-separated string or array", "string", true),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
+				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
 			}, []string{"access_code", "to", "subject", "body"}),
 		},
 		{
@@ -241,7 +242,10 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	if subject == "" || body == "" {
 		return nil, fmt.Errorf("subject and body are required")
 	}
-	res, err := client.Send(entry.Address, entry.Password, to, subject, body)
+	// public (optional, default false): additionally publish a showcase copy
+	// for the portal sample — the sender's explicit opt-in.
+	public, _ := args["public"].(bool)
+	res, err := client.Send(entry.Address, entry.Password, to, subject, body, public)
 	if err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
@@ -250,6 +254,7 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 		"message_id":  res.MessageID,
 		"from":        entry.Address,
 		"to":          to,
+		"public":      public,
 	}, nil
 }
 
