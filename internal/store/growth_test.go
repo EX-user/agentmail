@@ -89,8 +89,47 @@ func TestMessageGrowthEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MessageGrowth: %v", err)
 	}
-	if g != (Growth{}) {
-		t.Errorf("empty store growth = %+v, want zero", g)
+	if g.Today != 0 || g.Week != 0 || g.Month != 0 || g.Total != 0 {
+		t.Errorf("empty store counts = %+v, want zeros", g)
+	}
+}
+
+// TestMessageGrowthDays verifies the 7-day chart array: ordering, dates,
+// zero-fill, and that the last bucket equals the Today count.
+func TestMessageGrowthDays(t *testing.T) {
+	now := time.Date(2026, 8, 14, 15, 30, 0, 0, time.UTC)
+	weekFloor := time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)
+
+	stamps := []int64{
+		now.Unix() - 60,              // today
+		now.Unix() - 3600 * 5,        // still today
+		weekFloor.Unix() + 3600,      // Aug 8 (oldest chart day)
+		weekFloor.AddDate(0, 0, 3).Add(2 * time.Hour).Unix(), // Aug 11
+		weekFloor.AddDate(0, 0, 3).Add(9 * time.Hour).Unix(), // Aug 11
+		weekFloor.AddDate(0, 0, -1).Unix(),                   // Aug 7: before the chart
+	}
+	s := newGrowthTestStore(t, stamps)
+	g, err := s.MessageGrowth(now)
+	if err != nil {
+		t.Fatalf("MessageGrowth: %v", err)
+	}
+	if len(g.Days) != 7 {
+		t.Fatalf("len(Days) = %d, want 7", len(g.Days))
+	}
+	wantDates := []string{"2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"}
+	for i, d := range g.Days {
+		if d.Date != wantDates[i] {
+			t.Errorf("Days[%d].Date = %q, want %q", i, d.Date, wantDates[i])
+		}
+	}
+	wantCounts := []int{1, 0, 0, 2, 0, 0, 2} // Aug7 message is outside the chart
+	for i, c := range wantCounts {
+		if g.Days[i].Count != c {
+			t.Errorf("Days[%d].Count = %d, want %d", i, g.Days[i].Count, c)
+		}
+	}
+	if g.Days[6].Count != g.Today {
+		t.Errorf("Days[6].Count = %d, want == Today (%d)", g.Days[6].Count, g.Today)
 	}
 }
 

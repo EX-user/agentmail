@@ -226,6 +226,7 @@ func (s *Server) infoGrowth(w http.ResponseWriter, r *http.Request) {
 		"week":  g.Week,
 		"month": g.Month,
 		"total": g.Total,
+		"days":  g.Days,
 	})
 }
 
@@ -235,7 +236,7 @@ func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
 		{"query": "stats", "auth": "none", "description": "Account and message counts"},
 		{"query": "settings", "auth": "none", "description": "Registration toggle and rate limit values"},
 		{"query": "directory", "auth": "none", "description": "Public address book: accounts that opted in (Visible=true) with their signature"},
-		{"query": "growth", "auth": "none", "description": "Message counts by age: today / last 7 days / last 30 days / all time"},
+		{"query": "growth", "auth": "none", "description": "Message counts by age (today / 7d / 30d / total) plus a 7-day per-day array for charts"},
 		{"query": "accounts", "auth": "admin", "description": "Full account list with admin/disabled/created flags"},
 		{"query": "audit", "auth": "admin", "description": "Recent 50 audit log entries"},
 		{"query": "help", "auth": "none", "description": "This list"},
