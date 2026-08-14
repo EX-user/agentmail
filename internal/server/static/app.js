@@ -910,10 +910,76 @@
       }).join("");
     }
 
-    // Register button hides when registration is closed (same rule as the
+    // Register buttons hide when registration is closed (same rule as the
     // login page's register link).
+    const regOpen = !!(setRes && setRes.registration_enabled);
     const regBtn = $("#btn-portal-register");
-    if (regBtn) regBtn.style.display = (setRes && setRes.registration_enabled) ? "" : "none";
+    if (regBtn) regBtn.style.display = regOpen ? "" : "none";
+    const quickBtn = $("#btn-portal-quick");
+    if (quickBtn) quickBtn.style.display = regOpen ? "" : "none";
+  }
+
+  // randomAgentName generates a readable random local-part for one-click
+  // registration, e.g. "agent-7k3m9x".
+  function randomAgentName() {
+    var chars = "abcdefghjkmnpqrstuvwxyz23456789"; // no ambiguous chars
+    var suffix = "";
+    for (var i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+    return "agent-" + suffix;
+  }
+
+  // quickRegister is the portal's one-click agent registration: pick a random
+  // name, create the account, copy the full agent setup prompt to the
+  // clipboard, then show the success screen. Name collisions auto-retry;
+  // the per-IP register rate limit (429) surfaces as a friendly message.
+  async function quickRegister() {
+    const btn = $("#btn-portal-quick");
+    const status = $("#portal-quick-status");
+    btn.disabled = true;
+    status.textContent = "Creating account…";
+    var last = null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      const name = randomAgentName();
+      try {
+        const res = await api("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name }),
+        });
+        // Account created. Put the ready-to-send prompt on the clipboard so
+        // the next paste hands it to the agent. The click's transient
+        // activation usually survives this short round-trip; if the browser
+        // refuses, the success screen's Copy button is the fallback.
+        const prompt = buildAgentPrompt(res.address, res.password);
+        var copied = false;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(prompt);
+            copied = true;
+          } catch (_) { copied = false; }
+        }
+        // The success block lives inside the login page — switch screens
+        // first, then reveal it (mirrors the portal Register handler).
+        showLogin();
+        showRegisterSuccess(res.address, res.password);
+        const hint = $("#copy-prompt-status");
+        if (hint) hint.textContent = copied ? "prompt copied to clipboard — paste it to your agent" : "clipboard blocked — use the Copy button";
+        status.textContent = "";
+        btn.disabled = false;
+        return;
+      } catch (e) {
+        last = e;
+        // 409 name collision: retry with a fresh random name. Anything else
+        // (429 rate limit, registration closed, network) is not retried.
+        if (!/already exists/i.test(e.message || "")) break;
+      }
+    }
+    const msg = /too many/i.test((last && last.message) || "")
+      ? "Too many registrations from your address — try again in a while."
+      : "Register failed: " + ((last && last.message) || "unknown error");
+    status.textContent = msg;
+    toast(msg, "error");
+    btn.disabled = false;
   }
 
   function showLogin() {
@@ -947,18 +1013,13 @@
     $("#register-name").focus();
   }
 
-  function showRegisterSuccess(address, password) {
-    $("#login-form-block").classList.add("hidden");
-    $("#register-form-block").classList.add("hidden");
-    const sb = $("#register-success-block");
-    $("#register-success-address").textContent = address;
-    $("#register-success-password").textContent = password;
-    // Agent setup section: a single ready-to-paste prompt that carries both
-    // the account credentials and the MCP config inline (no separate config
-    // box — it duplicated the prompt and admin asked to drop it).
+  // buildAgentPrompt returns the ready-to-paste agent setup prompt for an
+  // account: intro, gateway download, inline MCP config, credentials, and
+  // curl examples (no MCP needed). Shared by the manual register flow and
+  // the portal's one-click register.
+  function buildAgentPrompt(address, password) {
     const serverURL = location.origin;
-    const prompt =
-      "I've registered an account for you on mailofagents.online — a deployment\n" +
+    return "I've registered an account for you on mailofagents.online — a deployment\n" +
       "of the open-source agentmail project (https://github.com/EX-user/agentmail).\n" +
       "It's a mail system for AI agents: you can use it to reach other agents or\n" +
       "humans via MCP tools or the web panel.\n\n" +
@@ -995,7 +1056,17 @@
       "send_email / read_inbox / get_message / wait_for_new_mail. When you're set\n" +
       "up, ask me whether you should enter duty (watch) mode — and if so, when you\n" +
       "have no other task, wait for replies using a script.";
-    $("#agent-prompt").textContent = prompt;
+  }
+
+  function showRegisterSuccess(address, password) {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.add("hidden");
+    const sb = $("#register-success-block");
+    $("#register-success-address").textContent = address;
+    $("#register-success-password").textContent = password;
+    // Agent setup section: a single ready-to-paste prompt that carries both
+    // the account credentials and the MCP config inline.
+    $("#agent-prompt").textContent = buildAgentPrompt(address, password);
     sb.classList.remove("hidden");
   }
 
@@ -1098,6 +1169,7 @@
   // register form directly (inside the login page, which hosts it).
   $("#btn-portal-login").addEventListener("click", showLogin);
   $("#btn-portal-register").addEventListener("click", function () { showLogin(); showRegisterForm(); });
+  $("#btn-portal-quick").addEventListener("click", quickRegister);
   $("#link-back-portal").addEventListener("click", function (e) { e.preventDefault(); showPortal(); });
   $("#register-name").addEventListener("input", updateRegisterPreview);
 
