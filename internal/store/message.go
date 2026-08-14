@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -425,6 +426,47 @@ func (s *Store) GetMessageAdmin(messageID string) (*Message, error) {
 		return nil, err
 	}
 	return &msg, nil
+}
+
+// Growth counts messages in standard age buckets. It powers the guest
+// portal's activity stats; the handler caches the result so the underlying
+// scan runs at most once per cache interval even under heavy traffic.
+type Growth struct {
+	Today int `json:"today"` // since UTC midnight
+	Week  int `json:"week"`  // last 7 days (inclusive of today)
+	Month int `json:"month"` // last 30 days (inclusive of today)
+	Total int `json:"total"` // all time
+}
+
+// MessageGrowth counts messages into age buckets relative to now. One pass
+// over bMessages; a corrupt record is skipped rather than failing the scan.
+func (s *Store) MessageGrowth(now time.Time) (Growth, error) {
+	var g Growth
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	weekStart := now.Unix() - 7*24*3600
+	monthStart := now.Unix() - 30*24*3600
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bMessages).ForEach(func(_, v []byte) error {
+			var m Message
+			if err := json.Unmarshal(v, &m); err != nil {
+				return nil // skip corrupt records, keep counting
+			}
+			g.Total++
+			switch {
+			case m.ReceivedAt >= dayStart:
+				g.Today++
+				g.Week++
+				g.Month++
+			case m.ReceivedAt >= weekStart:
+				g.Week++
+				g.Month++
+			case m.ReceivedAt >= monthStart:
+				g.Month++
+			}
+			return nil
+		})
+	})
+	return g, err
 }
 
 // getAccountInTx reads an account inside an existing transaction.

@@ -2,6 +2,10 @@ package server
 
 import (
 	"net/http"
+	"sync"
+	"time"
+
+	"github.com/agentmail/agentmail/internal/store"
 )
 
 // handleInfo is a general-purpose query endpoint that returns structured
@@ -14,6 +18,7 @@ import (
 //   GET /api/info?query=stats      -> account/message counts (public)
 //   GET /api/info?query=settings   -> registration + rate limits (public)
 //   GET /api/info?query=directory  -> public address book of opt-in accounts (public)
+//   GET /api/info?query=growth     -> message counts by age bucket (public)
 //   GET /api/info?query=accounts   -> account list (admin only)
 //   GET /api/info?query=audit      -> recent audit log (admin only)
 //   GET /api/info?query=help       -> list of available queries (public)
@@ -52,6 +57,10 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	case "directory":
 		// Public: list accounts that opted into the directory.
 		s.infoDirectory(w, r)
+
+	case "growth":
+		// Public: message-volume growth stats for the guest portal.
+		s.infoGrowth(w, r)
 
 	case "help":
 		s.infoHelp(w, r)
@@ -185,12 +194,47 @@ func (s *Server) infoDirectory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// growthCache memoizes the last computed Growth result. The endpoint is
+// public (it feeds the guest portal), so we scan at most once per TTL
+// instead of on every hit; a scan error keeps serving the last good value.
+var (
+	growthMu     sync.Mutex
+	growthCached store.Growth
+	growthAt     time.Time
+)
+
+const growthCacheTTL = 60 * time.Second
+
+// infoGrowth returns message counts bucketed by age (today / week / month /
+// total). Public: activity stats for the guest portal homepage.
+func (s *Server) infoGrowth(w http.ResponseWriter, r *http.Request) {
+	growthMu.Lock()
+	if growthAt.IsZero() || time.Since(growthAt) > growthCacheTTL {
+		if g, err := s.store.MessageGrowth(time.Now()); err == nil {
+			growthCached = g
+			growthAt = time.Now()
+		}
+		// On error: fall through and serve the stale value (a slightly old
+		// count beats a broken portal).
+	}
+	g := growthCached
+	growthMu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query": "growth",
+		"today": g.Today,
+		"week":  g.Week,
+		"month": g.Month,
+		"total": g.Total,
+	})
+}
+
 func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
 	queries := []map[string]any{
 		{"query": "status", "auth": "none", "description": "Server version, domain, initialization state"},
 		{"query": "stats", "auth": "none", "description": "Account and message counts"},
 		{"query": "settings", "auth": "none", "description": "Registration toggle and rate limit values"},
 		{"query": "directory", "auth": "none", "description": "Public address book: accounts that opted in (Visible=true) with their signature"},
+		{"query": "growth", "auth": "none", "description": "Message counts by age: today / last 7 days / last 30 days / all time"},
 		{"query": "accounts", "auth": "admin", "description": "Full account list with admin/disabled/created flags"},
 		{"query": "audit", "auth": "admin", "description": "Recent 50 audit log entries"},
 		{"query": "help", "auth": "none", "description": "This list"},
