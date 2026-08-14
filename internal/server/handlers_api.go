@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/agentmail/agentmail/internal/audit"
 	"github.com/agentmail/agentmail/internal/store"
@@ -93,6 +94,13 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.store.IsRegistrationEnabled() {
 		http.Error(w, "registration disabled", http.StatusForbidden)
+		return
+	}
+	// Per-IP throttle: the portal offers friction-free registration, so
+	// scripted mass creation (and name-probing) needs a stopper. Attempts
+	// count even when they fail, and the threshold is admin-tunable.
+	if !s.regLimit.allow(clientIP(r), s.store.GetRegisterIPRateLimit(), time.Now()) {
+		http.Error(w, "too many registrations from this address, try again later", http.StatusTooManyRequests)
 		return
 	}
 	var body struct {

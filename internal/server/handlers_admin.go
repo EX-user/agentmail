@@ -398,16 +398,18 @@ func (s *Server) handleAdminSetDirectoryListed(w http.ResponseWriter, r *http.Re
 }
 
 // handleAdminSetLimits adjusts the rate limits.
-//   POST /admin/set-limits {"send_rate": 500, "byte_rate": 1048576}
-//   Both fields optional; only provided fields are updated.
+//   POST /admin/set-limits {"send_rate": 500, "byte_rate": 1048576, "register_rate": 5}
+//   All fields optional; only provided fields are updated. register_rate is
+//   the per-IP registration attempt limit per hour (0 disables).
 func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
 	var body struct {
-		SendRate *int   `json:"send_rate"`
-		ByteRate *int64 `json:"byte_rate"`
+		SendRate     *int   `json:"send_rate"`
+		ByteRate     *int64 `json:"byte_rate"`
+		RegisterRate *int   `json:"register_rate"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -433,8 +435,19 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.RegisterRate != nil {
+		if *body.RegisterRate < 0 {
+			badRequest(w, "register_rate must be >= 0 (0 disables)")
+			return
+		}
+		if err := s.store.SetRegisterIPRateLimit(*body.RegisterRate); err != nil {
+			internalError(w, "set register rate: "+err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"send_rate": s.store.GetSendRateLimit(),
-		"byte_rate": s.store.GetByteRateLimit(),
+		"send_rate":     s.store.GetSendRateLimit(),
+		"byte_rate":     s.store.GetByteRateLimit(),
+		"register_rate": s.store.GetRegisterIPRateLimit(),
 	})
 }
