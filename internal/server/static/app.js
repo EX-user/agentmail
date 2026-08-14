@@ -927,10 +927,12 @@
     }
 
     // Register buttons hide when registration is closed (same rule as the
-    // login page's register link).
+    // login page's register link). One-click additionally respects the
+    // admin's oneclick_register_enabled toggle (v0.4.3).
     const regOpen = !!(setRes && setRes.registration_enabled);
     const regBtn = $("#btn-portal-register");
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
+    applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
     spawnPortalParticles();
   }
@@ -1201,9 +1203,16 @@
     showRegisterForm();
   });
 
-  $("#btn-oneclick-register").addEventListener("click", async function () {
-    const status = $("#oneclick-status");
-    status.textContent = "registering…";
+  // runOneClickRegister: shared handler for the register-form button and the
+  // portal hero button. Registers with a random name (collision retry),
+  // copies the agent prompt, and opens the modal. Progress/failure goes to
+  // statusEl when given, else to a toast (portal hero has no status line).
+  async function runOneClickRegister(statusEl) {
+    const say = function (msg, isError) {
+      if (statusEl) statusEl.textContent = msg;
+      else if (msg) toast(msg, isError ? "error" : "");
+    };
+    say("registering…");
     // Register logic merged from Devi's v0.4.1 quickRegister: random name
     // with 409 collision auto-retry (up to 3 fresh names) and a friendly
     // 429 message for the per-IP rate limit; presentation is Felix's modal.
@@ -1218,7 +1227,7 @@
         });
         const prompt = buildAgentPrompt(res.address, res.password);
         const copied = await copyText(prompt);
-        status.textContent = "";
+        say("");
         openOneClickModal(res.address, res.password, copied);
         return;
       } catch (e) {
@@ -1228,9 +1237,19 @@
         if (!/already exists/i.test(e.message || "")) break;
       }
     }
-    status.textContent = /too many/i.test((last && last.message) || "")
+    const msg = /too many/i.test((last && last.message) || "")
       ? "Too many registrations from your address — try again in a while."
       : "failed: " + ((last && last.message) || "unknown error");
+    say(msg, true);
+  }
+
+  $("#btn-oneclick-register").addEventListener("click", function () {
+    runOneClickRegister($("#oneclick-status"));
+  });
+  // Portal hero one-click (v0.4.3): same flow; the hero has no status line,
+  // so failures surface as a toast and success opens the modal directly.
+  $("#btn-portal-oneclick").addEventListener("click", function () {
+    runOneClickRegister(null);
   });
 
   // Copy the agent prompt to the clipboard (one-click).
@@ -1259,10 +1278,22 @@
       // portal" link must stay visible even when registration is closed.
       const wrap = $("#register-link-wrap");
       (wrap || link).style.display = st.registration_enabled ? "" : "none";
+      applyOneClickVisibility(st);
     } catch (_) {
       const wrap = $("#register-link-wrap");
       (wrap || link).style.display = "none";
     }
+  }
+
+  // applyOneClickVisibility shows/hides every one-click register button from
+  // the public settings (v0.4.3). oneclick_register_enabled defaults to true
+  // — only an explicit false hides the buttons (older servers send nothing).
+  function applyOneClickVisibility(st) {
+    const hidden = !!(st && st.oneclick_register_enabled === false);
+    ["#btn-portal-oneclick", "#btn-oneclick-register"].forEach(function (sel) {
+      const el = $(sel);
+      if (el) el.style.display = hidden ? "none" : "";
+    });
   }
 
   // Live preview of the full address the chosen name will produce.

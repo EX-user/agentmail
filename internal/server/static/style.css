@@ -589,9 +589,13 @@ nav {
 nav::-webkit-scrollbar { display: none; }
 nav .tab { flex: 0 0 auto; }
 
-/* Tables: scroll within themselves on narrow screens instead of stretching
-   the page (Accounts measured 574px, Audit 431px against a 390px viewport). */
-.tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Tables: scroll within themselves only on narrow screens. On wide screens
+   the scroll treatment squeezed columns into an inner scrollbar (v0.4.2
+   regression reported by admin on PC), so >800px keeps the original
+   natural table layout. */
+@media (max-width: 800px) {
+  .tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
 
 /* Stats row wraps instead of overflowing. */
 .stats { flex-wrap: wrap; }
