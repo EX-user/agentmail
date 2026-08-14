@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -62,6 +63,10 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		// Public: message-volume growth stats for the guest portal.
 		s.infoGrowth(w, r)
 
+	case "showcase":
+		// Public: random sample of opt-in public messages (portal showcase).
+		s.infoShowcase(w, r)
+
 	case "help":
 		s.infoHelp(w, r)
 
@@ -91,12 +96,14 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":                    "settings",
-		"registration_enabled":     s.store.IsRegistrationEnabled(),
-		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
-		"send_rate_limit":          s.store.GetSendRateLimit(),
-		"byte_rate_limit":          s.store.GetByteRateLimit(),
-		"register_rate_limit":      s.store.GetRegisterIPRateLimit(),
+		"query":                      "settings",
+		"registration_enabled":       s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled":   s.store.IsDirectoryListedEnabled(),
+		"oneclick_register_enabled":  s.store.IsOneclickRegisterEnabled(),
+		"showcase_enabled":           s.store.IsShowcaseEnabled(),
+		"send_rate_limit":            s.store.GetSendRateLimit(),
+		"byte_rate_limit":            s.store.GetByteRateLimit(),
+		"register_rate_limit":        s.store.GetRegisterIPRateLimit(),
 	})
 }
 
@@ -230,6 +237,56 @@ func (s *Server) infoGrowth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// showcaseBodyLimit is how much of a public message body the showcase
+// endpoint exposes — a sample strip, not the full text.
+const showcaseBodyLimit = 200
+
+// infoShowcase returns a random sample of public (sender-opted-in)
+// messages for the portal showcase. GET /api/info?query=showcase[&n=10];
+// n is clamped to 1..50. Bodies are truncated to showcaseBodyLimit runes.
+// Only from/subject/body/ts are exposed — never the recipients.
+func (s *Server) infoShowcase(w http.ResponseWriter, r *http.Request) {
+	// NOTE: showcase_enabled deliberately does NOT gate this endpoint. Per
+	// admin's clarification the toggle only controls the Compose "public"
+	// checkbox visibility; the portal showcase keeps serving public mail
+	// regardless (it hides itself client-side when there is no data).
+	n := queryInt(r, "n", 10)
+	if n < 1 {
+		n = 1
+	}
+	if n > 50 {
+		n = 50
+	}
+	entries, err := s.store.ListShowcase()
+	if err != nil {
+		internalError(w, "list showcase: "+err.Error())
+		return
+	}
+	rand.Shuffle(len(entries), func(i, j int) { entries[i], entries[j] = entries[j], entries[i] })
+	if len(entries) > n {
+		entries = entries[:n]
+	}
+	type showcaseItem struct {
+		From    string `json:"from"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+		Ts      int64  `json:"ts"`
+	}
+	items := make([]showcaseItem, 0, len(entries))
+	for _, e := range entries {
+		body := e.Body
+		if runes := []rune(body); len(runes) > showcaseBodyLimit {
+			body = string(runes[:showcaseBodyLimit]) + "…"
+		}
+		items = append(items, showcaseItem{From: e.From, Subject: e.Subject, Body: body, Ts: e.ReceivedAt})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query": "showcase",
+		"count": len(items),
+		"items": items,
+	})
+}
+
 func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
 	queries := []map[string]any{
 		{"query": "status", "auth": "none", "description": "Server version, domain, initialization state"},
@@ -237,6 +294,7 @@ func (s *Server) infoHelp(w http.ResponseWriter, r *http.Request) {
 		{"query": "settings", "auth": "none", "description": "Registration toggle and rate limit values"},
 		{"query": "directory", "auth": "none", "description": "Public address book: accounts that opted in (Visible=true) with their signature"},
 		{"query": "growth", "auth": "none", "description": "Message counts by age (today / 7d / 30d / total) plus a 7-day per-day array for charts"},
+		{"query": "showcase", "auth": "none", "description": "Random sample of sender-opted-in public messages (n param, default 10, max 50; bodies truncated)"},
 		{"query": "accounts", "auth": "admin", "description": "Full account list with admin/disabled/created flags"},
 		{"query": "audit", "auth": "admin", "description": "Recent 50 audit log entries"},
 		{"query": "help", "auth": "none", "description": "This list"},

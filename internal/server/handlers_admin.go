@@ -340,11 +340,13 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 //   GET /admin/settings -> {registration_enabled, directory_listed_enabled, send_rate, byte_rate}
 func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"registration_enabled":    s.store.IsRegistrationEnabled(),
-		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
-		"send_rate":               s.store.GetSendRateLimit(),
-		"byte_rate":               s.store.GetByteRateLimit(),
-		"register_rate":           s.store.GetRegisterIPRateLimit(),
+		"registration_enabled":      s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled":  s.store.IsDirectoryListedEnabled(),
+		"oneclick_register_enabled": s.store.IsOneclickRegisterEnabled(),
+		"showcase_enabled":          s.store.IsShowcaseEnabled(),
+		"send_rate":                 s.store.GetSendRateLimit(),
+		"byte_rate":                 s.store.GetByteRateLimit(),
+		"register_rate":             s.store.GetRegisterIPRateLimit(),
 	})
 }
 
@@ -370,6 +372,56 @@ func (s *Server) handleAdminSetRegistration(w http.ResponseWriter, r *http.Reque
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionSetRegistration, "registration", "by=admin "+state)
 	writeJSON(w, http.StatusOK, map[string]any{"registration_enabled": body.Enabled})
+}
+
+// handleAdminSetOneclickRegister toggles the portal's one-click register UX.
+//   POST /admin/set-oneclick-register {"enabled": bool}
+func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct{ Enabled bool `json:"enabled"` }
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetOneclickRegisterEnabled(body.Enabled); err != nil {
+		internalError(w, "set oneclick register: "+err.Error())
+		return
+	}
+	state := "enable"
+	if !body.Enabled {
+		state = "disable"
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSetOneclickRegister, "oneclick_register", "by=admin "+state)
+	writeJSON(w, http.StatusOK, map[string]any{"oneclick_register_enabled": body.Enabled})
+}
+
+// handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
+// Per admin's clarification it does NOT gate the tee or the showcase
+// endpoint — the portal keeps serving public mail regardless.
+//   POST /admin/set-showcase {"enabled": bool}
+func (s *Server) handleAdminSetShowcase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct{ Enabled bool `json:"enabled"` }
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetShowcaseEnabled(body.Enabled); err != nil {
+		internalError(w, "set showcase: "+err.Error())
+		return
+	}
+	state := "enable"
+	if !body.Enabled {
+		state = "disable"
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSetShowcase, "showcase", "by=admin "+state)
+	writeJSON(w, http.StatusOK, map[string]any{"showcase_enabled": body.Enabled})
 }
 
 // handleAdminSetDirectoryListed toggles whether accounts may opt themselves

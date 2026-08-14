@@ -160,14 +160,18 @@ func (s *Server) handleVerifyPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSend posts a message from the authenticated account.
-//   POST /api/send  {"to": [...], "subject": "...", "body": "..."}
+//   POST /api/send  {"to": [...], "subject": "...", "body": "...", "public": bool}
 //   -> {"message_id": "..."}
+// public (optional, default false) additionally writes an independent copy
+// to the showcase bucket for the public portal sample — explicit opt-in by
+// the sender; delivery is unaffected either way.
 func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	from := accountFrom(r.Context())
 	var body struct {
 		To      []string `json:"to"`
 		Subject string   `json:"subject"`
 		Body    string   `json:"body"`
+		Public  bool     `json:"public"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -208,8 +212,16 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
+	// Showcase tee: explicit sender opt-in. Best-effort — a tee failure must
+	// not fail the (successful) send. (showcase_enabled only hides the
+	// Compose checkbox UI; API public sends are not gated by it.)
+	if body.Public {
+		if err := s.store.TeeShowcase(from, body.To, body.Subject, body.Body); err != nil {
+			fmt.Printf("showcase tee failed (send %s still delivered): %v\n", res.MessageID, err)
+		}
+	}
 	_ = s.audit.Record(r.Context(), audit.ActionSend, from,
-		fmt.Sprintf("to=%s subj_len=%d", strings.Join(body.To, ","), len(body.Subject)))
+		fmt.Sprintf("to=%s subj_len=%d public=%v", strings.Join(body.To, ","), len(body.Subject), body.Public))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message_id": res.MessageID,
 		"status":     "sent",
