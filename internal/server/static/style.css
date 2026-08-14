@@ -406,18 +406,217 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .settings-section { margin-bottom: 24px; }
 .settings-section .row { gap: 16px; flex-wrap: wrap; }
 
-/* Guest portal (public landing page) */
-.portal-card { max-width: 720px; }
-.portal-hero h1 { font-size: 26px; margin: 0 0 8px; }
-.btn-link {
-  display: inline-flex; align-items: center;
-  padding: 8px 14px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 13px;
+/* ============================================================
+   One-click agent register modal (v0.4.2)
+   Overlay + centered card; glass style consistent with the
+   portal redesign. Closes via ×, overlay click, or Esc.
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8, 10, 16, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
 }
-.btn-link:hover { border-color: var(--accent); }
-#portal-page h2 { font-size: 16px; margin: 0 0 4px; }
+.modal-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px 26px; width: 100%; max-width: 640px; max-height: 88vh;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal-x {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px;
+}
+.modal-x:hover { color: var(--text); background: var(--panel-2); }
+/* Scrollable prompt block, clamped by the modal's max-height. */
+.modal-code { flex: 1 1 auto; overflow-y: auto; min-height: 120px; max-height: 42vh; }
+@media (max-width: 520px) {
+  .modal-card { padding: 18px; max-height: 92vh; }
+  .modal-code { max-height: 34vh; }
+}
+
+/* ============================================================
+   Guest portal (public landing page) — v0.4.2 redesign
+   "deep-space + aurora": animated gradient backdrop, glass cards,
+   count-up stats, 7-day growth bars, directory avatar cards.
+   All motion degrades under prefers-reduced-motion. No build step,
+   no dependencies — plain CSS + a little JS in app.js.
+   ============================================================ */
+
+/* Aurora backdrop: three blurred radial glows drifting slowly.
+   Fixed behind everything while the portal is visible. Never a click
+   target, whatever the stacking context. */
+.aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: var(--portal-bg, var(--bg)); }
+.aurora::before, .aurora::after { content: ""; position: absolute; border-radius: 50%; filter: blur(90px); opacity: .5; }
+.aurora::before { width: 60vw; height: 60vw; left: -15vw; top: -20vw;
+  background: radial-gradient(circle, rgba(94,162,255,.45), transparent 65%);
+  animation: aurora-drift-1 26s ease-in-out infinite alternate; }
+.aurora::after { width: 50vw; height: 50vw; right: -12vw; top: 10vh;
+  background: radial-gradient(circle, rgba(138,123,255,.38), transparent 65%);
+  animation: aurora-drift-2 32s ease-in-out infinite alternate; }
+.aurora .glow3 { position: absolute; width: 46vw; height: 46vw; left: 28vw; bottom: -22vw; border-radius: 50%;
+  filter: blur(100px); opacity: .35;
+  background: radial-gradient(circle, rgba(79,214,196,.4), transparent 65%);
+  animation: aurora-drift-1 38s ease-in-out infinite alternate-reverse; }
+@keyframes aurora-drift-1 { from { transform: translate(0,0) scale(1); } to { transform: translate(6vw, 4vh) scale(1.15); } }
+@keyframes aurora-drift-2 { from { transform: translate(0,0) scale(1.1); } to { transform: translate(-5vw, 6vh) scale(.95); } }
+
+/* Floating envelope particles (span.portal-particle, spawned by JS). */
+.portal-particle { position: fixed; z-index: -1; bottom: -10px; color: rgba(139,147,167,.4);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px;
+  user-select: none; pointer-events: none; animation: portal-rise linear infinite; }
+@keyframes portal-rise {
+  from { transform: translateY(0); opacity: 0; }
+  10% { opacity: .8; } 90% { opacity: .6; }
+  to { transform: translateY(-110vh); opacity: 0; }
+}
+
+.portal-wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+
+/* Hero */
+.portal-hero { text-align: center; padding: 64px 0 40px; }
+.portal-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 14px; background: var(--portal-glass, var(--panel)); backdrop-filter: blur(8px);
+}
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+  box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: portal-pulse 2.2s infinite; }
+@keyframes portal-pulse { 70% { box-shadow: 0 0 0 9px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
+.portal-title {
+  font-size: clamp(44px, 8vw, 76px); letter-spacing: -2.5px; margin: 26px 0 14px; font-weight: 800;
+  background: linear-gradient(100deg, #fff 20%, #5ea2ff 55%, #8a7bff 80%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.portal-sub { color: var(--muted); font-size: 17px; max-width: 560px; margin: 0 auto 30px; }
+.portal-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 26px; border-radius: 10px;
+  font-size: 15px; font-weight: 600; cursor: pointer; text-decoration: none; border: none;
+  font-family: inherit;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.btn:active { transform: translateY(1px) scale(.98); }
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(120deg, #5ea2ff, #8a7bff);
+  box-shadow: 0 6px 24px rgba(94,162,255,.35);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(94,162,255,.5); }
+.btn-ghost { color: var(--text); background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(8px); }
+.btn-ghost:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* Section titles */
+.portal-section-title { display: flex; align-items: baseline; gap: 10px; margin: 48px 0 18px; }
+.portal-section-title h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0; }
+.portal-section-title .line { flex: 1; height: 1px; background: var(--border); }
+
+/* Cards / grid */
+.portal-grid { display: grid; grid-template-columns: 1fr 1.6fr; gap: 16px; }
+@media (max-width: 760px) { .portal-grid { grid-template-columns: 1fr; } }
+.portal-card {
+  background: rgba(22, 27, 41, 0.72); border: 1px solid var(--border); border-radius: 16px;
+  padding: 22px 24px; backdrop-filter: blur(10px);
+}
+/* Light theme: glass on a light backdrop needs its own values. */
+@media (prefers-color-scheme: light) {
+  .portal-card { background: rgba(255,255,255,.75); }
+}
+
+/* Stats column: wraps instead of overflowing on narrow screens (fixes the
+   v0.4.0 horizontal-overflow bug admin reported). */
+.portal-stats { display: flex; flex-direction: column; gap: 16px; }
+.portal-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.portal-stat .num { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.portal-stat .num.hot { color: #4fd6c4; }
+.portal-stat .label { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; text-align: right; }
+
+/* Growth bars */
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+.chart-head .t { font-weight: 600; font-size: 15px; }
+.chart-head .u { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px; color: var(--muted); }
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 130px; }
+.bar { flex: 1; border-radius: 6px 6px 2px 2px; position: relative; min-width: 0;
+  background: linear-gradient(180deg, #5ea2ff, rgba(138,123,255,.25));
+  transform-origin: bottom; animation: bar-grow .8s cubic-bezier(.2,.8,.2,1) backwards; }
+.bar:hover { filter: brightness(1.25); }
+.bar .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px; color: #4fd6c4; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+.bar:hover .tip { opacity: 1; }
+.bar-lbls { display: flex; gap: 8px; margin-top: 6px; }
+.bar-lbls span { flex: 1; text-align: center; font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+@keyframes bar-grow { from { transform: scaleY(0); } }
+
+/* Directory avatar cards */
+.dir-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.dir-card { display: flex; gap: 14px; align-items: center; min-width: 0;
+  background: rgba(22, 27, 41, 0.72); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; backdrop-filter: blur(10px);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+@media (prefers-color-scheme: light) { .dir-card { background: rgba(255,255,255,.75); } }
+.dir-card:hover { transform: translateY(-3px); border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(94,162,255,.18); }
+.avatar { width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 16px; color: #fff; }
+.dir-card .addr { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px;
+  overflow-wrap: anywhere; }
+.dir-card .sig { color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+
+.portal-footer { margin-top: 64px; text-align: center; color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
+.portal-footer a { color: var(--muted); }
+
+/* ============================================================
+   Mobile adaptation (v0.4.2) — panel P0/P1, CSS-only.
+   Fixes measured issues at 390px: page-level horizontal overflow
+   (nav 680px vs 350px container, 4 tabs unreachable), table
+   overflow, iOS input auto-zoom (<16px), small touch targets.
+   ============================================================ */
+
+/* Nav: horizontally scrollable tab strip instead of overflowing the page.
+   Scrollbar hidden but scrolling stays possible (touch drag / wheel). */
+nav {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+nav::-webkit-scrollbar { display: none; }
+nav .tab { flex: 0 0 auto; }
+
+/* Tables: scroll within themselves on narrow screens instead of stretching
+   the page (Accounts measured 574px, Audit 431px against a 390px viewport). */
+.tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Stats row wraps instead of overflowing. */
+.stats { flex-wrap: wrap; }
+
+@media (max-width: 520px) {
+  /* 16px inputs stop iOS Safari from auto-zooming on focus. */
+  .compose-form input[type="text"],
+  .compose-form input[type="password"],
+  .compose-form textarea,
+  .row input[type="text"],
+  .row input[type="password"],
+  .row input[type="number"],
+  .row select { font-size: 16px; }
+
+  /* Comfortable touch targets (iOS HIG 44px). */
+  button.primary, button.row-action, .btn, .tab { min-height: 44px; }
+
+  /* Give the page a little more room on small screens. */
+  main { margin: 16px auto; padding: 0 14px; }
+  header { padding: 10px 14px; }
+}
+
+/* Accessibility: freeze all portal motion when the user prefers reduced
+   motion; content stays fully readable. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before, .aurora::after, .glow3, .portal-particle, .bar, .pulse-dot { animation: none !important; }
+  .btn, .dir-card { transition: none !important; }
+}

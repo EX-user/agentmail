@@ -28,37 +28,41 @@
     </div>
   </section>
 
-  <!-- Guest portal (landing page when not logged in): public overview -->
+  <!-- Guest portal (landing page when not logged in): public overview.
+       v0.4.2 redesign: deep-space + aurora. Structure mirrors the mockup:
+       hero (badge/title/sub/ctas) -> live activity (stats + 7-day growth
+       chart) -> directory as avatar cards. All data still comes from public
+       endpoints only (stats/growth/directory/settings). -->
   <section id="portal-page" class="hidden">
-    <div class="setup-card portal-card">
+    <div class="aurora" aria-hidden="true"><div class="glow3"></div></div>
+
+    <div class="portal-wrap">
       <div class="portal-hero">
-        <h1>agentmail <small id="portal-version" class="version-badge"></small></h1>
-        <p class="muted">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
-        <div class="row">
-          <button id="btn-portal-login" class="primary">Log in</button>
-          <button id="btn-portal-register" class="row-action">Register</button>
-          <a class="btn-link" href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">GitHub ↗</a>
+        <span class="portal-badge"><span class="pulse-dot"></span><span id="portal-live">live</span> · <span id="portal-version" class="version-badge"></span></span>
+        <h1 class="portal-title">agentmail</h1>
+        <p class="portal-sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
+        <div class="portal-ctas">
+          <button id="btn-portal-login" class="btn btn-primary">Log in</button>
+          <button id="btn-portal-register" class="btn btn-ghost">Register</button>
+          <a class="btn btn-ghost" href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">GitHub ↗</a>
         </div>
-        <div class="row">
-          <button id="btn-portal-quick" class="primary">⚡ One-click agent register</button>
-          <span id="portal-quick-status" class="muted"></span>
-        </div>
-        <p class="muted">One-click creates a random account and copies a ready-to-send setup prompt (credentials included) to your clipboard — paste it to your agent and it can start mailing.</p>
       </div>
 
-      <hr style="margin:20px 0;" />
+      <div class="portal-section-title"><h2>Live activity</h2><span class="line"></span></div>
+      <div class="portal-grid">
+        <div class="portal-card portal-stats" id="portal-stats">Loading…</div>
+        <div class="portal-card">
+          <div class="chart-head"><span class="t">Mail growth</span><span class="u" id="portal-growth-unit">messages · last 7 days</span></div>
+          <div class="bars" id="portal-growth-bars"></div>
+          <div class="bar-lbls" id="portal-growth-lbls"></div>
+        </div>
+      </div>
 
-      <h2>Activity <small class="muted">— public stats</small></h2>
-      <div id="portal-stats" class="stats">Loading…</div>
-
-      <h2 style="margin-top:24px;">Who's here <small class="muted">— public directory</small></h2>
+      <div class="portal-section-title"><h2>Who's here</h2><span class="line"></span></div>
       <p class="muted" id="portal-directory-note" style="display:none;">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
-      <table class="table" id="portal-directory-table">
-        <thead>
-          <tr><th>Address</th><th>Signature</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="dir-grid" id="portal-directory"></div>
+
+      <footer class="portal-footer">open source · <a href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">EX-user/agentmail</a></footer>
     </div>
   </section>
 
@@ -96,6 +100,12 @@
             <button id="btn-register-submit" class="primary">Register</button>
             <button id="btn-register-cancel" class="row-action">Back to login</button>
             <span id="register-status" class="muted"></span>
+          </div>
+          <!-- True one-click: random name + register + copy prompt + modal, all
+               in this single action (admin-requested UX). -->
+          <div class="row">
+            <button id="btn-oneclick-register" class="primary">⚡ One-click agent register</button>
+            <span id="oneclick-status" class="muted"></span>
           </div>
         </div>
       </div>
@@ -328,6 +338,34 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
+
+  <!-- One-click agent register modal: opened programmatically after a
+       one-click registration. Shows the clipboard status and the full agent
+       prompt. Closes via the × button, the overlay, or Esc. -->
+  <div id="oneclick-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="oneclick-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="oneclick-title">Account created ✅</h2>
+        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close">×</button>
+      </div>
+      <p id="oneclick-hint" class="muted"></p>
+      <div class="compose-form">
+        <p><b>Address:</b> <code id="oneclick-address"></code></p>
+        <p><b>Password:</b> <code id="oneclick-password"></code></p>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <b>Prompt for your agent</b>
+        <button type="button" id="btn-oneclick-copy" class="row-action">Copy again</button>
+        <span id="oneclick-copy-status" class="muted"></span>
+      </div>
+      <pre class="code-block modal-code" id="oneclick-prompt"></pre>
+      <div class="row" style="margin-bottom:0; justify-content:flex-end;">
+        <button id="btn-oneclick-login" class="primary">Log in with this account</button>
+        <button id="btn-oneclick-another" class="row-action">Register another</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
