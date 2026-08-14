@@ -742,6 +742,7 @@
 
       $("#send-rate-input").value = s.send_rate;
       $("#byte-rate-input").value = Math.round(s.byte_rate / 1048576 * 100) / 100; // bytes → MB
+      $("#register-rate-input").value = s.register_rate;
     } catch (e) {
       $("#reg-status").textContent = "Error: " + e.message;
     }
@@ -783,7 +784,9 @@
     const sendRate = parseInt($("#send-rate-input").value, 10);
     const byteMB = parseFloat($("#byte-rate-input").value);
     const byteRate = Math.round(byteMB * 1048576);
-    if (!sendRate || sendRate < 1 || !byteRate || byteRate < 1) {
+    const registerRate = parseInt($("#register-rate-input").value, 10);
+    if (!sendRate || sendRate < 1 || !byteRate || byteRate < 1 ||
+        isNaN(registerRate) || registerRate < 0) {
       $("#limits-status").textContent = "Invalid values";
       return;
     }
@@ -791,7 +794,7 @@
       await api("/admin/set-limits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ send_rate: sendRate, byte_rate: byteRate }),
+        body: JSON.stringify({ send_rate: sendRate, byte_rate: byteRate, register_rate: registerRate }),
       });
       $("#limits-status").textContent = "✓ Saved";
       toast("Limits saved");
