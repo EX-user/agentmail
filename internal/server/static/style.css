@@ -405,3 +405,19 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 /* Settings tab */
 .settings-section { margin-bottom: 24px; }
 .settings-section .row { gap: 16px; flex-wrap: wrap; }
+
+/* Guest portal (public landing page) */
+.portal-card { max-width: 720px; }
+.portal-hero h1 { font-size: 26px; margin: 0 0 8px; }
+.btn-link {
+  display: inline-flex; align-items: center;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+}
+.btn-link:hover { border-color: var(--accent); }
+#portal-page h2 { font-size: 16px; margin: 0 0 4px; }

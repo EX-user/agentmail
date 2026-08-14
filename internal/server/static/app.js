@@ -807,12 +807,18 @@
     try {
       const st = await api("/api/status");
       if (st.domain) systemDomain = st.domain;
-      if (st.version) $("#version-badge").textContent = "v" + st.version.replace(/^v/, "");
+      if (st.version) {
+        const v = "v" + st.version.replace(/^v/, "");
+        $("#version-badge").textContent = v;
+        const pv = $("#portal-version");
+        if (pv) pv.textContent = v;
+      }
       if (!st.initialized) {
         showSetup();
         return;
       }
-      // Initialized: if we have cached creds, verify them; else show login.
+      // Initialized: if we have cached creds, verify them; else show the
+      // guest portal (public overview) — login is reachable from there.
       if (getSession()) {
         try {
           const me = await api("/api/account/info?query=self");
@@ -825,7 +831,7 @@
           showLogin();
         }
       } else {
-        showLogin();
+        showPortal();
       }
     } catch (e) {
       // If /api/status itself fails, show login (server may be mid-restart).
@@ -836,6 +842,7 @@
   function hideAllScreens() {
     $("#setup-page").classList.add("hidden");
     $("#login-page").classList.add("hidden");
+    $("#portal-page").classList.add("hidden");
     $("#app-header").classList.add("hidden");
     document.querySelector("main").classList.add("hidden");
   }
@@ -843,6 +850,70 @@
   function showSetup() {
     hideAllScreens();
     $("#setup-page").classList.remove("hidden");
+  }
+
+  // ---- guest portal (public landing page) ----
+
+  // showPortal is the landing screen for guests (no cached credentials).
+  // It shows public data only: stats, message growth, the directory, and
+  // entry points to login/register. No authenticated call is made.
+  function showPortal() {
+    hideAllScreens();
+    $("#portal-page").classList.remove("hidden");
+    loadPortal();
+  }
+
+  // loadPortal fills the portal from public endpoints. Each block fails
+  // independently: one broken API never blanks the whole page.
+  async function loadPortal() {
+    const [statsRes, growthRes, dirRes, setRes] = await Promise.all([
+      api("/api/info?query=stats").catch(function () { return null; }),
+      api("/api/info?query=growth").catch(function () { return null; }),
+      api("/api/info?query=directory").catch(function () { return null; }),
+      api("/api/info?query=settings").catch(function () { return null; }),
+    ]);
+
+    // Stats row: account/message totals + growth buckets when available.
+    const statsEl = $("#portal-stats");
+    if (statsRes) {
+      const cards = [
+        { num: statsRes.account_count, label: "accounts" },
+        { num: statsRes.message_count, label: "messages" },
+      ];
+      if (growthRes) {
+        cards.push(
+          { num: growthRes.today, label: "today" },
+          { num: growthRes.week, label: "last 7 days" }
+        );
+      }
+      statsEl.innerHTML = cards.map(function (c) {
+        return '<div class="stat"><span class="num">' + esc(c.num) + "</span><span>" + esc(c.label) + "</span></div>";
+      }).join("");
+    } else {
+      statsEl.textContent = "Stats unavailable right now.";
+    }
+
+    // Directory table: who's here (accounts that opted in).
+    const tbody = $("#portal-directory-table tbody");
+    const entries = (dirRes && dirRes.entries) || [];
+    if (!dirRes) {
+      tbody.innerHTML = '<tr><td colspan="2" class="muted">Directory unavailable right now.</td></tr>';
+    } else if (!entries.length) {
+      $("#portal-directory-note").style.display = "";
+      tbody.innerHTML = '<tr><td colspan="2" class="muted">No listed accounts yet.</td></tr>';
+    } else {
+      tbody.innerHTML = entries.map(function (e) {
+        return "<tr>" +
+          '<td class="addr-cell">' + esc(e.address) + "</td>" +
+          '<td class="sig-cell">' + esc(e.signature || "") + "</td>" +
+          "</tr>";
+      }).join("");
+    }
+
+    // Register button hides when registration is closed (same rule as the
+    // login page's register link).
+    const regBtn = $("#btn-portal-register");
+    if (regBtn) regBtn.style.display = (setRes && setRes.registration_enabled) ? "" : "none";
   }
 
   function showLogin() {
@@ -914,6 +985,12 @@
       "  address: " + address + "\n" +
       "  password: " + password + "\n" +
       "  server URL: " + serverURL + "\n\n" +
+      "No MCP setup? The same API works over plain HTTP with Basic auth:\n" +
+      "  curl -u " + address + ":" + password + " " + serverURL + "/api/inbox\n" +
+      "  curl -u " + address + ":" + password + " \"" + serverURL + "/api/message?id=MSG_ID\"\n" +
+      "  curl -u " + address + ":" + password + " -X POST " + serverURL + "/api/send \\\n" +
+      "    -H 'Content-Type: application/json' \\\n" +
+      "    -d '{\"to\":[\"someone@" + systemDomain + "\"],\"subject\":\"hi\",\"body\":\"hello\"}'\n\n" +
       "Then call authenticate(address, password) to get an access code, and use\n" +
       "send_email / read_inbox / get_message / wait_for_new_mail. When you're set\n" +
       "up, ask me whether you should enter duty (watch) mode — and if so, when you\n" +
@@ -944,9 +1021,13 @@
     if (!link) return;
     try {
       const st = await api("/api/info?query=settings");
-      link.parentElement.style.display = st.registration_enabled ? "" : "none";
+      // Toggle only the register link's wrapper — the sibling "back to
+      // portal" link must stay visible even when registration is closed.
+      const wrap = $("#register-link-wrap");
+      (wrap || link).style.display = st.registration_enabled ? "" : "none";
     } catch (_) {
-      link.parentElement.style.display = "none";
+      const wrap = $("#register-link-wrap");
+      (wrap || link).style.display = "none";
     }
   }
 
@@ -1012,6 +1093,12 @@
 
   $("#link-show-register").addEventListener("click", function (e) { e.preventDefault(); showRegisterForm(); });
   $("#btn-register-cancel").addEventListener("click", showLoginForm);
+
+  // Portal entry points: login goes to the classic form; register opens the
+  // register form directly (inside the login page, which hosts it).
+  $("#btn-portal-login").addEventListener("click", showLogin);
+  $("#btn-portal-register").addEventListener("click", function () { showLogin(); showRegisterForm(); });
+  $("#link-back-portal").addEventListener("click", function (e) { e.preventDefault(); showPortal(); });
   $("#register-name").addEventListener("input", updateRegisterPreview);
 
   $("#btn-register-submit").addEventListener("click", async function () {
