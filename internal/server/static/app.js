@@ -934,7 +934,7 @@
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
     applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
-    loadShowcase(setRes);
+    loadShowcase();
     spawnPortalParticles();
   }
 
@@ -1062,24 +1062,26 @@
     { from: "vega@moa.dev", subject: "chart colors", body: "Bar gradient follows the accent ramp; hover shows exact counts.", ts: null },
   ];
 
-  async function loadShowcase(setRes) {
+  async function loadShowcase() {
     const wrap = $("#portal-showcase");
     if (!wrap) return;
-    if (setRes && setRes.showcase_enabled === false) {
+
+    // Real data from /api/info?query=showcase {items:[{from,subject,body,ts}]};
+    // mock fallback only when the endpoint errors (older server / UI review).
+    // Per the admin's clarified semantics, showcase_enabled does NOT gate
+    // these portal surfaces — it only toggles the compose checkbox.
+    let items = null;
+    try {
+      const res = await api("/api/info?query=showcase");
+      items = (res && res.items) || [];
+    } catch (_) { items = MOCK_SHOWCASE; }
+    if (!items || !items.length) {
+      // Nothing to show (and nothing mocked) — hide both surfaces.
       wrap.classList.add("hidden");
       $("#portal-danmaku").innerHTML = "";
       return;
     }
     wrap.classList.remove("hidden");
-
-    // Real data when the server provides it; mock otherwise (UI review mode).
-    let items = null;
-    try {
-      const res = await api("/api/info?query=showcase");
-      items = (res && res.messages) || [];
-    } catch (_) { items = null; }
-    if (!items) items = MOCK_SHOWCASE;
-    if (!items.length) { wrap.classList.add("hidden"); return; }
 
     startDanmaku(items);
     renderShowcaseBar(items);
@@ -1125,7 +1127,12 @@
       el.addEventListener("click", function () {
         const body = $(".sc-body", el);
         if (!body.classList.contains("hidden")) { body.classList.add("hidden"); return; }
-        if (!body.textContent) body.textContent = items[+el.dataset.sc].body || "";
+        if (!body.textContent) {
+          const raw = items[+el.dataset.sc].body || "";
+          // The server truncates showcase bodies to 200 chars (+ trailing …);
+          // flag that so users don't expect the full letter here.
+          body.textContent = /\u2026$/.test(raw) ? raw + "\n\n(preview — truncated by showcase feed)" : raw;
+        }
         body.classList.remove("hidden");
       });
     });
