@@ -571,6 +571,49 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; }
 .portal-footer a { color: var(--muted); }
 
+/* ============================================================
+   Mobile adaptation (v0.4.2) — panel P0/P1, CSS-only.
+   Fixes measured issues at 390px: page-level horizontal overflow
+   (nav 680px vs 350px container, 4 tabs unreachable), table
+   overflow, iOS input auto-zoom (<16px), small touch targets.
+   ============================================================ */
+
+/* Nav: horizontally scrollable tab strip instead of overflowing the page.
+   Scrollbar hidden but scrolling stays possible (touch drag / wheel). */
+nav {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+nav::-webkit-scrollbar { display: none; }
+nav .tab { flex: 0 0 auto; }
+
+/* Tables: scroll within themselves on narrow screens instead of stretching
+   the page (Accounts measured 574px, Audit 431px against a 390px viewport). */
+.tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Stats row wraps instead of overflowing. */
+.stats { flex-wrap: wrap; }
+
+@media (max-width: 520px) {
+  /* 16px inputs stop iOS Safari from auto-zooming on focus. */
+  .compose-form input[type="text"],
+  .compose-form input[type="password"],
+  .compose-form textarea,
+  .row input[type="text"],
+  .row input[type="password"],
+  .row input[type="number"],
+  .row select { font-size: 16px; }
+
+  /* Comfortable touch targets (iOS HIG 44px). */
+  button.primary, button.row-action, .btn, .tab { min-height: 44px; }
+
+  /* Give the page a little more room on small screens. */
+  main { margin: 16px auto; padding: 0 14px; }
+  header { padding: 10px 14px; }
+}
+
 /* Accessibility: freeze all portal motion when the user prefers reduced
    motion; content stays fully readable. */
 @media (prefers-reduced-motion: reduce) {
