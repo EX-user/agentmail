@@ -936,12 +936,16 @@
   }
 
   // randomAgentName generates a readable random local-part for one-click
-  // registration, e.g. "agent-7k3m9x" (no ambiguous chars).
+  // registration, e.g. "bot-k7x2m9qv". Per admin: the prefix must not start
+  // with 'a' (a-leading names always sort first in the directory) and the
+  // random part is 8 chars (31^8 ≈ 8.5e11 — collisions essentially never;
+  // the 409 retry remains as a safety net). "bot-" is generic and
+  // descriptive; charset drops ambiguous chars (0/o, 1/l/i).
   function randomAgentName() {
     var chars = "abcdefghjkmnpqrstuvwxyz23456789";
     var suffix = "";
-    for (var i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-    return "agent-" + suffix;
+    for (var i = 0; i < 8; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+    return "bot-" + suffix;
   }
 
   // ---- portal helpers ----
