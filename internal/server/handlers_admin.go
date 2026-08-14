@@ -344,6 +344,7 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
 		"send_rate":               s.store.GetSendRateLimit(),
 		"byte_rate":               s.store.GetByteRateLimit(),
+		"register_rate":           s.store.GetRegisterIPRateLimit(),
 	})
 }
 

@@ -288,6 +288,10 @@
             <input type="number" id="byte-rate-input" value="1" min="1" style="width:80px" />
             <small class="muted">MB/hour per account</small>
           </label>
+          <label>Register limit:
+            <input type="number" id="register-rate-input" value="5" min="0" style="width:80px" />
+            <small class="muted">/hour per IP (0 = off)</small>
+          </label>
           <button id="btn-save-limits" class="row-action">Save limits</button>
           <span id="limits-status" class="muted"></span>
         </div>
