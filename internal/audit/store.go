@@ -31,6 +31,8 @@ const (
 	ActionProfileUpdate  Action = "profile_update"
 	ActionSetRegistration   Action = "set_registration"
 	ActionSetDirectoryListed Action = "set_directory_listed"
+	ActionSetOneclickRegister Action = "set_oneclick_register"
+	ActionSetShowcase        Action = "set_showcase"
 )
 
 // Entry is one audit record.

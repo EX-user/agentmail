@@ -45,6 +45,8 @@ var (
 	mSendRateLimit        = []byte("send_rate_limit")
 	mByteRateLimit        = []byte("byte_rate_limit")
 	mRegisterIPRateLimit  = []byte("register_ip_rate_limit")
+	mOneclickRegisterEnabled = []byte("oneclick_register_enabled")
+	mShowcaseEnabled      = []byte("showcase_enabled")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -245,6 +247,65 @@ func (s *Store) SetRegistrationEnabled(enabled bool) error {
 		}
 		return mb.Put(mRegistrationEnabled, []byte(v))
 	})
+}
+
+// metaBool reads a boolean meta flag; absent = def.
+func (s *Store) metaBool(key []byte, def bool) bool {
+	var raw []byte
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if v := mb.Get(key); v != nil {
+			raw = append([]byte(nil), v...)
+		}
+		return nil
+	})
+	if raw == nil {
+		return def
+	}
+	return string(raw) != "0"
+}
+
+// setMetaBool writes a boolean meta flag.
+func (s *Store) setMetaBool(key []byte, value bool) error {
+	v := "1"
+	if !value {
+		v = "0"
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(key, []byte(v))
+	})
+}
+
+// IsOneclickRegisterEnabled reports whether the portal's one-click agent
+// register is offered. Defaults to true. (Frontend hides the button when
+// off; the register API itself keeps working — this gates the UX, not
+// registration.)
+func (s *Store) IsOneclickRegisterEnabled() bool {
+	return s.metaBool(mOneclickRegisterEnabled, true)
+}
+
+// SetOneclickRegisterEnabled toggles the one-click register UX.
+func (s *Store) SetOneclickRegisterEnabled(enabled bool) error {
+	return s.setMetaBool(mOneclickRegisterEnabled, enabled)
+}
+
+// IsShowcaseEnabled reports whether the public showcase (opt-in public
+// message samples) is offered. Defaults to true. When off, the tee is
+// skipped and the showcase endpoint serves an empty list.
+func (s *Store) IsShowcaseEnabled() bool {
+	return s.metaBool(mShowcaseEnabled, true)
+}
+
+// SetShowcaseEnabled toggles the showcase.
+func (s *Store) SetShowcaseEnabled(enabled bool) error {
+	return s.setMetaBool(mShowcaseEnabled, enabled)
 }
 
 // IsDirectoryListedEnabled reports whether accounts are allowed to opt

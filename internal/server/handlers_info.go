@@ -96,12 +96,14 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":                    "settings",
-		"registration_enabled":     s.store.IsRegistrationEnabled(),
-		"directory_listed_enabled": s.store.IsDirectoryListedEnabled(),
-		"send_rate_limit":          s.store.GetSendRateLimit(),
-		"byte_rate_limit":          s.store.GetByteRateLimit(),
-		"register_rate_limit":      s.store.GetRegisterIPRateLimit(),
+		"query":                      "settings",
+		"registration_enabled":       s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled":   s.store.IsDirectoryListedEnabled(),
+		"oneclick_register_enabled":  s.store.IsOneclickRegisterEnabled(),
+		"showcase_enabled":           s.store.IsShowcaseEnabled(),
+		"send_rate_limit":            s.store.GetSendRateLimit(),
+		"byte_rate_limit":            s.store.GetByteRateLimit(),
+		"register_rate_limit":        s.store.GetRegisterIPRateLimit(),
 	})
 }
 
@@ -244,6 +246,16 @@ const showcaseBodyLimit = 200
 // n is clamped to 1..50. Bodies are truncated to showcaseBodyLimit runes.
 // Only from/subject/body/ts are exposed — never the recipients.
 func (s *Server) infoShowcase(w http.ResponseWriter, r *http.Request) {
+	// Global admin toggle: when the showcase is off, serve an empty list (the
+	// frontend also hides its section, but the endpoint must not leak).
+	if !s.store.IsShowcaseEnabled() {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"query": "showcase",
+			"count": 0,
+			"items": []any{},
+		})
+		return
+	}
 	n := queryInt(r, "n", 10)
 	if n < 1 {
 		n = 1
