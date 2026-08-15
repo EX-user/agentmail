@@ -517,6 +517,89 @@ func (s *Store) MessageGrowth(now time.Time) (Growth, error) {
 	return g, err
 }
 
+// MyDayCount is one day of an account's personal in/out counts (for the
+// panel's My activity row; same shape as the portal growth days so the
+// frontend can reuse its chart logic).
+type MyDayCount struct {
+	Date string `json:"date"`
+	In   int    `json:"in"`  // received that day
+	Out  int    `json:"out"` // sent that day
+}
+
+// MyGrowth is an account's recent in/out activity. Week covers the same 7
+// UTC calendar days as Days (their sum), for consistency with the chart.
+type MyGrowth struct {
+	TodayIn  int          `json:"today_in"`
+	TodayOut int          `json:"today_out"`
+	WeekIn   int          `json:"week_in"`
+	WeekOut  int          `json:"week_out"`
+	Days     []MyDayCount `json:"days"` // 7 entries, oldest first
+}
+
+// MyGrowthStats scans the account's inbox and sent indexes and buckets the
+// referenced messages' timestamps into today/week scalars plus a 7-day
+// array. Index entries carry no timestamps, so each referenced message is
+// fetched by ID (bolt point reads). Corrupt or missing records are skipped.
+func (s *Store) MyGrowthStats(address string, now time.Time) (MyGrowth, error) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return MyGrowth{}, err
+	}
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	weekFloor := dayStart.AddDate(0, 0, -6)
+	g := MyGrowth{Days: make([]MyDayCount, 7)}
+	for i := range g.Days {
+		g.Days[i] = MyDayCount{Date: weekFloor.AddDate(0, 0, i).Format("2006-01-02")}
+	}
+	err = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMessages)
+		prefix := indexKey(acc.UUID, "")
+		prefixStr := string(prefix)
+		scan := func(bucket []byte, isOut bool) {
+			ib := tx.Bucket(bucket)
+			if ib == nil {
+				return
+			}
+			c := ib.Cursor()
+			for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+				raw := mb.Get(k[len(prefix):])
+				if raw == nil {
+					continue // index points at a missing record; skip
+				}
+				var m Message
+				if json.Unmarshal(raw, &m) != nil {
+					continue
+				}
+				ts := m.ReceivedAt
+				if ts < weekFloor.Unix() {
+					continue // outside the 7-day window
+				}
+				idx := int((ts - weekFloor.Unix()) / 86400)
+				if idx < 0 || idx > 6 {
+					continue // corrupt far-future timestamp guard
+				}
+				if isOut {
+					g.Days[idx].Out++
+					g.WeekOut++
+					if idx == 6 {
+						g.TodayOut++
+					}
+				} else {
+					g.Days[idx].In++
+					g.WeekIn++
+					if idx == 6 {
+						g.TodayIn++
+					}
+				}
+			}
+		}
+		scan(bInbox, false)
+		scan(bSent, true)
+		return nil
+	})
+	return g, err
+}
+
 // getAccountInTx reads an account inside an existing transaction.
 func getAccountInTx(tx *bolt.Tx, address string) (*Account, error) {
 	val := tx.Bucket(bAccounts).Get([]byte(address))

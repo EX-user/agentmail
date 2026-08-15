@@ -448,6 +448,24 @@ func (s *Server) handleSent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs, "count": len(msgs), "total_count": total})
 }
 
+// handleMyGrowth returns the authenticated account's recent in/out activity
+// (today/week scalars + a 7-day array). Account-authenticated — this is
+// personal data, deliberately NOT under public /api/info.
+//   GET /api/mygrowth -> {"today_in","today_out","week_in","week_out","days":[...]}
+func (s *Server) handleMyGrowth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	g, err := s.store.MyGrowthStats(who, time.Now())
+	if err != nil {
+		internalError(w, "my growth: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, g)
+}
+
 // handleChangePassword lets the authenticated account change its own password
 // by proving the old password. Account Basic auth.
 //   POST /api/password {"old_password":"...","new_password":"..."} -> {"ok":true}
