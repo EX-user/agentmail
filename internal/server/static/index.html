@@ -186,6 +186,14 @@
     <section id="tab-overview" class="tab-panel">
       <h2>Overview <small class="muted">— system stats and recent activity</small></h2>
       <div class="stats" id="stats">Loading…</div>
+      <!-- 7-day growth chart (v0.4.8, admin request): the logged-in Overview
+           shows at least what the guest portal shows. Filled from the public
+           growth endpoint; hidden when it fails. -->
+      <div id="ovw-growth-card" class="portal-card hidden" style="max-width:640px; margin-top:16px;">
+        <div class="chart-head"><span class="t">Mail growth</span><span class="u">messages · last 7 days</span></div>
+        <div class="bars" id="ovw-growth-bars"></div>
+        <div class="bar-lbls" id="ovw-growth-lbls"></div>
+      </div>
       <h3>Recent activity</h3>
       <div id="recent-activity">Loading…</div>
     </section>

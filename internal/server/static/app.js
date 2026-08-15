@@ -106,12 +106,37 @@
 
   // ---- overview ----
 
+  // renderOverviewGrowth adds today / last-7-days stat cards and the 7-day
+  // bar chart to the Overview tab (admin request: the logged-in page should
+  // show at least what the guest portal shows). Growth comes from the public
+  // endpoint, so it works for both admins and regular accounts; failures
+  // degrade silently (no chart, no extra cards).
+  function renderOverviewGrowth(growth) {
+    const chart = $("#ovw-growth-card");
+    if (!growth) { if (chart) chart.classList.add("hidden"); return; }
+    const stats = $("#stats");
+    if (stats) {
+      stats.innerHTML +=
+        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>today</span></div>' +
+        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>last 7 days</span></div>';
+    }
+    if (chart) {
+      drawGrowthDays((growth.days && growth.days.length)
+        ? growth.days
+        : [{ date: "today", count: growth.today }, { date: "week", count: growth.week }],
+        $("#ovw-growth-bars"), $("#ovw-growth-lbls"));
+      chart.classList.remove("hidden");
+    }
+  }
+
   async function loadOverview() {
     const stats = $("#stats");
     const recent = $("#recent-activity");
     stats.textContent = "Loading…";
     recent.textContent = "Loading…";
     const s = getSession();
+    // Growth enrichment runs for both roles (public endpoint).
+    const growthP = api("/api/info?query=growth").catch(function () { return null; });
     // Regular accounts can't read /admin/* — calling it would 401 and the
     // api() wrapper would treat that as session-expired. Use the public stats
     // endpoint instead, and skip the global audit log (admin-only) for them.
@@ -121,6 +146,7 @@
         stats.innerHTML =
           '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
           '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>";
+        renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
         stats.textContent = "Error: " + e.message;
@@ -133,6 +159,7 @@
       stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
         '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>";
+      renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
         recent.textContent = "No activity yet.";
@@ -997,7 +1024,7 @@
     });
   }
 
-  // renderGrowthChart draws the 7-day bar chart. Preferred input is
+  // renderGrowthChart draws the portal's 7-day bar chart. Preferred input is
   // growth.days = [{date, count}, ...]; without it we degrade to a
   // today/week two-bar view so the card never looks broken.
   function renderGrowthChart(growthRes) {
@@ -1018,6 +1045,13 @@
       if (unitEl) unitEl.textContent = "growth unavailable right now";
       return;
     }
+    drawGrowthDays(days, barsEl, lblsEl);
+  }
+
+  // drawGrowthDays fills a bar chart (shared by the portal card and the
+  // panel Overview). Labels: short weekday for ISO dates, raw text otherwise.
+  function drawGrowthDays(days, barsEl, lblsEl) {
+    if (!barsEl || !lblsEl) return;
     const max = Math.max.apply(null, days.map(function (d) { return d.count || 0; }).concat([1]));
     barsEl.innerHTML = days.map(function (d, i) {
       const h = Math.max(Math.round((d.count || 0) / max * 100), 3);
@@ -1025,7 +1059,6 @@
         '<span class="tip">' + esc(d.count == null ? "0" : d.count) + "</span></div>";
     }).join("");
     lblsEl.innerHTML = days.map(function (d) {
-      // Label: short weekday for ISO dates, raw text otherwise.
       let lbl = String(d.date || "");
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(lbl);
       if (m) {
