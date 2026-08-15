@@ -1142,7 +1142,8 @@
 
   // startDanmaku fills the band with flying multi-line cards (admin's
   // clarified design): line 1 from + date, line 2 subject, lines 3-4 body
-  // preview. Two lanes; items cycle so both lanes always carry traffic.
+  // preview. Initial vertical position is randomized within the band
+  // (admin: no fixed lanes), items cycle so traffic stays continuous.
   // Pure decoration: pointer-events none, aria-hidden, skipped entirely for
   // reduced-motion users.
   function startDanmaku(items) {
@@ -1150,8 +1151,10 @@
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
     if (reduce) return;
-    const LANES = 2;
-    const TARGET = 6; // cards across the two lanes
+    const TARGET = 6;
+    // Random top anywhere the card fully fits (card ~106px tall).
+    const bandH = band.clientHeight || 300;
+    const topMax = Math.max(bandH - 116, 8);
     for (let i = 0; i < TARGET; i++) {
       const m = items[i % items.length];
       const el = document.createElement("span");
@@ -1164,7 +1167,7 @@
         '<div class="dm-head">' + esc(m.from) + (dateStr ? " · " + esc(dateStr) : "") + "</div>" +
         '<div class="dm-subj">' + esc(m.subject) + "</div>" +
         '<div class="dm-body">' + esc(m.body || "") + "</div>";
-      el.style.top = (i % LANES === 0 ? 16 : 156) + "px";
+      el.style.top = Math.round(8 + Math.random() * (topMax - 8)) + "px";
       const dur = 30 + Math.random() * 16; // seconds to cross (cards are bigger now)
       el.style.animationDuration = dur + "s";
       el.style.animationDelay = (-Math.random() * dur) + "s";
