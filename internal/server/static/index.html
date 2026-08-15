@@ -308,6 +308,14 @@
         <p class="muted">When off, accounts cannot newly opt into the public directory. Already-listed accounts stay listed.</p>
       </div>
       <div class="settings-section">
+        <h3>Showcase</h3>
+        <div class="row">
+          <span id="showcase-admin-status" class="muted">Public letters shown on the guest portal.</span>
+          <button id="btn-clear-showcase" class="row-action">Clear showcase</button>
+        </div>
+        <p class="muted">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
+      </div>
+      <div class="settings-section">
         <h3>Rate limits</h3>
         <div class="row">
           <label>Send limit:
@@ -350,10 +358,11 @@
           <button id="btn-refresh-thread" class="row-action">Refresh thread</button>
           <!-- Public showcase opt-in (v0.4.4): also publish this letter on the
                guest portal. Default off; hidden when the admin disables
-               showcase globally (showcase_enabled === false). -->
+               showcase globally (showcase_enabled === false). Plain wording
+               per admin feedback (was "Public showcase"). -->
           <label id="compose-public-wrap" class="public-toggle" style="display:none;">
             <input type="checkbox" id="compose-public" />
-            Public showcase
+            Make this letter public
           </label>
           <span id="compose-status" class="muted"></span>
         </div>
