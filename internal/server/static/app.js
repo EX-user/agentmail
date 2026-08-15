@@ -1155,7 +1155,7 @@
     // these portal surfaces — it only toggles the compose checkbox.
     let items = null;
     try {
-      const res = await api("/api/info?query=showcase");
+      const res = await api("/api/info?query=showcase&n=50");
       items = (res && res.items) || [];
     } catch (_) { items = MOCK_SHOWCASE; }
     if (!items || !items.length) {
