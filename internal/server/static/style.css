@@ -682,9 +682,13 @@ nav .tab { flex: 0 0 auto; }
 }
 @media (prefers-color-scheme: light) { .sc-item { background: rgba(255,255,255,.75); } }
 
-/* Compose public-showcase toggle (v0.4.4) */
+/* Compose public-showcase toggle (v0.4.4). Must stay horizontal: the bare
+   label selector under .compose-form is column (field rows), so scope with
+   enough specificity to win (admin: keep it aligned with the other row
+   controls). */
+.compose-form .public-toggle,
 .public-toggle {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
-  cursor: pointer; user-select: none;
+  display: inline-flex; flex-direction: row; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted); cursor: pointer; user-select: none;
 }
 .public-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
