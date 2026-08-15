@@ -780,6 +780,26 @@
     }
   });
 
+  // Clear showcase (v0.4.5): wipe every public letter from the portal.
+  // Irreversible, so confirm first; the result line reports how many went.
+  $("#btn-clear-showcase").addEventListener("click", async function () {
+    if (!window.confirm("Remove ALL public letters from the portal? This cannot be undone.")) return;
+    const status = $("#showcase-admin-status");
+    const btn = $("#btn-clear-showcase");
+    btn.disabled = true;
+    status.textContent = "Clearing…";
+    try {
+      const res = await api("/admin/clear-showcase", { method: "POST" });
+      const n = (res && (res.cleared != null ? res.cleared : res.count)) || 0;
+      status.textContent = "Cleared " + n + " public letter" + (n === 1 ? "" : "s") + ".";
+      toast("Showcase cleared (" + n + ")", "success");
+    } catch (e) {
+      status.textContent = "Clear failed: " + e.message;
+      toast("Clear showcase failed", "error");
+    }
+    btn.disabled = false;
+  });
+
   $("#btn-save-limits").addEventListener("click", async function () {
     const sendRate = parseInt($("#send-rate-input").value, 10);
     const byteMB = parseFloat($("#byte-rate-input").value);

@@ -102,6 +102,7 @@ button.row-action {
   font-size: 13px;
 }
 button.row-action:hover { background: var(--panel-2); border-color: var(--accent); }
+button.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 
 tr.row-disabled td { opacity: 0.5; }
 .badge-disabled {
