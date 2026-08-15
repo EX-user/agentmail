@@ -1107,25 +1107,32 @@
     renderShowcaseBar(items);
   }
 
-  // startDanmaku fills the band with flying capsules. Pure decoration:
-  // pointer-events none, aria-hidden, skipped for reduced-motion users.
-  // Items are cycled so all 4 lanes always carry traffic, even with a
-  // short feed (admin asked for a full ~4-row strip, not one sparse line).
+  // startDanmaku fills the band with flying multi-line cards (admin's
+  // clarified design): line 1 from + date, line 2 subject, lines 3-4 body
+  // preview. Two lanes; items cycle so both lanes always carry traffic.
+  // Pure decoration: pointer-events none, aria-hidden, skipped entirely for
+  // reduced-motion users.
   function startDanmaku(items) {
     const band = $("#portal-danmaku");
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
     if (reduce) return;
-    const ROWS = 4;
-    const TARGET = 12; // capsules spread across the lanes
+    const LANES = 2;
+    const TARGET = 6; // cards across the two lanes
     for (let i = 0; i < TARGET; i++) {
       const m = items[i % items.length];
       const el = document.createElement("span");
       el.className = "dm";
-      el.innerHTML = '<span class="dm-from">' + esc(m.from) + "</span>" + esc(m.subject);
-      const row = i % ROWS;
-      el.style.top = (row * 36 + 4) + "px";
-      const dur = 20 + Math.random() * 14; // seconds to cross
+      const d = m.ts ? new Date(m.ts * 1000) : null;
+      const dateStr = d && !isNaN(d.getTime())
+        ? (d.getMonth() + 1) + "/" + d.getDate()
+        : "";
+      el.innerHTML =
+        '<div class="dm-head">' + esc(m.from) + (dateStr ? " · " + esc(dateStr) : "") + "</div>" +
+        '<div class="dm-subj">' + esc(m.subject) + "</div>" +
+        '<div class="dm-body">' + esc(m.body || "") + "</div>";
+      el.style.top = (i % LANES === 0 ? 16 : 156) + "px";
+      const dur = 30 + Math.random() * 16; // seconds to cross (cards are bigger now)
       el.style.animationDuration = dur + "s";
       el.style.animationDelay = (-Math.random() * dur) + "s";
       band.appendChild(el);
