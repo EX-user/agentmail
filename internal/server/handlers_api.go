@@ -429,7 +429,9 @@ func (s *Server) handleContacts(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSent lists the authenticated account's sent messages.
-//   GET /api/sent?limit=50  -> {"messages": [...], "count": N}
+//   GET /api/sent?limit=50  -> {"messages": [...], "count": N, "total_count": T}
+// total_count is the full sent count regardless of the page limit (mirrors
+// /api/inbox; the My-activity cards request limit=1 and read total_count).
 func (s *Server) handleSent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
@@ -442,7 +444,8 @@ func (s *Server) handleSent(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "read sent: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs, "count": len(msgs)})
+	total, _ := s.store.CountSent(who)
+	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs, "count": len(msgs), "total_count": total})
 }
 
 // handleChangePassword lets the authenticated account change its own password
