@@ -130,27 +130,36 @@
   }
 
   // renderOverviewPersonal fills the "My activity" row (admin request):
-  // people I've exchanged mail with, received / sent totals, unread. Uses
-  // the account's own endpoints (works for both roles — admins see their own
+  // people I've exchanged mail with, received / sent totals, unread, plus
+  // recent traffic (today / last-7-days in+out from /api/mygrowth). Uses the
+  // account's own endpoints (works for both roles — admins see their own
   // data, not the system's). limit=1 keeps responses light; we only read
   // the counters. Silent degrade on any failure.
   async function renderOverviewPersonal() {
     const el = $("#personal-stats");
     if (!el) return;
     try {
-      const [con, inb, sent] = await Promise.all([
+      const [con, inb, sent, myg] = await Promise.all([
         api("/api/contacts").catch(function () { return null; }),
         api("/api/inbox?limit=1").catch(function () { return null; }),
         api("/api/sent?limit=1").catch(function () { return null; }),
+        api("/api/mygrowth").catch(function () { return null; }),
       ]);
       const cards = [];
       if (con) cards.push({ num: con.count, label: "contacts" });
       if (inb) cards.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
       if (inb && inb.unread_count) cards.push({ num: inb.unread_count, label: "unread" });
       if (sent) cards.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      // Recent traffic (v0.4.9): today + last-7-days, in and out.
+      if (myg) {
+        cards.push({ num: myg.today_in, label: "today in" });
+        cards.push({ num: myg.today_out, label: "today out" });
+        cards.push({ num: myg.week_in, label: "7d in" });
+        cards.push({ num: myg.week_out, label: "7d out" });
+      }
       if (!cards.length) { el.textContent = ""; return; }
       el.innerHTML = cards.map(function (c) {
-        return '<div class="stat"><span class="num">' + esc(c.num) + '</span><span>' + esc(c.label) + "</span></div>";
+        return '<div class="stat"><span class="num">' + esc(c.num) + "</span><span>" + esc(c.label) + "</span></div>";
       }).join("");
     } catch (_) {
       el.textContent = "";
