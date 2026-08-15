@@ -33,6 +33,7 @@ const (
 	ActionSetDirectoryListed Action = "set_directory_listed"
 	ActionSetOneclickRegister Action = "set_oneclick_register"
 	ActionSetShowcase        Action = "set_showcase"
+	ActionClearShowcase      Action = "clear_showcase"
 )
 
 // Entry is one audit record.

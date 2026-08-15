@@ -398,6 +398,24 @@ func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, map[string]any{"oneclick_register_enabled": body.Enabled})
 }
 
+// handleAdminClearShowcase empties the showcase bucket (e.g. after bad data
+// such as encoding-mangled entries landed). Real mail is untouched.
+//   POST /admin/clear-showcase
+func (s *Server) handleAdminClearShowcase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	before, _ := s.store.CountShowcase()
+	if err := s.store.ClearShowcase(); err != nil {
+		internalError(w, "clear showcase: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionClearShowcase, "showcase",
+		fmt.Sprintf("by=admin cleared=%d", before))
+	writeJSON(w, http.StatusOK, map[string]any{"cleared": before, "count": 0})
+}
+
 // handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
 // Per admin's clarification it does NOT gate the tee or the showcase
 // endpoint — the portal keeps serving public mail regardless.
