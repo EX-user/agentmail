@@ -129,6 +129,34 @@
     }
   }
 
+  // renderOverviewPersonal fills the "My activity" row (admin request):
+  // people I've exchanged mail with, received / sent totals, unread. Uses
+  // the account's own endpoints (works for both roles — admins see their own
+  // data, not the system's). limit=1 keeps responses light; we only read
+  // the counters. Silent degrade on any failure.
+  async function renderOverviewPersonal() {
+    const el = $("#personal-stats");
+    if (!el) return;
+    try {
+      const [con, inb, sent] = await Promise.all([
+        api("/api/contacts").catch(function () { return null; }),
+        api("/api/inbox?limit=1").catch(function () { return null; }),
+        api("/api/sent?limit=1").catch(function () { return null; }),
+      ]);
+      const cards = [];
+      if (con) cards.push({ num: con.count, label: "contacts" });
+      if (inb) cards.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
+      if (inb && inb.unread_count) cards.push({ num: inb.unread_count, label: "unread" });
+      if (sent) cards.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      if (!cards.length) { el.textContent = ""; return; }
+      el.innerHTML = cards.map(function (c) {
+        return '<div class="stat"><span class="num">' + esc(c.num) + '</span><span>' + esc(c.label) + "</span></div>";
+      }).join("");
+    } catch (_) {
+      el.textContent = "";
+    }
+  }
+
   async function loadOverview() {
     const stats = $("#stats");
     const recent = $("#recent-activity");
@@ -137,6 +165,8 @@
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
     const growthP = api("/api/info?query=growth").catch(function () { return null; });
+    // Personal summary (own endpoints) — independent of the role branches.
+    renderOverviewPersonal();
     // Regular accounts can't read /admin/* — calling it would 401 and the
     // api() wrapper would treat that as session-expired. Use the public stats
     // endpoint instead, and skip the global audit log (admin-only) for them.
