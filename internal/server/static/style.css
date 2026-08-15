@@ -407,6 +407,20 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .settings-section { margin-bottom: 24px; }
 .settings-section .row { gap: 16px; flex-wrap: wrap; }
 
+/* My activity grouped card (Overview): two columns of compact stat rows
+   instead of a long row of boxes (admin feedback). */
+.my-activity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; }
+@media (max-width: 520px) { .my-activity-grid { grid-template-columns: 1fr; } }
+.my-group-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); margin: 0 0 6px; font-weight: 600;
+}
+.my-stat-row { display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3px 0; border-bottom: 1px solid var(--border); }
+.my-stat-row:last-child { border-bottom: none; }
+.my-stat-label { font-size: 13px; color: var(--muted); }
+.my-stat-num { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* ============================================================
    One-click agent register modal (v0.4.2)
    Overlay + centered card; glass style consistent with the

@@ -129,15 +129,14 @@
     }
   }
 
-  // renderOverviewPersonal fills the "My activity" row (admin request):
-  // people I've exchanged mail with, received / sent totals, unread, plus
-  // recent traffic (today / last-7-days in+out from /api/mygrowth). Uses the
-  // account's own endpoints (works for both roles — admins see their own
-  // data, not the system's). limit=1 keeps responses light; we only read
-  // the counters. Silent degrade on any failure.
+  // renderOverviewPersonal fills the grouped "My activity" card: an
+  // "All time" column (contacts / received / unread / sent) and a "Recent
+  // traffic" column (today + 7-day in/out from /api/mygrowth). Uses the
+  // account's own endpoints (works for both roles). limit=1 keeps responses
+  // light; we only read the counters. Silent degrade on any failure.
   async function renderOverviewPersonal() {
-    const el = $("#personal-stats");
-    if (!el) return;
+    const card = $("#personal-card");
+    if (!card) return;
     try {
       const [con, inb, sent, myg] = await Promise.all([
         api("/api/contacts").catch(function () { return null; }),
@@ -145,24 +144,33 @@
         api("/api/sent?limit=1").catch(function () { return null; }),
         api("/api/mygrowth").catch(function () { return null; }),
       ]);
-      const cards = [];
-      if (con) cards.push({ num: con.count, label: "contacts" });
-      if (inb) cards.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
-      if (inb && inb.unread_count) cards.push({ num: inb.unread_count, label: "unread" });
-      if (sent) cards.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
-      // Recent traffic (v0.4.9): today + last-7-days, in and out.
-      if (myg) {
-        cards.push({ num: myg.today_in, label: "today in" });
-        cards.push({ num: myg.today_out, label: "today out" });
-        cards.push({ num: myg.week_in, label: "7d in" });
-        cards.push({ num: myg.week_out, label: "7d out" });
-      }
-      if (!cards.length) { el.textContent = ""; return; }
-      el.innerHTML = cards.map(function (c) {
-        return '<div class="stat"><span class="num">' + esc(c.num) + "</span><span>" + esc(c.label) + "</span></div>";
-      }).join("");
+      const allTime = [];
+      if (con) allTime.push({ num: con.count, label: "contacts" });
+      if (inb) allTime.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
+      if (inb && inb.unread_count) allTime.push({ num: inb.unread_count, label: "unread" });
+      if (sent) allTime.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      const recent = myg ? [
+        { num: myg.today_in, label: "today in" },
+        { num: myg.today_out, label: "today out" },
+        { num: myg.week_in, label: "last 7 days in" },
+        { num: myg.week_out, label: "last 7 days out" },
+      ] : [];
+      const renderRows = function (rows) {
+        return rows.map(function (c) {
+          return '<div class="my-stat-row"><span class="my-stat-label">' + esc(c.label) +
+            '</span><span class="my-stat-num">' + esc(c.num) + "</span></div>";
+        }).join("");
+      };
+      $("#personal-alltime").innerHTML = renderRows(allTime);
+      $("#personal-recent").innerHTML = renderRows(recent);
+      // Empty halves collapse instead of showing an empty column.
+      const allEl = $("#personal-alltime").parentElement;
+      const recEl = $("#personal-recent").parentElement;
+      allEl.style.display = allTime.length ? "" : "none";
+      recEl.style.display = recent.length ? "" : "none";
+      card.classList.toggle("hidden", !allTime.length && !recent.length);
     } catch (_) {
-      el.textContent = "";
+      card.classList.add("hidden");
     }
   }
 

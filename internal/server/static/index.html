@@ -194,10 +194,21 @@
         <div class="bars" id="ovw-growth-bars"></div>
         <div class="bar-lbls" id="ovw-growth-lbls"></div>
       </div>
-      <!-- Personal summary (v0.4.8, admin request): my contacts / received /
-           sent / unread, from the account's own endpoints (both roles). -->
-      <h3>My activity</h3>
-      <div class="stats" id="personal-stats">Loading…</div>
+      <!-- Personal summary (v0.4.8+, admin feedback: one row of boxes was
+           ugly): a single grouped card — "All time" and "Recent traffic"
+           columns of compact stat rows. -->
+      <div class="portal-card hidden" id="personal-card" style="max-width:640px; margin-top:16px;">
+        <div class="my-activity-grid">
+          <div>
+            <h4 class="my-group-title">All time</h4>
+            <div id="personal-alltime"></div>
+          </div>
+          <div>
+            <h4 class="my-group-title">Recent traffic</h4>
+            <div id="personal-recent"></div>
+          </div>
+        </div>
+      </div>
       <h3>Recent activity</h3>
       <div id="recent-activity">Loading…</div>
     </section>
