@@ -1089,31 +1089,36 @@
 
   // startDanmaku fills the band with flying capsules. Pure decoration:
   // pointer-events none, aria-hidden, skipped for reduced-motion users.
+  // Items are cycled so all 4 lanes always carry traffic, even with a
+  // short feed (admin asked for a full ~4-row strip, not one sparse line).
   function startDanmaku(items) {
     const band = $("#portal-danmaku");
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
     if (reduce) return;
     const ROWS = 4;
-    items.slice(0, 10).forEach(function (m, i) {
+    const TARGET = 12; // capsules spread across the lanes
+    for (let i = 0; i < TARGET; i++) {
+      const m = items[i % items.length];
       const el = document.createElement("span");
       el.className = "dm";
       el.innerHTML = '<span class="dm-from">' + esc(m.from) + "</span>" + esc(m.subject);
       const row = i % ROWS;
-      el.style.top = (row * 34 + 6) + "px";
-      const dur = 18 + Math.random() * 14; // seconds to cross
+      el.style.top = (row * 36 + 4) + "px";
+      const dur = 20 + Math.random() * 14; // seconds to cross
       el.style.animationDuration = dur + "s";
       el.style.animationDelay = (-Math.random() * dur) + "s";
       band.appendChild(el);
-    });
+    }
   }
 
-  // renderShowcaseBar fills the expandable capsule: header previews the
-  // newest letter; expanding lists letters, each expandable to its body.
+  // renderShowcaseBar fills the always-open section: a one-line preview of
+  // the newest letter under the topic title, then the list — each letter
+  // individually expandable to its (truncated) body. The section itself
+  // never collapses (admin polish request).
   function renderShowcaseBar(items) {
-    const wrap = $("#portal-showcase");
     $("#showcase-latest").textContent = items.length
-      ? items[0].from + " — " + items[0].subject
+      ? "Newest — " + items[0].from + " · " + items[0].subject
       : "";
     const list = $("#showcase-list");
     list.innerHTML = items.map(function (m, i) {
@@ -1137,13 +1142,6 @@
       });
     });
   }
-
-  $("#btn-showcase-toggle").addEventListener("click", function () {
-    const wrap = $("#portal-showcase");
-    const open = wrap.classList.toggle("open");
-    $("#showcase-list").classList.toggle("hidden", !open);
-    this.setAttribute("aria-expanded", open ? "true" : "false");
-  });
 
   // Compose "Public showcase" toggle: actionable control, so it only shows
   // once the server explicitly enables the feature (showcase_enabled ===

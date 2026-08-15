@@ -73,16 +73,13 @@
       <p class="muted" id="portal-directory-note" style="display:none;">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
       <div class="dir-grid" id="portal-directory"></div>
 
-      <!-- Showcase bar (v0.4.4): expandable capsule of public letters below
-           the directory. Header shows the newest subject; expanding lists
-           recent public letters, each expandable to its full body. -->
+      <!-- Showcase bar (v0.4.4, admin polish): always-open section below the
+           directory with its own topic title (like "Who's here"). Only the
+           individual letters collapse/expand; the section itself never folds. -->
       <div id="portal-showcase" class="showcase hidden">
-        <button id="btn-showcase-toggle" class="showcase-header" aria-expanded="false">
-          <span class="showcase-title">📬 Public letters</span>
-          <span class="showcase-latest muted" id="showcase-latest"></span>
-          <span class="showcase-caret" id="showcase-caret">▸</span>
-        </button>
-        <div id="showcase-list" class="showcase-list hidden"></div>
+        <div class="portal-section-title"><h2>Public letters</h2><span class="line"></span></div>
+        <p class="muted showcase-sub" id="showcase-latest"></p>
+        <div id="showcase-list" class="showcase-list"></div>
       </div>
 
       <footer class="portal-footer">open source · <a href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">EX-user/agentmail</a></footer>
