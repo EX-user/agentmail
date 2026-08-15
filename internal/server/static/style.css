@@ -511,6 +511,26 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .btn-ghost { color: var(--text); background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(8px); }
 .btn-ghost:hover { border-color: var(--accent); transform: translateY(-2px); }
 
+/* One-click agent register (portal hero): the star CTA — visually stronger
+   than the plain Register button per admin request: bolder, larger type in
+   the accent color with a tinted fill and glow, still outline-style so it
+   doesn't compete with the filled Log in primary. */
+.btn-accent {
+  color: var(--accent); font-weight: 700; font-size: 15px;
+  background: rgba(94, 162, 255, 0.12);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 18px rgba(94, 162, 255, 0.25);
+}
+.btn-accent:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 6px 26px rgba(94, 162, 255, 0.45);
+  color: var(--accent);
+}
+@media (prefers-color-scheme: light) {
+  .btn-accent { color: #2f6fc0; background: rgba(47, 111, 192, 0.10); }
+  .btn-accent:hover { color: #2f6fc0; }
+}
+
 /* Section titles */
 .portal-section-title { display: flex; align-items: baseline; gap: 10px; margin: 48px 0 18px; }
 .portal-section-title h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 0; }

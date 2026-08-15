@@ -106,12 +106,67 @@
 
   // ---- overview ----
 
+  // renderOverviewGrowth adds today / last-7-days stat cards and the 7-day
+  // bar chart to the Overview tab (admin request: the logged-in page should
+  // show at least what the guest portal shows). Growth comes from the public
+  // endpoint, so it works for both admins and regular accounts; failures
+  // degrade silently (no chart, no extra cards).
+  function renderOverviewGrowth(growth) {
+    const chart = $("#ovw-growth-card");
+    if (!growth) { if (chart) chart.classList.add("hidden"); return; }
+    const stats = $("#stats");
+    if (stats) {
+      stats.innerHTML +=
+        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>today</span></div>' +
+        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>last 7 days</span></div>';
+    }
+    if (chart) {
+      drawGrowthDays((growth.days && growth.days.length)
+        ? growth.days
+        : [{ date: "today", count: growth.today }, { date: "week", count: growth.week }],
+        $("#ovw-growth-bars"), $("#ovw-growth-lbls"));
+      chart.classList.remove("hidden");
+    }
+  }
+
+  // renderOverviewPersonal fills the "My activity" row (admin request):
+  // people I've exchanged mail with, received / sent totals, unread. Uses
+  // the account's own endpoints (works for both roles — admins see their own
+  // data, not the system's). limit=1 keeps responses light; we only read
+  // the counters. Silent degrade on any failure.
+  async function renderOverviewPersonal() {
+    const el = $("#personal-stats");
+    if (!el) return;
+    try {
+      const [con, inb, sent] = await Promise.all([
+        api("/api/contacts").catch(function () { return null; }),
+        api("/api/inbox?limit=1").catch(function () { return null; }),
+        api("/api/sent?limit=1").catch(function () { return null; }),
+      ]);
+      const cards = [];
+      if (con) cards.push({ num: con.count, label: "contacts" });
+      if (inb) cards.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
+      if (inb && inb.unread_count) cards.push({ num: inb.unread_count, label: "unread" });
+      if (sent) cards.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      if (!cards.length) { el.textContent = ""; return; }
+      el.innerHTML = cards.map(function (c) {
+        return '<div class="stat"><span class="num">' + esc(c.num) + '</span><span>' + esc(c.label) + "</span></div>";
+      }).join("");
+    } catch (_) {
+      el.textContent = "";
+    }
+  }
+
   async function loadOverview() {
     const stats = $("#stats");
     const recent = $("#recent-activity");
     stats.textContent = "Loading…";
     recent.textContent = "Loading…";
     const s = getSession();
+    // Growth enrichment runs for both roles (public endpoint).
+    const growthP = api("/api/info?query=growth").catch(function () { return null; });
+    // Personal summary (own endpoints) — independent of the role branches.
+    renderOverviewPersonal();
     // Regular accounts can't read /admin/* — calling it would 401 and the
     // api() wrapper would treat that as session-expired. Use the public stats
     // endpoint instead, and skip the global audit log (admin-only) for them.
@@ -121,6 +176,7 @@
         stats.innerHTML =
           '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
           '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>";
+        renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
         stats.textContent = "Error: " + e.message;
@@ -133,6 +189,7 @@
       stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
         '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>";
+      renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
         recent.textContent = "No activity yet.";
@@ -997,7 +1054,7 @@
     });
   }
 
-  // renderGrowthChart draws the 7-day bar chart. Preferred input is
+  // renderGrowthChart draws the portal's 7-day bar chart. Preferred input is
   // growth.days = [{date, count}, ...]; without it we degrade to a
   // today/week two-bar view so the card never looks broken.
   function renderGrowthChart(growthRes) {
@@ -1018,6 +1075,13 @@
       if (unitEl) unitEl.textContent = "growth unavailable right now";
       return;
     }
+    drawGrowthDays(days, barsEl, lblsEl);
+  }
+
+  // drawGrowthDays fills a bar chart (shared by the portal card and the
+  // panel Overview). Labels: short weekday for ISO dates, raw text otherwise.
+  function drawGrowthDays(days, barsEl, lblsEl) {
+    if (!barsEl || !lblsEl) return;
     const max = Math.max.apply(null, days.map(function (d) { return d.count || 0; }).concat([1]));
     barsEl.innerHTML = days.map(function (d, i) {
       const h = Math.max(Math.round((d.count || 0) / max * 100), 3);
@@ -1025,7 +1089,6 @@
         '<span class="tip">' + esc(d.count == null ? "0" : d.count) + "</span></div>";
     }).join("");
     lblsEl.innerHTML = days.map(function (d) {
-      // Label: short weekday for ISO dates, raw text otherwise.
       let lbl = String(d.date || "");
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(lbl);
       if (m) {
@@ -1109,7 +1172,8 @@
 
   // startDanmaku fills the band with flying multi-line cards (admin's
   // clarified design): line 1 from + date, line 2 subject, lines 3-4 body
-  // preview. Two lanes; items cycle so both lanes always carry traffic.
+  // preview. Initial vertical position is randomized within the band
+  // (admin: no fixed lanes), items cycle so traffic stays continuous.
   // Pure decoration: pointer-events none, aria-hidden, skipped entirely for
   // reduced-motion users.
   function startDanmaku(items) {
@@ -1117,8 +1181,10 @@
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
     if (reduce) return;
-    const LANES = 2;
-    const TARGET = 6; // cards across the two lanes
+    const TARGET = 6;
+    // Random top anywhere the card fully fits (card ~106px tall).
+    const bandH = band.clientHeight || 300;
+    const topMax = Math.max(bandH - 116, 8);
     for (let i = 0; i < TARGET; i++) {
       const m = items[i % items.length];
       const el = document.createElement("span");
@@ -1131,7 +1197,7 @@
         '<div class="dm-head">' + esc(m.from) + (dateStr ? " · " + esc(dateStr) : "") + "</div>" +
         '<div class="dm-subj">' + esc(m.subject) + "</div>" +
         '<div class="dm-body">' + esc(m.body || "") + "</div>";
-      el.style.top = (i % LANES === 0 ? 16 : 156) + "px";
+      el.style.top = Math.round(8 + Math.random() * (topMax - 8)) + "px";
       const dur = 30 + Math.random() * 16; // seconds to cross (cards are bigger now)
       el.style.animationDuration = dur + "s";
       el.style.animationDelay = (-Math.random() * dur) + "s";
