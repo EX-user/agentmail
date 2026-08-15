@@ -97,6 +97,46 @@ func TestListShowcaseNewestFirst(t *testing.T) {
 	}
 }
 
+// TestClearShowcase empties the bucket without touching real mail.
+func TestClearShowcase(t *testing.T) {
+	s := newShowcaseStore(t)
+	if _, err := s.CreateAccount("a", "t", false); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := s.CreateAccount("b", "t", false); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := s.Send("a@t", "a", []string{"b@t"}, "real", "mail"); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.TeeShowcase("a@t", nil, "pub", "b"); err != nil {
+			t.Fatalf("tee: %v", err)
+		}
+	}
+	if n, _ := s.CountShowcase(); n != 3 {
+		t.Fatalf("pre-clear count = %d, want 3", n)
+	}
+	if err := s.ClearShowcase(); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if n, _ := s.CountShowcase(); n != 0 {
+		t.Errorf("post-clear count = %d, want 0", n)
+	}
+	// Real mail untouched.
+	msgs, err := s.ReadInbox("b@t", 10)
+	if err != nil || len(msgs) != 1 || msgs[0].Subject != "real" {
+		t.Errorf("real mail affected: %v %+v", err, msgs)
+	}
+	// Bucket still usable after clear.
+	if err := s.TeeShowcase("a@t", nil, "post", "b"); err != nil {
+		t.Fatalf("tee after clear: %v", err)
+	}
+	if n, _ := s.CountShowcase(); n != 1 {
+		t.Errorf("post-clear tee count = %d, want 1", n)
+	}
+}
+
 // TestListShowcaseSkipsCorrupt mirrors the growth-scan tolerance.
 func TestListShowcaseSkipsCorrupt(t *testing.T) {
 	s := newShowcaseStore(t)

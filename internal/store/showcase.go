@@ -103,3 +103,16 @@ func (s *Store) CountShowcase() (int, error) {
 	})
 	return n, err
 }
+
+// ClearShowcase removes every public entry (admin operation, e.g. after bad
+// data lands in the showcase). Recreates the bucket so it is atomically
+// empty afterwards.
+func (s *Store) ClearShowcase() error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bShowcase); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucket(bShowcase)
+		return err
+	})
+}
