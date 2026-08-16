@@ -578,6 +578,7 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 		ByteRate     *int64 `json:"byte_rate"`
 		RegisterRate *int   `json:"register_rate"`
 		FilesTotal   *int64 `json:"files_total_limit"`
+		FileQuota    *int64 `json:"file_quota_per_acct"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -623,10 +624,21 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.FileQuota != nil {
+		if *body.FileQuota < 1<<20 {
+			badRequest(w, "file_quota_per_acct must be >= 1MB")
+			return
+		}
+		if err := s.store.SetFileQuotaPerAcct(*body.FileQuota); err != nil {
+			internalError(w, "set file quota: "+err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"send_rate":         s.store.GetSendRateLimit(),
-		"byte_rate":         s.store.GetByteRateLimit(),
-		"register_rate":     s.store.GetRegisterIPRateLimit(),
-		"files_total_limit": s.store.GetFilesTotalLimit(),
+		"send_rate":          s.store.GetSendRateLimit(),
+		"byte_rate":          s.store.GetByteRateLimit(),
+		"register_rate":      s.store.GetRegisterIPRateLimit(),
+		"files_total_limit":  s.store.GetFilesTotalLimit(),
+		"file_quota_per_acct": s.store.GetFileQuotaPerAcct(),
 	})
 }

@@ -387,13 +387,19 @@ func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, 
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
 	}
-	return map[string]any{
+	resp := map[string]any{
 		"message_id": res.MessageID,
 		"from":       res.From,
 		"to":         res.To,
 		"subject":    res.Subject,
 		"body":       res.Body,
-	}, nil
+	}
+	// Attachments carry the download codes the recipient agent needs
+	// (AC-1.4): GET /api/files/{id}/download?code=... with Basic auth.
+	if len(res.Attachments) > 0 {
+		resp["attachments"] = res.Attachments
+	}
+	return resp, nil
 }
 
 // toolWaitForNewMail blocks until a message newer than since_id appears, or the

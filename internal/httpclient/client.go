@@ -78,6 +78,13 @@ type InboxResponse struct {
 	Count    int              `json:"count"`
 }
 
+type AttachmentInfo struct {
+	ID         string `json:"id"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+	AccessCode string `json:"access_code"`
+}
+
 type MessageResponse struct {
 	MessageID string `json:"message_id"`
 	From      string `json:"from"`
@@ -85,6 +92,7 @@ type MessageResponse struct {
 	Subject   string `json:"subject"`
 	Body      string `json:"body"`
 	ReceivedAt int64 `json:"received_at"`
+	Attachments []AttachmentInfo `json:"attachments"`
 }
 
 // --- API methods ---
