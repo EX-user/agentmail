@@ -202,9 +202,9 @@
 
   async function loadOverview() {
     const recent = $("#recent-activity");
-    $("#stats-system").textContent = "Loading…";
+    $("#stats-system").textContent = t("common.loading");
     $("#stats-activity").textContent = "";
-    recent.textContent = "Loading…";
+    recent.textContent = t("common.loading");
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
     const growthP = api("/api/info?query=growth").catch(function () { return null; });
@@ -225,7 +225,7 @@
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
-        $("#stats-system").textContent = "Error: " + e.message;
+        $("#stats-system").textContent = t("common.error", { msg: e.message });
         recent.textContent = "";
       }
       return;
@@ -249,7 +249,7 @@
           (e.detail ? " — " + esc(e.detail) : "") + "</li>";
       }).join("") + "</ul>";
     } catch (e) {
-      $("#stats-system").textContent = "Error: " + e.message;
+      $("#stats-system").textContent = t("common.error", { msg: e.message });
       recent.textContent = "";
     }
   }
@@ -424,7 +424,7 @@
       toast("Password reset");
     } catch (e) {
       box.className = "callout error";
-      box.textContent = "Error: " + e.message;
+      box.textContent = t("common.error", { msg: e.message });
       box.classList.remove("hidden");
     }
   }
@@ -481,7 +481,7 @@
       sel.innerHTML = "";
       // "All accounts" pseudo-option: iterate every account on Load.
       const all = document.createElement("option");
-      all.value = "__all__"; all.textContent = "All accounts";
+      all.value = "__all__"; all.textContent = t("mail.allAccounts");
       sel.appendChild(all);
       (data.accounts || []).forEach(function (a) {
         const o = document.createElement("option");
@@ -509,7 +509,7 @@
     const detail = $("#mail-detail");
     detail.innerHTML = t("mail.selectHint");
     if (!account) { list.textContent = t("mail.noAccount"); return; }
-    list.textContent = "Loading…";
+    list.textContent = t("common.loading");
     try {
       const s = getSession();
       const isRegular = s && !s.is_admin;
@@ -566,7 +566,7 @@
         list.appendChild(item);
       });
     } catch (e) {
-      list.textContent = "Error: " + e.message;
+      list.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -603,7 +603,7 @@
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
-    detail.textContent = "Loading…";
+    detail.textContent = t("common.loading");
     revealDetailOnMobile("mail-grid", detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
@@ -621,7 +621,7 @@
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
     } catch (e) {
-      detail.textContent = "Error: " + e.message;
+      detail.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -642,7 +642,7 @@
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
     detail.innerHTML = t("mail.selectHint");
-    status.textContent = "Loading…";
+    status.textContent = t("common.loading");
     list.textContent = "";
     // Both admins and regular accounts read their own inbox via /api/inbox
     // (the admin credential satisfies account auth). showInboxDetail uses the
@@ -692,7 +692,7 @@
         if (first && newest) showInboxDetail(newest.id, first, true);
       }
     } catch (e) {
-      list.textContent = "Error: " + e.message;
+      list.textContent = t("common.error", { msg: e.message });
       status.textContent = "";
     }
   }
@@ -732,7 +732,7 @@
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
-    detail.textContent = "Loading…";
+    detail.textContent = t("common.loading");
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -757,7 +757,7 @@
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
     } catch (e) {
-      detail.textContent = "Error: " + e.message;
+      detail.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -817,7 +817,7 @@
 
   async function loadProfile() {
     const status = $("#profile-status");
-    status.textContent = "Loading…";
+    status.textContent = t("common.loading");
     status.className = "muted";
     try {
       const p = await api("/api/profile/self");
@@ -825,7 +825,7 @@
       $("#profile-signature").value = p.signature || "";
       status.textContent = "";
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -849,7 +849,7 @@
       status.textContent = t("set.saved");
       toast("Profile saved");
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     } finally {
       btn.disabled = false;
     }
@@ -928,11 +928,11 @@
       const regStatus = $("#reg-status");
       const regBtn = $("#btn-toggle-registration");
       if (s.registration_enabled) {
-        regStatus.textContent = "Open (anyone can register)";
-        regBtn.textContent = "Disable registration";
+        regStatus.textContent = t("set.regOpen");
+        regBtn.textContent = t("set.regDisable");
       } else {
-        regStatus.textContent = "Closed (only admin can register)";
-        regBtn.textContent = "Enable registration";
+        regStatus.textContent = t("set.regClosed");
+        regBtn.textContent = t("set.regEnable");
       }
       regBtn.classList.remove("hidden");
 
@@ -940,11 +940,11 @@
       const listedStatus = $("#listed-status");
       const listedBtn = $("#btn-toggle-listed");
       if (s.directory_listed_enabled) {
-        listedStatus.textContent = "Open (accounts can list themselves)";
-        listedBtn.textContent = "Disable listing";
+        listedStatus.textContent = t("set.listedOpen");
+        listedBtn.textContent = t("set.listedDisable");
       } else {
-        listedStatus.textContent = "Closed (accounts cannot newly list)";
-        listedBtn.textContent = "Enable listing";
+        listedStatus.textContent = t("set.listedClosed");
+        listedBtn.textContent = t("set.listedEnable");
       }
       listedBtn.classList.remove("hidden");
 
@@ -957,7 +957,7 @@
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
     } catch (e) {
-      $("#reg-status").textContent = "Error: " + e.message;
+      $("#reg-status").textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -1058,7 +1058,7 @@
       $("#limits-status").textContent = "✓ Saved";
       toast("Limits saved");
     } catch (e) {
-      $("#limits-status").textContent = "Error: " + e.message;
+      $("#limits-status").textContent = t("common.error", { msg: e.message });
     }
   });
 
@@ -1662,7 +1662,7 @@
   $("#btn-oneclick-copy").addEventListener("click", function () {
     copyText($("#oneclick-prompt").textContent).then(function (ok) {
       const st = $("#oneclick-copy-status");
-      st.textContent = ok ? "copied!" : "copy failed — select the text manually";
+      st.textContent = ok ? t("common.copied") : t("common.copyManual");
       setTimeout(function () { st.textContent = ""; }, 2000);
     });
   });
@@ -1733,14 +1733,14 @@
   $("#btn-copy-prompt").addEventListener("click", function () {
     const text = $("#agent-prompt").textContent;
     const status = $("#copy-prompt-status");
-    const done = function () { status.textContent = "copied!"; setTimeout(function () { status.textContent = ""; }, 1500); };
+    const done = function () { status.textContent = t("common.copied"); setTimeout(function () { status.textContent = ""; }, 1500); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { status.textContent = "copy failed"; });
+      navigator.clipboard.writeText(text).then(done, function () { status.textContent = t("common.copyFailed"); });
     } else {
       // Fallback: select the pre block.
       const range = document.createRange(); range.selectNode($("#agent-prompt"));
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      try { document.execCommand("copy"); done(); } catch (_) { status.textContent = "copy failed"; }
+      try { document.execCommand("copy"); done(); } catch (_) { status.textContent = t("common.copyFailed"); }
       sel.removeAllRanges();
     }
   });
@@ -1896,7 +1896,7 @@
       // where the admin can sign in with the password just chosen.
       setTimeout(function () { window.location.reload(); }, 1500);
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     }
   });
 
@@ -1985,16 +1985,16 @@
     const bodyText = $("#compose-body").value;
     const status = $("#compose-status");
 
-    if (!toRaw) { status.textContent = "Error: To is required."; return; }
-    if (!subject) { status.textContent = "Error: Subject is required."; return; }
-    if (!bodyText) { status.textContent = "Error: Body is required."; return; }
+    if (!toRaw) { status.textContent = t("compose.needTo"); return; }
+    if (!subject) { status.textContent = t("compose.needSubject"); return; }
+    if (!bodyText) { status.textContent = t("compose.needBody"); return; }
 
     // Comma-separated list of addresses, trimmed, de-duplicated.
     const to = Array.from(new Set(
       toRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     ));
 
-    status.textContent = "Sending…";
+    status.textContent = t("compose.sending");
     try {
       const sender = getSession();
       const sendPath = (sender && !sender.is_admin) ? "/api/send" : "/admin/send";
@@ -2009,14 +2009,14 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      status.textContent = "Sent. message_id=" + res.message_id;
+      status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       loadComposeThread();
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
       toast(t("toast.sendFailed"), "error");
     }
   });
@@ -2039,7 +2039,7 @@
     }
     titleEl.textContent = "Conversation with " + to;
     threadEl.className = "thread-list";
-    threadEl.textContent = "Loading…";
+    threadEl.textContent = t("common.loading");
 
     try {
       const cur = getSession();
@@ -2156,7 +2156,7 @@
     if (full.classList.contains("hidden")) {
       // Expand: load body on first time, then show.
       if (!loaded) {
-        full.textContent = "Loading…";
+        full.textContent = t("common.loading");
         try {
           const cur = getSession();
           const path = (cur && !cur.is_admin)
@@ -2166,7 +2166,7 @@
           full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>";
           item.dataset.loaded = "1";
         } catch (e) {
-          full.textContent = "Error: " + e.message;
+          full.textContent = t("common.error", { msg: e.message });
         }
       }
       full.classList.remove("hidden");
