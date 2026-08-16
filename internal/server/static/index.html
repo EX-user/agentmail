@@ -56,7 +56,34 @@
       <!-- Showcase danmaku (v0.4.4): public letters flying across ~4 rows.
            Pure display, glass capsules, no interaction. Filled by JS from
            /api/info?query=showcase (mock data until the server ships it).
-           Frozen (hidden) under prefers-reduced-motion. -->
+           Frozen (hidden) under prefers-reduced-motion. v0.4.10: dual mode
+           (in-flow band or full-page backdrop) + per-visitor preferences
+           via the ⚙ popover (localStorage; server provides defaults). -->
+      <div class="dm-controls">
+        <button id="btn-dm-gear" class="dm-gear" title="Danmaku settings" aria-label="Danmaku settings">⚙</button>
+        <div id="dm-pref" class="dm-pref hidden">
+          <div class="dm-pref-row"><span class="lbl">Mode</span>
+            <span class="dm-seg" data-pref="mode">
+              <button type="button" data-v="A">Band</button>
+              <button type="button" data-v="B">Backdrop</button>
+            </span>
+          </div>
+          <div class="dm-pref-row"><span class="lbl">Speed</span>
+            <span class="dm-seg" data-pref="speed">
+              <button type="button" data-v="slow">Slow</button>
+              <button type="button" data-v="medium">Med</button>
+              <button type="button" data-v="fast">Fast</button>
+            </span>
+          </div>
+          <div class="dm-pref-row"><span class="lbl">Cards</span>
+            <span class="dm-seg" data-pref="count">
+              <button type="button" data-v="few">Few</button>
+              <button type="button" data-v="normal">Normal</button>
+              <button type="button" data-v="more">More</button>
+            </span>
+          </div>
+        </div>
+      </div>
       <div id="portal-danmaku" class="danmaku" aria-hidden="true"></div>
 
       <div class="portal-section-title"><h2>Live activity</h2><span class="line"></span></div>
@@ -337,6 +364,36 @@
           <button id="btn-clear-showcase" class="row-action">Clear showcase</button>
         </div>
         <p class="muted">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
+      </div>
+      <!-- Danmaku defaults (v0.4.10): site-wide initial values; visitors can
+           override locally from the portal's ⚙ popover (localStorage). -->
+      <div class="settings-section">
+        <h3>Danmaku defaults</h3>
+        <div class="row">
+          <label>Mode:
+            <select id="dm-default-mode">
+              <option value="A">Band (in-flow)</option>
+              <option value="B">Backdrop (full page)</option>
+            </select>
+          </label>
+          <label>Speed:
+            <select id="dm-default-speed">
+              <option value="slow">Slow</option>
+              <option value="medium">Medium</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+          <label>Cards:
+            <select id="dm-default-count">
+              <option value="few">Few</option>
+              <option value="normal">Normal</option>
+              <option value="more">More</option>
+            </select>
+          </label>
+          <button id="btn-save-danmaku" class="row-action">Save defaults</button>
+          <span id="danmaku-admin-status" class="muted"></span>
+        </div>
+        <p class="muted">Initial danmaku style for visitors who haven't set their own preference.</p>
       </div>
       <div class="settings-section">
         <h3>Rate limits</h3>

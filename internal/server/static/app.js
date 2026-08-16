@@ -817,10 +817,41 @@
       $("#send-rate-input").value = s.send_rate;
       $("#byte-rate-input").value = Math.round(s.byte_rate / 1048576 * 100) / 100; // bytes → MB
       $("#register-rate-input").value = s.register_rate;
+
+      // Danmaku defaults (v0.4.10). Absent fields keep the built-in default.
+      if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
+      if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
+      if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
     } catch (e) {
       $("#reg-status").textContent = "Error: " + e.message;
     }
   }
+
+  // Save danmaku site defaults (v0.4.10): visitors who haven't set their own
+  // preference start from these.
+  $("#btn-save-danmaku").addEventListener("click", async function () {
+    const status = $("#danmaku-admin-status");
+    const btn = $("#btn-save-danmaku");
+    btn.disabled = true;
+    status.textContent = "Saving…";
+    try {
+      await api("/admin/set-danmaku", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: $("#dm-default-mode").value,
+          speed: $("#dm-default-speed").value,
+          count: $("#dm-default-count").value,
+        }),
+      });
+      status.textContent = "Saved.";
+      toast("Danmaku defaults saved", "success");
+    } catch (e) {
+      status.textContent = "Save failed: " + e.message;
+      toast("Save danmaku defaults failed", "error");
+    }
+    btn.disabled = false;
+  });
 
   $("#btn-toggle-registration").addEventListener("click", async function () {
     try {
@@ -1028,7 +1059,7 @@
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
     applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
-    loadShowcase();
+    loadShowcase(setRes);
     spawnPortalParticles();
   }
 
@@ -1162,9 +1193,19 @@
     { from: "vega@moa.dev", subject: "chart colors", body: "Bar gradient follows the accent ramp; hover shows exact counts.", ts: null },
   ];
 
-  async function loadShowcase() {
+  async function loadShowcase(setRes) {
     const wrap = $("#portal-showcase");
     if (!wrap) return;
+
+    // Danmaku site defaults from public settings (absent fields fall back
+    // to built-ins inside dmEffective()).
+    if (setRes) {
+      dmServerDefaults = {
+        mode: setRes.danmaku_default_mode,
+        speed: setRes.danmaku_default_speed,
+        count: setRes.danmaku_default_count,
+      };
+    }
 
     // Real data from /api/info?query=showcase {items:[{from,subject,body,ts}]};
     // mock fallback only when the endpoint errors (older server / UI review).
@@ -1187,35 +1228,62 @@
     renderShowcaseBar(items);
   }
 
-  // startDanmaku fills the band with flying multi-line cards (admin's
-  // clarified design): line 1 from + date, line 2 subject, lines 3-4 body
-  // preview. Optimization pass (admin feedback: heavy overlap on mobile,
-  // differing perceived speed):
-  // - speed is defined in px/second and duration derived from the actual
-  //   crossing distance, so narrow and wide viewports share the same tempo
-  //   (previously a fixed duration made mobile visibly slower);
-  // - vertical placement is slotted (2 slots) with jitter inside each slot,
-  //   and cards are staggered evenly across the cycle, so same-slot cards
-  //   rarely collide; mobile also flies fewer cards (less crowding).
-  // Pure decoration: pointer-events none, aria-hidden, skipped entirely for
-  // reduced-motion users.
+  // ---- danmaku preferences (v0.4.10) ----
+  // Effective danmaku style = visitor override (localStorage) > server
+  // default (settings) > built-in. Guests tune it from the ⚙ popover without
+  // logging in; panel Settings configures the site-wide default.
+  const DM_PREF_KEY = "agentmail_danmaku";
+  const DM_SPEEDS = { slow: 32, medium: 52, fast: 78 }; // px/second
+  const DM_COUNTS = { few: 3, normal: 6, more: 10 };
+  let dmServerDefaults = null; // {mode, speed, count} from public settings
+  let dmLastItems = null;      // last showcase items, for live re-render
+
+  function dmReadLocal() {
+    try { return JSON.parse(localStorage.getItem(DM_PREF_KEY) || "null"); }
+    catch (_) { return null; }
+  }
+  function dmEffective() {
+    const local = dmReadLocal() || {};
+    const srv = dmServerDefaults || {};
+    const pick = function (v, d) { return v === "A" || v === "B" || DM_SPEEDS[v] || DM_COUNTS[v] ? v : d; };
+    return {
+      mode: pick(local.mode, pick(srv.mode, "A")),
+      speed: pick(local.speed, pick(srv.speed, "medium")),
+      count: pick(local.count, pick(srv.count, "normal")),
+    };
+  }
+
+  // startDanmaku fills the band (mode A) or the viewport backdrop (mode B)
+  // with flying multi-line cards: line 1 from + date, line 2 subject, lines
+  // 3-4 body preview. Speed is px/second (same tempo on any viewport width);
+  // placement is slotted and phase-staggered to avoid pile-ups. Pure
+  // decoration: pointer-events none, aria-hidden, skipped entirely for
+  // reduced-motion users (mode B especially — dim static cards would just
+  // smudge the page).
   function startDanmaku(items) {
     const band = $("#portal-danmaku");
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
-    if (reduce) return;
+    dmLastItems = items;
+    if (reduce) { band.classList.remove("bg-mode"); return; }
+    const prefs = dmEffective();
+    band.classList.toggle("bg-mode", prefs.mode === "B");
+    const bg = prefs.mode === "B";
     const isNarrow = window.innerWidth < 520;
     const cardW = isNarrow ? 280 : 320;
-    const TARGET = isNarrow ? 4 : 6;
-    const SLOTS = 2;
-    const bandH = band.clientHeight || 300;
-    // Per-slot vertical room: card (~106px) must fully fit inside its slot.
+    const baseCount = DM_COUNTS[prefs.count] || 6;
+    // Mobile flies fewer cards; the backdrop hosts more slots than the band.
+    let target = Math.round(baseCount * (isNarrow ? 0.6 : 1));
+    const bandH = bg ? window.innerHeight : (band.clientHeight || 300);
+    const slots = bg
+      ? Math.min(6, Math.max(3, Math.floor(bandH / 150)))
+      : 2;
+    if (bg) target = Math.max(target, slots); // every backdrop slot gets traffic
+    target = Math.min(target, isNarrow ? 6 : 12);
     const slotTop = 8;
-    const slotH = Math.max(Math.floor((bandH - 16) / SLOTS), 110);
+    const slotH = Math.max(Math.floor((bandH - 16) / slots), 110);
     const slotJitter = Math.max(slotH - 116, 0);
-    // Even phase spread across the cycle keeps same-slot cards apart.
-    const phase = (i) => (i / TARGET);
-    for (let i = 0; i < TARGET; i++) {
+    for (let i = 0; i < target; i++) {
       const m = items[i % items.length];
       const el = document.createElement("span");
       el.className = "dm";
@@ -1227,17 +1295,48 @@
         '<div class="dm-head">' + esc(m.from) + (dateStr ? " · " + esc(dateStr) : "") + "</div>" +
         '<div class="dm-subj">' + esc(m.subject) + "</div>" +
         '<div class="dm-body">' + esc(m.body || "") + "</div>";
-      const slot = Math.floor(i / Math.ceil(TARGET / SLOTS)) % SLOTS;
+      const slot = i % slots;
       el.style.top = Math.round(slotTop + slot * slotH + Math.random() * slotJitter) + "px";
-      // Same perceived speed everywhere: px/s -> duration from real distance.
-      const speed = 42 + Math.random() * 22; // px/s, slight variety
+      const speed = (DM_SPEEDS[prefs.speed] || 52) * (0.9 + Math.random() * 0.3);
       const dist = window.innerWidth + cardW;
       const dur = dist / speed;
       el.style.animationDuration = dur.toFixed(2) + "s";
-      el.style.animationDelay = (-(phase(i) + Math.random() * 0.12) * dur).toFixed(2) + "s";
+      el.style.animationDelay = (-(i / target + Math.random() * 0.1) * dur).toFixed(2) + "s";
       band.appendChild(el);
     }
   }
+
+  // ⚙ popover: segmented controls write localStorage and re-render live.
+  function dmSyncPopover() {
+    const prefs = dmEffective();
+    $$(".dm-seg").forEach(function (seg) {
+      const key = seg.dataset.pref;
+      $$(".dm-seg[data-pref=" + key + "] button").forEach(function (b) {
+        b.classList.toggle("on", b.dataset.v === prefs[key]);
+      });
+    });
+  }
+  $("#btn-dm-gear").addEventListener("click", function (e) {
+    e.stopPropagation();
+    const panel = $("#dm-pref");
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) dmSyncPopover();
+  });
+  document.addEventListener("click", function (e) {
+    const panel = $("#dm-pref");
+    if (panel.classList.contains("hidden")) return;
+    if (!e.target.closest(".dm-pref") && !e.target.closest(".dm-gear")) panel.classList.add("hidden");
+  });
+  $$(".dm-seg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      const key = b.closest(".dm-seg").dataset.pref;
+      const cur = dmReadLocal() || {};
+      cur[key] = b.dataset.v;
+      try { localStorage.setItem(DM_PREF_KEY, JSON.stringify(cur)); } catch (_) {}
+      dmSyncPopover();
+      if (dmLastItems && dmLastItems.length) startDanmaku(dmLastItems);
+    });
+  });
 
   // renderShowcaseBar fills the always-open section: a one-line preview of
   // the newest letter under the topic title, then the list — each letter
