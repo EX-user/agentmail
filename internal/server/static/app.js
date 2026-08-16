@@ -563,11 +563,20 @@
     }
   }
 
+  // revealDetailOnMobile: on narrow screens the detail pane sits below the
+  // list — bring it into view when a message is opened, so users don't miss
+  // that anything happened. No-op on desktop (PC layout unaffected).
+  function revealDetailOnMobile(detailEl) {
+    if (window.innerWidth > 800 || !detailEl || !detailEl.scrollIntoView) return;
+    try { detailEl.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+  }
+
   async function showDetail(id, item) {
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
     detail.textContent = "Loading…";
+    revealDetailOnMobile(detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
       item.classList.remove("unread");
@@ -688,6 +697,7 @@
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.textContent = "Loading…";
+    revealDetailOnMobile(detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);

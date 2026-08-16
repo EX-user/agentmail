@@ -285,6 +285,14 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 
 .mail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 800px) { .mail-grid { grid-template-columns: 1fr; } }
+/* Inbox/Mail mobile pass (v0.4.11): stacked panes shouldn't force two
+   300px-min blocks — compact the list pane and cap heights so the detail
+   area is reachable; tighter list rows fit more per screen. PC untouched. */
+@media (max-width: 800px) {
+  .pane { min-height: 160px; max-height: 46vh; }
+  .mail-item { padding: 8px; }
+  .mail-item .meta, .mail-item .prev { font-size: 11px; }
+}
 .pane {
   background: var(--panel);
   border: 1px solid var(--border);
