@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -250,6 +251,20 @@ func (s *Store) SetRegistrationEnabled(enabled bool) error {
 		}
 		return mb.Put(mRegistrationEnabled, []byte(v))
 	})
+}
+
+// DBSizeBytes returns the current size of the bbolt database file via a
+// filesystem stat. 0 if unavailable (the field is informational).
+func (s *Store) DBSizeBytes() int64 {
+	p := s.db.Path()
+	if p == "" {
+		return 0
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		return 0
+	}
+	return fi.Size()
 }
 
 // metaBool reads a boolean meta flag; absent = def.
