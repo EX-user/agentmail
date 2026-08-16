@@ -350,6 +350,8 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		"send_rate":                 s.store.GetSendRateLimit(),
 		"byte_rate":                 s.store.GetByteRateLimit(),
 		"register_rate":             s.store.GetRegisterIPRateLimit(),
+		"files_total_limit":         s.store.GetFilesTotalLimit(),
+		"file_quota_per_acct":       s.store.GetFileQuotaPerAcct(),
 	})
 }
 

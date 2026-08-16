@@ -107,6 +107,8 @@ func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 		"send_rate_limit":            s.store.GetSendRateLimit(),
 		"byte_rate_limit":            s.store.GetByteRateLimit(),
 		"register_rate_limit":        s.store.GetRegisterIPRateLimit(),
+		"files_total_limit":          s.store.GetFilesTotalLimit(),
+		"file_quota_per_acct":        s.store.GetFileQuotaPerAcct(),
 	})
 }
 
