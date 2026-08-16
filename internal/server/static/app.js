@@ -174,6 +174,25 @@
     }
   }
 
+  // fmtBytes renders a byte count as a compact human size (12.4 MB).
+  function fmtBytes(n) {
+    if (typeof n !== "number" || isNaN(n) || n < 0) return null;
+    if (n < 1024) return n + " B";
+    const units = ["KB", "MB", "GB", "TB"];
+    let v = n;
+    for (let i = 0; i < units.length; i++) {
+      v = v / 1024;
+      if (v < 1024 || i === units.length - 1) return (Math.round(v * 10) / 10) + " " + units[i];
+    }
+  }
+
+  // storageCard renders the db size stat card when the public stats endpoint
+  // reports db_size_bytes (absent on older servers — card just doesn't show).
+  function storageCard(sizeBytes) {
+    const human = fmtBytes(sizeBytes);
+    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>storage</span></div>' : "";
+  }
+
   async function loadOverview() {
     const stats = $("#stats");
     const recent = $("#recent-activity");
@@ -182,6 +201,8 @@
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
     const growthP = api("/api/info?query=growth").catch(function () { return null; });
+    // Storage size comes from the public stats payload (both roles see it).
+    const statsP = api("/api/info?query=stats").catch(function () { return null; });
     // Personal summary (own endpoints) — independent of the role branches.
     renderOverviewPersonal();
     // Regular accounts can't read /admin/* — calling it would 401 and the
@@ -192,7 +213,8 @@
         const d = await api("/api/info?query=stats");
         stats.innerHTML =
           '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
-          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>";
+          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>" +
+          storageCard(d.db_size_bytes);
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
@@ -203,9 +225,11 @@
     }
     try {
       const s = await api("/admin/stats");
+      const pub = await statsP;
       stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
-        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>";
+        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>" +
+        storageCard(pub && pub.db_size_bytes);
       renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {

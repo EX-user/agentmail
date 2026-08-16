@@ -199,8 +199,13 @@
       </div>
       <!-- Personal summary (v0.4.8+, admin feedback: one row of boxes was
            ugly): a single grouped card — "All time" and "Recent traffic"
-           columns of compact stat rows. -->
+           columns of compact stat rows. Subtitle clarifies these are the
+           viewer's own numbers, not system-wide. -->
       <div class="portal-card hidden" id="personal-card" style="max-width:640px; margin-top:16px;">
+        <div class="chart-head" style="margin-bottom:8px;">
+          <span class="t">My activity</span>
+          <span class="u">your personal mail stats — not system-wide</span>
+        </div>
         <div class="my-activity-grid">
           <div>
             <h4 class="my-group-title">All time</h4>
