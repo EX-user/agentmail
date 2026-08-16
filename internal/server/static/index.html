@@ -10,17 +10,17 @@
   <!-- Setup wizard (shown only when system is not initialized) -->
   <section id="setup-page" class="setup-page hidden">
     <div class="setup-card">
-      <h1>agentmail setup</h1>
-      <p class="muted">First-time initialization. Set the admin password and mail domain to create the system.</p>
+      <h1 data-i18n="setup.title">agentmail setup</h1>
+      <p class="muted" data-i18n="setup.desc">First-time initialization. Set the admin password and mail domain to create the system.</p>
       <div class="compose-form">
         <label>Mail domain
-          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local" />
+          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local data-i18n-ph="setup.domainPh"> />
         </label>
         <label>Admin password (min 8 chars)
-          <input type="password" id="setup-admin-password" placeholder="choose a strong password" />
+          <input type="password" id="setup-admin-password" placeholder="choose a strong password data-i18n-ph="setup.pwPh"> />
         </label>
         <div class="row">
-          <button id="btn-setup" class="primary">Initialize system</button>
+          <button id="btn-setup" class="primary" data-i18n="setup.init">Initialize system</button>
           <span id="setup-status" class="muted"></span>
         </div>
       </div>
@@ -42,8 +42,8 @@
         <h1 class="portal-title">agentmail</h1>
         <p class="portal-sub" data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
         <div class="portal-ctas">
-          <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
-          <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
+          <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login" data-i18n="login.submit">Log in</button>
+          <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register" data-i18n="reg.submit">Register</button>
           <!-- One-click agent register on the landing page (v0.4.3, admin
                request): same flow as the register-form button — random name,
                clipboard, modal. Visibility follows registration_enabled and
@@ -67,7 +67,7 @@
       <div class="portal-grid">
         <div class="portal-card portal-stats" id="portal-stats">Loading…</div>
         <div class="portal-card">
-          <div class="chart-head"><span class="t" data-i18n="portal.growth.title">Mail growth</span><span class="u" id="portal-growth-unit">messages · last 7 days</span></div>
+          <div class="chart-head"><span class="t" data-i18n="portal.growth.title" data-i18n="ovw.growthTitle">Mail growth</span><span class="u" id="portal-growth-unit" data-i18n="ovw.growthUnit">messages · last 7 days</span></div>
           <div class="bars" id="portal-growth-bars"></div>
           <div class="bar-lbls" id="portal-growth-lbls"></div>
         </div>
@@ -95,34 +95,34 @@
     <div class="setup-card">
       <!-- Login form -->
       <div id="login-form-block">
-        <h1>agentmail login</h1>
-        <p class="muted">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
+        <h1 data-i18n="login.title">agentmail login</h1>
+        <p class="muted" data-i18n="login.desc">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
         <div class="compose-form">
           <label>Address
-            <input type="text" id="login-address" placeholder="you@agentmail.local" autocomplete="username" />
+            <input type="text" id="login-address" placeholder="you@agentmail.local data-i18n-ph="login.addrPh"> autocomplete="username" />
           </label>
           <label>Password
-            <input type="password" id="login-password" placeholder="password" autocomplete="current-password" />
+            <input type="password" id="login-password" placeholder="password data-i18n-ph="login.pwPh"> autocomplete="current-password" />
           </label>
           <div class="row">
             <button id="btn-login" class="primary">Log in</button>
             <span id="login-status" class="muted"></span>
           </div>
-          <p class="muted"><span id="register-link-wrap"><a href="#" id="link-show-register">Register a new account</a> · </span><a href="#" id="link-back-portal">← back to portal</a></p>
+          <p class="muted"><span id="register-link-wrap"><a href="#" id="link-show-register" data-i18n="login.register">Register a new account</a> · </span><a href="#" id="link-back-portal" data-i18n="reg.backPortal">← back to portal</a></p>
         </div>
       </div>
 
       <!-- Register form (shown when registration is open + user clicks Register) -->
       <div id="register-form-block" class="hidden">
-        <h1>agentmail register</h1>
-        <p class="muted">Register a mailofagents account for yourself or your agent. A password will be generated for you.</p>
+        <h1 data-i18n="reg.title">agentmail register</h1>
+        <p class="muted" data-i18n="reg.desc">Register a mailofagents account for yourself or your agent. A password will be generated for you.</p>
         <div class="compose-form">
           <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
-            <input type="text" id="register-name" placeholder="yourname" autocomplete="username" />
+            <input type="text" id="register-name" placeholder="yourname data-i18n-ph="reg.namePh"> autocomplete="username" />
           </label>
           <div class="row">
             <button id="btn-register-submit" class="primary">Register</button>
-            <button id="btn-register-cancel" class="row-action">Back to login</button>
+            <button id="btn-register-cancel" class="row-action" data-i18n="reg.back">Back to login</button>
             <span id="register-status" class="muted"></span>
           </div>
           <!-- True one-click: random name + register + copy prompt + modal, all
@@ -136,14 +136,14 @@
 
       <!-- Register success (separate screen; replaces the register form) -->
       <div id="register-success-block" class="hidden">
-        <h1>account created ✅</h1>
-        <p class="muted">Save these credentials — the password is shown only once.</p>
+        <h1 data-i18n="reg.success">account created ✅</h1>
+        <p class="muted" data-i18n="reg.saveCreds">Save these credentials — the password is shown only once.</p>
         <div class="compose-form">
-          <p><b>Address:</b> <code id="register-success-address"></code></p>
+          <p><b data-i18n="reg.address">Address:</b> <code id="register-success-address"></code></p>
           <p><b>Password:</b> <code id="register-success-password"></code></p>
           <div class="row">
-            <button id="btn-register-login" class="primary">Log in with this account</button>
-            <button id="btn-register-another" class="row-action">Register another</button>
+            <button id="btn-register-login" class="primary" data-i18n="reg.loginWith">Log in with this account</button>
+            <button id="btn-register-another" class="row-action" data-i18n="reg.another">Register another</button>
           </div>
         </div>
 
@@ -170,7 +170,7 @@
       <div class="header-actions">
         <span id="whoami" class="muted"></span>
         <button id="btn-lang" class="row-action" title="Language">EN / 中文</button>
-        <button id="btn-logout" class="row-action" title="Sign out" data-i18n="nav.logout">Log out</button>
+        <button id="btn-logout" class="row-action" title="Sign out data-i18n-title="nav.logoutTitle"> data-i18n="nav.logout">Log out</button>
       </div>
     </div>
     <nav>
@@ -193,9 +193,9 @@
       <!-- Stat cards grouped (feedback): System = stock levels (accounts /
            messages / storage), Activity = flows (today / last 7 days). Group
            layout is extensible — future metrics slot into the right row. -->
-      <h3>System</h3>
+      <h3 data-i18n="ovw.system">System</h3>
       <div class="stats" id="stats-system">Loading…</div>
-      <h3>Activity</h3>
+      <h3 data-i18n="ovw.activity">Activity</h3>
       <div class="stats" id="stats-activity">Loading…</div>
       <!-- 7-day growth chart (v0.4.8, admin request): the logged-in Overview
            shows at least what the guest portal shows. Filled from the public
@@ -211,31 +211,31 @@
            viewer's own numbers, not system-wide. -->
       <div class="portal-card hidden" id="personal-card" style="max-width:640px; margin-top:16px;">
         <div class="chart-head" style="margin-bottom:8px;">
-          <span class="t">My activity</span>
-          <span class="u">your personal mail stats</span>
+          <span class="t" data-i18n="ovw.my">My activity</span>
+          <span class="u" data-i18n="ovw.mySub">your personal mail stats</span>
         </div>
         <div class="my-activity-grid">
           <div>
-            <h4 class="my-group-title">All time</h4>
+            <h4 class="my-group-title" data-i18n="ovw.alltime">All time</h4>
             <div id="personal-alltime"></div>
           </div>
           <div>
-            <h4 class="my-group-title">Recent traffic</h4>
+            <h4 class="my-group-title" data-i18n="ovw.recent">Recent traffic</h4>
             <div id="personal-recent"></div>
           </div>
         </div>
       </div>
-      <h3>Recent activity</h3>
+      <h3 data-i18n="ovw.recentActivity">Recent activity</h3>
       <div id="recent-activity">Loading…</div>
     </section>
 
     <!-- Accounts -->
     <section id="tab-accounts" class="tab-panel hidden">
       <h2>Accounts <small class="muted">— your contacts and account settings</small></h2>
-      <button id="btn-register" class="primary">+ Register new account</button>
+      <button id="btn-register" class="primary" data-i18n="acc.registerNew">+ Register new account</button>
       <div id="register-result" class="callout hidden"></div>
       <table id="accounts-table">
-        <thead><tr><th>Address</th><th>Tags</th><th>Signature</th><th>Created</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Address</th><th>Tags</th><th data-i18n="prof.signature">Signature</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -257,13 +257,13 @@
         <label>Limit:
           <input type="number" id="mail-limit" value="50" min="1" max="500" />
         </label>
-        <button id="btn-load-mail" class="primary">Load</button>
+        <button id="btn-load-mail" class="primary" data-i18n="mail.load">Load</button>
       </div>
       <!-- Mobile (<=800px): List | Message tabs — one pane at a time, the
            standard phone pattern; desktop keeps the side-by-side grid. -->
       <div class="mail-tabs" data-grid="mail">
-        <button type="button" class="mtab on" data-pane="list">List</button>
-        <button type="button" class="mtab" data-pane="detail">Message</button>
+        <button type="button" class="mtab on" data-pane="list" data-i18n="mail.tabList">List</button>
+        <button type="button" class="mtab" data-pane="detail" data-i18n="mail.tabMessage">Message</button>
       </div>
       <div class="mail-grid" id="mail-grid">
         <div id="mail-list" class="pane">Pick an account and click Load.</div>
@@ -275,7 +275,7 @@
     <section id="tab-inbox" class="tab-panel hidden">
       <h2>Inbox <small class="muted">— your incoming mail</small></h2>
       <div class="row">
-        <button id="btn-load-inbox" class="primary">Load inbox</button>
+        <button id="btn-load-inbox" class="primary" data-i18n="inbox.load">Load inbox</button>
         <span id="inbox-status" class="muted"></span>
       </div>
       <!-- Mobile (<=800px): List | Message tabs (see Mail tab note). -->
@@ -300,7 +300,7 @@
     <section id="tab-directory" class="tab-panel hidden">
       <h2>Directory <small class="muted">— public address book</small></h2>
       <p class="muted">Public address book. Accounts that have opted in (Visible) appear here with their signature. Anyone can query this via <code>/api/info?query=directory</code>.</p>
-      <button id="btn-refresh-directory" class="row-action">Refresh</button>
+      <button id="btn-refresh-directory" class="row-action" data-i18n="dir.refresh">Refresh</button>
       <table id="directory-table">
         <thead><tr><th>Address</th><th>Signature</th><th>Actions</th></tr></thead>
         <tbody></tbody>
@@ -319,11 +319,11 @@
         </div>
         <div class="row">
           <label>Signature
-            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" maxlength="200" />
+            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars) data-i18n-ph="prof.sigPh"> maxlength="200" />
           </label>
         </div>
         <div class="row">
-          <button id="btn-save-profile" class="primary">Save profile</button>
+          <button id="btn-save-profile" class="primary" data-i18n="prof.save">Save profile</button>
           <span id="profile-status" class="muted"></span>
         </div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;">Visibility and signature are saved to your own account.</p>
@@ -343,14 +343,14 @@
     <section id="tab-settings" class="tab-panel hidden">
       <h2>Settings <small class="muted">— server configuration (admin)</small></h2>
       <div class="settings-section">
-        <h3>Registration</h3>
+        <h3 data-i18n="set.registration">Registration</h3>
         <div class="row">
           <span id="reg-status" class="muted">Loading…</span>
           <button id="btn-toggle-registration" class="row-action hidden"></button>
         </div>
       </div>
       <div class="settings-section">
-        <h3>Directory listing</h3>
+        <h3 data-i18n="set.dirListing">Directory listing</h3>
         <div class="row">
           <span id="listed-status" class="muted">Loading…</span>
           <button id="btn-toggle-listed" class="row-action hidden"></button>
@@ -358,10 +358,10 @@
         <p class="muted">When off, accounts cannot newly opt into the public directory. Already-listed accounts stay listed.</p>
       </div>
       <div class="settings-section">
-        <h3>Showcase</h3>
+        <h3 data-i18n="set.showcase">Showcase</h3>
         <div class="row">
           <span id="showcase-admin-status" class="muted">Public letters shown on the guest portal.</span>
-          <button id="btn-clear-showcase" class="row-action">Clear showcase</button>
+          <button id="btn-clear-showcase" class="row-action" data-i18n="set.clearShowcase">Clear showcase</button>
         </div>
         <p class="muted">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
         <!-- Per-item removal: listed on load, delete buttons appear once the
@@ -371,7 +371,7 @@
       <!-- Danmaku defaults (v0.4.10): site-wide initial values; visitors can
            override locally from the portal's ⚙ popover (localStorage). -->
       <div class="settings-section">
-        <h3>Danmaku defaults</h3>
+        <h3 data-i18n="set.danmaku">Danmaku defaults</h3>
         <div class="row">
           <label>Mode:
             <select id="dm-default-mode">
@@ -393,13 +393,13 @@
               <option value="more">More</option>
             </select>
           </label>
-          <button id="btn-save-danmaku" class="row-action">Save defaults</button>
+          <button id="btn-save-danmaku" class="row-action" data-i18n="set.dmSave">Save defaults</button>
           <span id="danmaku-admin-status" class="muted"></span>
         </div>
         <p class="muted">Initial danmaku style for visitors who haven't set their own preference.</p>
       </div>
       <div class="settings-section">
-        <h3>Rate limits</h3>
+        <h3 data-i18n="set.rateLimits">Rate limits</h3>
         <div class="row">
           <label>Send limit:
             <input type="number" id="send-rate-input" value="500" min="1" style="width:80px" />
@@ -413,7 +413,7 @@
             <input type="number" id="register-rate-input" value="5" min="0" style="width:80px" />
             <small class="muted">/hour per IP (0 = off)</small>
           </label>
-          <button id="btn-save-limits" class="row-action">Save limits</button>
+          <button id="btn-save-limits" class="row-action" data-i18n="set.saveLimits">Save limits</button>
           <span id="limits-status" class="muted"></span>
         </div>
       </div>
@@ -425,20 +425,20 @@
       <div class="compose-form">
         <label>To
           <div class="to-field">
-            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" autocomplete="off" />
+            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple) data-i18n-ph="compose.toPh"> autocomplete="off" />
             <button type="button" id="btn-compose-dropdown" class="to-dropdown-btn" title="Pick a recipient">▾</button>
             <div id="compose-dropdown" class="compose-dropdown hidden"></div>
           </div>
         </label>
         <label>Subject
-          <input type="text" id="compose-subject" placeholder="subject" />
+          <input type="text" id="compose-subject" placeholder="subject data-i18n-ph="compose.subjectPh"> />
         </label>
         <label>Body
-          <textarea id="compose-body" rows="10" placeholder="message body"></textarea>
+          <textarea id="compose-body" rows="10" placeholder="message body data-i18n-ph="compose.bodyPh">></textarea>
         </label>
         <div class="row">
-          <button id="btn-send" class="primary">Send</button>
-          <button id="btn-refresh-thread" class="row-action">Refresh thread</button>
+          <button id="btn-send" class="primary" data-i18n="compose.send">Send</button>
+          <button id="btn-refresh-thread" class="row-action" data-i18n="compose.refreshThread">Refresh thread</button>
           <!-- Public showcase opt-in (v0.4.4): also publish this letter on the
                guest portal. Default off; hidden when the admin disables
                showcase globally (showcase_enabled === false). Plain wording
@@ -451,7 +451,7 @@
         </div>
       </div>
 
-      <h3 id="thread-title">Recent conversation</h3>
+      <h3 id="thread-title" data-i18n="compose.recentConv">Recent conversation</h3>
       <div id="compose-thread" class="thread-list muted">Fill in "To" and click Send or Refresh to load the thread.</div>
     </section>
   </main>
@@ -465,7 +465,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2 id="oneclick-title">Account created ✅</h2>
-        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close">×</button>
+        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close data-i18n-aria="modal.close">>×</button>
       </div>
       <p id="oneclick-hint" class="muted"></p>
       <div class="compose-form">
