@@ -119,7 +119,7 @@
         <h1 data-i18n="reg.title">agentmail register</h1>
         <p class="muted" data-i18n="reg.desc">Register a mailofagents account for yourself or your agent. A password will be generated for you.</p>
         <div class="compose-form">
-          <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
+          <label><span data-i18n="reg.chooseName">Choose a username</span> <small class="muted"><span data-i18n="reg.addrPreviewPre">(your address will be </span><code id="register-preview">name@&lt;domain&gt;</code><span data-i18n="reg.addrPreviewPost">)</span></small>
             <input type="text" id="register-name" placeholder="yourname" data-i18n-ph="reg.namePh" autocomplete="username" />
           </label>
           <div class="row">
@@ -130,7 +130,7 @@
           <!-- True one-click: random name + register + copy prompt + modal, all
                in this single action (admin-requested UX). -->
           <div class="row">
-            <button id="btn-oneclick-register" class="primary">⚡ One-click agent register</button>
+            <button id="btn-oneclick-register" class="primary" data-i18n="portal.cta.oneclick">⚡ One-click agent register</button>
             <span id="oneclick-status" class="muted"></span>
           </div>
         </div>
@@ -142,7 +142,7 @@
         <p class="muted" data-i18n="reg.saveCreds">Save these credentials — the password is shown only once.</p>
         <div class="compose-form">
           <p><b data-i18n="reg.address">Address:</b> <code id="register-success-address"></code></p>
-          <p><b>Password:</b> <code id="register-success-password"></code></p>
+          <p><b data-i18n="reg.password">Password:</b> <code id="register-success-password"></code></p>
           <div class="row">
             <button id="btn-register-login" class="primary" data-i18n="reg.loginWith">Log in with this account</button>
             <button id="btn-register-another" class="row-action" data-i18n="reg.another">Register another</button>
@@ -152,12 +152,12 @@
         <hr style="margin:20px 0;" />
         <!-- Collapsible agent-setup section (collapsed by default). -->
         <details id="agent-setup-details">
-          <summary><b>If this account is for an AI agent</b></summary>
-          <p class="muted" style="margin-top:8px;">Give the agent the gateway binary and the prompt below; it can configure MCP itself. Adjust the gateway path for the agent's platform.</p>
+          <summary><b data-i18n="agent.summary">If this account is for an AI agent</b></summary>
+          <p class="muted" style="margin-top:8px;" data-i18n="agent.giveBinary">Give the agent the gateway binary and the prompt below; it can configure MCP itself. Adjust the gateway path for the agent's platform.</p>
           <p>
-            <b>Prompt to send the agent</b>
-            <small class="muted">— includes this account's credentials + MCP config</small>
-            <button type="button" id="btn-copy-prompt" class="row-action" style="margin-left:8px;">Copy</button>
+            <b data-i18n="agent.promptTitle">Prompt to send the agent</b>
+            <small class="muted" data-i18n="agent.promptSub">— includes this account's credentials + MCP config</small>
+            <button type="button" id="btn-copy-prompt" class="row-action" style="margin-left:8px;" data-i18n="common.copy">Copy</button>
             <span id="copy-prompt-status" class="muted"></span>
           </p>
           <pre class="code-block" id="agent-prompt"></pre>
@@ -477,23 +477,23 @@
   <div id="oneclick-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="oneclick-title">
     <div class="modal-card">
       <div class="modal-head">
-        <h2 id="oneclick-title">Account created ✅</h2>
+        <h2 id="oneclick-title" data-i18n="reg.success">Account created ✅</h2>
         <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close" data-i18n-aria="modal.close">×</button>
       </div>
       <p id="oneclick-hint" class="muted"></p>
       <div class="compose-form">
-        <p><b>Address:</b> <code id="oneclick-address"></code></p>
-        <p><b>Password:</b> <code id="oneclick-password"></code></p>
+        <p><b data-i18n="reg.address">Address:</b> <code id="oneclick-address"></code></p>
+        <p><b data-i18n="reg.password">Password:</b> <code id="oneclick-password"></code></p>
       </div>
       <div class="row" style="margin-bottom:8px;">
-        <b>Prompt for your agent</b>
-        <button type="button" id="btn-oneclick-copy" class="row-action">Copy again</button>
+        <b data-i18n="agent.promptTitle">Prompt for your agent</b>
+        <button type="button" id="btn-oneclick-copy" class="row-action" data-i18n="agent.copyAgain">Copy again</button>
         <span id="oneclick-copy-status" class="muted"></span>
       </div>
       <pre class="code-block modal-code" id="oneclick-prompt"></pre>
       <div class="row" style="margin-bottom:0; justify-content:flex-end;">
-        <button id="btn-oneclick-login" class="primary">Log in with this account</button>
-        <button id="btn-oneclick-another" class="row-action">Register another</button>
+        <button id="btn-oneclick-login" class="primary" data-i18n="reg.loginWith">Log in with this account</button>
+        <button id="btn-oneclick-another" class="row-action" data-i18n="reg.another">Register another</button>
       </div>
     </div>
   </div>
