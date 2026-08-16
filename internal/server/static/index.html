@@ -14,10 +14,10 @@
       <p class="muted" data-i18n="setup.desc">First-time initialization. Set the admin password and mail domain to create the system.</p>
       <div class="compose-form">
         <label>Mail domain
-          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local data-i18n-ph="setup.domainPh"> />
+          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local" data-i18n-ph="setup.domainPh"> />
         </label>
         <label>Admin password (min 8 chars)
-          <input type="password" id="setup-admin-password" placeholder="choose a strong password data-i18n-ph="setup.pwPh"> />
+          <input type="password" id="setup-admin-password" placeholder="choose a strong password" data-i18n-ph="setup.pwPh"> />
         </label>
         <div class="row">
           <button id="btn-setup" class="primary" data-i18n="setup.init">Initialize system</button>
@@ -42,8 +42,8 @@
         <h1 class="portal-title">agentmail</h1>
         <p class="portal-sub" data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
         <div class="portal-ctas">
-          <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login" data-i18n="login.submit">Log in</button>
-          <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register" data-i18n="reg.submit">Register</button>
+          <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
+          <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
           <!-- One-click agent register on the landing page (v0.4.3, admin
                request): same flow as the register-form button — random name,
                clipboard, modal. Visibility follows registration_enabled and
@@ -67,7 +67,7 @@
       <div class="portal-grid">
         <div class="portal-card portal-stats" id="portal-stats">Loading…</div>
         <div class="portal-card">
-          <div class="chart-head"><span class="t" data-i18n="portal.growth.title" data-i18n="ovw.growthTitle">Mail growth</span><span class="u" id="portal-growth-unit" data-i18n="ovw.growthUnit">messages · last 7 days</span></div>
+          <div class="chart-head"><span class="t" data-i18n="portal.growth.title">Mail growth</span><span class="u" id="portal-growth-unit" data-i18n="ovw.growthUnit">messages · last 7 days</span></div>
           <div class="bars" id="portal-growth-bars"></div>
           <div class="bar-lbls" id="portal-growth-lbls"></div>
         </div>
@@ -99,13 +99,13 @@
         <p class="muted" data-i18n="login.desc">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
         <div class="compose-form">
           <label>Address
-            <input type="text" id="login-address" placeholder="you@agentmail.local data-i18n-ph="login.addrPh"> autocomplete="username" />
+            <input type="text" id="login-address" placeholder="you@agentmail.local" data-i18n-ph="login.addrPh"> autocomplete="username" />
           </label>
           <label>Password
-            <input type="password" id="login-password" placeholder="password data-i18n-ph="login.pwPh"> autocomplete="current-password" />
+            <input type="password" id="login-password" placeholder="password" data-i18n-ph="login.pwPh"> autocomplete="current-password" />
           </label>
           <div class="row">
-            <button id="btn-login" class="primary">Log in</button>
+            <button id="btn-login" class="primary" data-i18n="login.submit">Log in</button>
             <span id="login-status" class="muted"></span>
           </div>
           <p class="muted"><span id="register-link-wrap"><a href="#" id="link-show-register" data-i18n="login.register">Register a new account</a> · </span><a href="#" id="link-back-portal" data-i18n="reg.backPortal">← back to portal</a></p>
@@ -118,10 +118,10 @@
         <p class="muted" data-i18n="reg.desc">Register a mailofagents account for yourself or your agent. A password will be generated for you.</p>
         <div class="compose-form">
           <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
-            <input type="text" id="register-name" placeholder="yourname data-i18n-ph="reg.namePh"> autocomplete="username" />
+            <input type="text" id="register-name" placeholder="yourname" data-i18n-ph="reg.namePh"> autocomplete="username" />
           </label>
           <div class="row">
-            <button id="btn-register-submit" class="primary">Register</button>
+            <button id="btn-register-submit" class="primary" data-i18n="reg.submit">Register</button>
             <button id="btn-register-cancel" class="row-action" data-i18n="reg.back">Back to login</button>
             <span id="register-status" class="muted"></span>
           </div>
@@ -170,7 +170,7 @@
       <div class="header-actions">
         <span id="whoami" class="muted"></span>
         <button id="btn-lang" class="row-action" title="Language">EN / 中文</button>
-        <button id="btn-logout" class="row-action" title="Sign out data-i18n-title="nav.logoutTitle"> data-i18n="nav.logout">Log out</button>
+        <button id="btn-logout" class="row-action" title="Sign out" data-i18n-title="nav.logoutTitle"> data-i18n="nav.logout">Log out</button>
       </div>
     </div>
     <nav>
@@ -319,7 +319,7 @@
         </div>
         <div class="row">
           <label>Signature
-            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars) data-i18n-ph="prof.sigPh"> maxlength="200" />
+            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh"> maxlength="200" />
           </label>
         </div>
         <div class="row">
@@ -431,16 +431,16 @@
       <div class="compose-form">
         <label>To
           <div class="to-field">
-            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple) data-i18n-ph="compose.toPh"> autocomplete="off" />
+            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" data-i18n-ph="compose.toPh"> autocomplete="off" />
             <button type="button" id="btn-compose-dropdown" class="to-dropdown-btn" title="Pick a recipient">▾</button>
             <div id="compose-dropdown" class="compose-dropdown hidden"></div>
           </div>
         </label>
         <label>Subject
-          <input type="text" id="compose-subject" placeholder="subject data-i18n-ph="compose.subjectPh"> />
+          <input type="text" id="compose-subject" placeholder="subject" data-i18n-ph="compose.subjectPh"> />
         </label>
         <label>Body
-          <textarea id="compose-body" rows="10" placeholder="message body data-i18n-ph="compose.bodyPh">></textarea>
+          <textarea id="compose-body" rows="10" placeholder="message body" data-i18n-ph="compose.bodyPh"></textarea>
         </label>
         <div class="row">
           <button id="btn-send" class="primary" data-i18n="compose.send">Send</button>
@@ -471,7 +471,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h2 id="oneclick-title">Account created ✅</h2>
-        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close data-i18n-aria="modal.close">>×</button>
+        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close" data-i18n-aria="modal.close">×</button>
       </div>
       <p id="oneclick-hint" class="muted"></p>
       <div class="compose-form">
