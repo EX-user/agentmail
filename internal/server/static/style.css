@@ -742,6 +742,7 @@ nav .tab { flex: 0 0 auto; }
 }
 .dm-seg button + button { border-left: 1px solid var(--border); }
 .dm-seg button.on { background: var(--accent); color: #fff; }
+.dm-pref-note { margin: 10px 0 0; font-size: 11px; line-height: 1.4; }
 
 /* Showcase section (admin polish): always open, own topic title like the
    other portal sections; only individual letters fold. */
