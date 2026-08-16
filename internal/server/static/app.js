@@ -75,6 +75,12 @@
     return d.toLocaleString();
   }
 
+  // i18n shortcut (v0.4.12): dynamic strings go through the dictionary;
+  // before i18n.js loads or if unavailable, fall back to the key.
+  function t(key, vars) {
+    return window.I18N ? window.I18N.t(key, vars) : key;
+  }
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -118,8 +124,8 @@
     const stats = $("#stats-activity");
     if (stats) {
       stats.innerHTML =
-        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>today</span></div>' +
-        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>last 7 days</span></div>';
+        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>' + t("lbl.today") + '</span></div>' +
+        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>' + t("lbl.week") + '</span></div>';
     }
     if (chart) {
       drawGrowthDays((growth.days && growth.days.length)
@@ -146,15 +152,15 @@
         api("/api/mygrowth").catch(function () { return null; }),
       ]);
       const allTime = [];
-      if (con) allTime.push({ num: con.count, label: "contacts" });
-      if (inb) allTime.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
-      if (inb && inb.unread_count) allTime.push({ num: inb.unread_count, label: "unread" });
-      if (sent) allTime.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      if (con) allTime.push({ num: con.count, label: t("lbl.contacts") });
+      if (inb) allTime.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: t("lbl.received") });
+      if (inb && inb.unread_count) allTime.push({ num: inb.unread_count, label: t("lbl.unread") });
+      if (sent) allTime.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: t("lbl.sent") });
       const recent = myg ? [
-        { num: myg.today_in, label: "today in" },
-        { num: myg.today_out, label: "today out" },
-        { num: myg.week_in, label: "last 7 days in" },
-        { num: myg.week_out, label: "last 7 days out" },
+        { num: myg.today_in, label: t("lbl.todayIn") },
+        { num: myg.today_out, label: t("lbl.todayOut") },
+        { num: myg.week_in, label: t("lbl.weekIn") },
+        { num: myg.week_out, label: t("lbl.weekOut") },
       ] : [];
       const renderRows = function (rows) {
         return rows.map(function (c) {
@@ -191,7 +197,7 @@
   // reports db_size_bytes (0/absent means unavailable — no card).
   function storageCard(sizeBytes) {
     const human = sizeBytes > 0 ? fmtBytes(sizeBytes) : null;
-    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>storage</span></div>' : "";
+    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>' + t("lbl.storage") + '</span></div>' : "";
   }
 
   async function loadOverview() {
@@ -213,8 +219,8 @@
       try {
         const d = await api("/api/info?query=stats");
         $("#stats-system").innerHTML =
-          '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
-          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>" +
+          '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>" + t("lbl.accounts") + "</span></div>" +
+          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>" + t("lbl.messages") + "</span></div>" +
           storageCard(d.db_size_bytes);
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
@@ -228,8 +234,8 @@
       const s = await api("/admin/stats");
       const pub = await statsP;
       $("#stats-system").innerHTML =
-        '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
-        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>" +
+        '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>" + t("lbl.accounts") + "</span></div>" +
+        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>" + t("lbl.messages") + "</span></div>" +
         storageCard(pub && pub.db_size_bytes);
       renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
@@ -1153,7 +1159,7 @@
 
     // Live badge: today's mail count in the hero chip.
     if (growthRes && typeof growthRes.today === "number") {
-      $("#portal-live").textContent = growthRes.today + " mails today";
+      $("#portal-live").textContent = t("portal.badge.mailsToday", { n: growthRes.today });
     }
 
     // Stats column: account/message totals + growth buckets, with a count-up
@@ -1161,13 +1167,13 @@
     const statsEl = $("#portal-stats");
     if (statsRes) {
       const cards = [
-        { num: statsRes.account_count, label: "accounts" },
-        { num: statsRes.message_count, label: "messages" },
+        { num: statsRes.account_count, label: t("lbl.accounts") },
+        { num: statsRes.message_count, label: t("lbl.messages") },
       ];
       if (growthRes) {
         cards.push(
-          { num: growthRes.today, label: "today", hot: true },
-          { num: growthRes.week, label: "last 7 days" }
+          { num: growthRes.today, label: t("lbl.today"), hot: true },
+          { num: growthRes.week, label: t("lbl.week") }
         );
       }
       statsEl.innerHTML = cards.map(function (c) {
@@ -1176,7 +1182,7 @@
       }).join("");
       animateCountUps(statsEl);
     } else {
-      statsEl.textContent = "Stats unavailable right now.";
+      statsEl.textContent = t("portal.statsUnavailable");
     }
 
     // Growth chart: 7 daily bars when the server sends a days array; falls
@@ -1188,10 +1194,10 @@
     const dirEl = $("#portal-directory");
     const entries = (dirRes && dirRes.entries) || [];
     if (!dirRes) {
-      dirEl.innerHTML = '<p class="muted">Directory unavailable right now.</p>';
+      dirEl.innerHTML = '<p class="muted">' + t("portal.statsUnavailable") + "</p>";
     } else if (!entries.length) {
       $("#portal-directory-note").style.display = "";
-      dirEl.innerHTML = '<p class="muted">No listed accounts yet.</p>';
+      dirEl.innerHTML = '<p class="muted">' + t("portal.noListed") + "</p>";
     } else {
       dirEl.innerHTML = entries.map(function (e) {
         return '<div class="dir-card">' + portalAvatar(e.address) +
@@ -1260,15 +1266,15 @@
     let days = (growthRes && growthRes.days) || [];
     if (!days.length && growthRes) {
       days = [
-        { date: "today", count: growthRes.today },
-        { date: "week", count: growthRes.week },
+        { date: t("lbl.today"), count: growthRes.today },
+        { date: t("lbl.week"), count: growthRes.week },
       ];
-      if (unitEl) unitEl.textContent = "messages · today / 7 days";
+      if (unitEl) unitEl.textContent = t("portal.growth.todayWeek");
     }
     if (!days.length) {
       barsEl.innerHTML = "";
       lblsEl.innerHTML = "";
-      if (unitEl) unitEl.textContent = "growth unavailable right now";
+      if (unitEl) unitEl.textContent = t("portal.growth.unavailable");
       return;
     }
     drawGrowthDays(days, barsEl, lblsEl);
@@ -1465,7 +1471,7 @@
   // never collapses (admin polish request).
   function renderShowcaseBar(items) {
     $("#showcase-latest").textContent = items.length
-      ? "Newest — " + items[0].from + " · " + items[0].subject
+      ? t("portal.newest") + items[0].from + " · " + items[0].subject
       : "";
     const list = $("#showcase-list");
     list.innerHTML = items.map(function (m, i) {
