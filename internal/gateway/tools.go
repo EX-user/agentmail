@@ -83,12 +83,12 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total). attachments (optional, 1-5 paths) uploads real attachments through the file store — recipients can download them via the codes embedded in the message (1MB per file).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
-				"to":          prop("Recipient address(es), comma-separated string or array", "string", true),
+				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
-				"inline_files": prop("Optional inline text: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
-				"attachments": prop("Optional real attachments: 1-5 local file paths uploaded via the file store; recipients receive download codes in the message (1MB/file)", "string", false),
+				"inline_files": arrayProp("Optional inline text: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total); a comma-separated string is also accepted", false),
+				"attachments": arrayProp("Optional real attachments: 1-5 local file paths uploaded via the file store; recipients receive download codes in the message (1MB/file); a comma-separated string is also accepted", false),
 			}, []string{"access_code", "to", "subject", "body"}),
 		},
 		{
@@ -160,6 +160,17 @@ func prop(desc, typ string, req bool) map[string]any {
 		desc += " (required)"
 	}
 	return map[string]any{"type": typ, "description": desc}
+}
+
+// arrayProp declares a string-array parameter. Clients that strictly follow
+// the schema rejected array inputs when these were declared "string" (three
+// testers tripped on it); a comma-separated single string is still accepted
+// by the tolerant parser.
+func arrayProp(desc string, req bool) map[string]any {
+	if req {
+		desc += " (required)"
+	}
+	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": desc}
 }
 
 // --- tools/call dispatch ---
@@ -462,22 +473,24 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 			if len(res.Messages) > 0 {
 				newLast = res.Messages[0].ID // inbox is newest-first
 			}
-			return map[string]any{"messages": fresh, "count": len(fresh), "last_seen_id": newLast}, nil
+			// If the poll window was full, there may be MORE messages older
+			// than the window but still newer than since_id — surface that
+			// instead of silently skipping them.
+			more := len(res.Messages) == 50
+			return map[string]any{"messages": fresh, "count": len(fresh), "last_seen_id": newLast, "possibly_more": more}, nil
 		}
 
-		// Stop if the timeout fired or the caller cancelled. Return the current
-		// newest id so the caller can resume from it on the next call (passing
-		// it as since_id) instead of re-baselining and missing in-between mail.
-		currentNewest := sinceID
-		if len(res.Messages) > 0 {
-			currentNewest = res.Messages[0].ID
-		}
+		// Stop if the timeout fired or the caller cancelled. Return the
+		// CALLER'S since_id unchanged: nothing was delivered, so the baseline
+		// must not move. (The old code recomputed it from the inbox newest,
+		// which can be OLDER than since_id — e.g. when since_id came from a
+		// different ULID space — silently rewinding the caller's baseline.)
 		if time.Now().After(deadline) {
-			return map[string]any{"messages": []any{}, "count": 0, "timed_out": true, "last_seen_id": currentNewest}, nil
+			return map[string]any{"messages": []any{}, "count": 0, "timed_out": true, "last_seen_id": sinceID}, nil
 		}
 		select {
 		case <-ctx.Done():
-			return map[string]any{"messages": []any{}, "count": 0, "cancelled": true, "last_seen_id": currentNewest}, nil
+			return map[string]any{"messages": []any{}, "count": 0, "cancelled": true, "last_seen_id": sinceID}, nil
 		case <-ticker.C:
 			// continue to next loop iteration
 		}

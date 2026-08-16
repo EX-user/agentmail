@@ -305,6 +305,35 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// handleThread returns the bilateral conversation between the authenticated
+// account and one peer, newest first.
+//   GET /api/thread?with=<address>&limit=50&offset=0
+//     -> {"peer","messages":[{...MessageSummary, "dir":"in"|"out"}],"count"}
+func (s *Server) handleThread(w http.ResponseWriter, r *http.Request) {
+	who := accountFrom(r.Context())
+	peer := strings.TrimSpace(r.URL.Query().Get("with"))
+	if peer == "" {
+		badRequest(w, "with is required")
+		return
+	}
+	limit := queryInt(r, "limit", 50)
+	offset := queryInt(r, "offset", 0)
+	entries, err := s.store.ReadThread(who, peer, limit, offset)
+	if err != nil {
+		if errors.Is(err, store.ErrAccountNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		internalError(w, "read thread: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"peer":     peer,
+		"messages": entries,
+		"count":    len(entries),
+	})
+}
+
 // handleProfileSelf updates the authenticated account's directory visibility
 // and signature. Uses account Basic auth (like handleSend).
 //   GET  /api/profile/self  -> {"address","visible","signature"}
@@ -332,7 +361,7 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Visible   bool   `json:"visible"`
+		Visible   *bool  `json:"visible"` // nil = keep current (omitting must NOT reset)
 		Signature string `json:"signature"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
@@ -344,18 +373,29 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, fmt.Sprintf("signature too long (max %d chars)", MaxSignatureLen))
 		return
 	}
+	// Resolve visible: an omitted field keeps the stored value (the old
+	// non-pointer bool decoded "absent" to false and silently un-listed
+	// accounts that only meant to update their signature).
+	cur, err := s.store.GetAccount(who)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	visible := cur.Visible
+	if body.Visible != nil {
+		visible = *body.Visible
+	}
 	// Global guard: if the admin has disabled directory listing, block the
 	// false→true transition. Existing listed accounts stay listed (true→true
 	// is allowed), and anyone can un-list themselves (→false). Only opting IN
 	// is refused.
-	if body.Visible && !s.store.IsDirectoryListedEnabled() {
-		cur, err := s.store.GetAccount(who)
-		if err != nil || !cur.Visible {
+	if body.Visible != nil && *body.Visible && !s.store.IsDirectoryListedEnabled() {
+		if !cur.Visible {
 			http.Error(w, "directory listing is disabled", http.StatusForbidden)
 			return
 		}
 	}
-	if err := s.store.UpdateProfile(who, body.Visible, sig); err != nil {
+	if err := s.store.UpdateProfile(who, visible, sig); err != nil {
 		internalError(w, "update profile: "+err.Error())
 		return
 	}

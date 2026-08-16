@@ -133,6 +133,68 @@ func (s *Store) ReadInbox(address string, limit int) ([]MessageSummary, error) {
 	return s.ReadInboxPaged(address, limit, 0)
 }
 
+// ThreadEntry is one side of a bilateral conversation.
+type ThreadEntry struct {
+	MessageSummary
+	Dir string `json:"dir"` // "in" = received from peer, "out" = sent to peer
+}
+
+// ReadThread returns the bilateral conversation between the account and one
+// peer: messages the account sent whose recipients include the peer ("out")
+// plus messages the account received from the peer ("in"), newest first.
+// Case-insensitive address match. Full index scan per side — fine at current
+// scale (thousands); revisit with a peer index if volume grows.
+func (s *Store) ReadThread(address, peer string, limit, offset int) ([]ThreadEntry, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return nil, err
+	}
+	// Scan a generous window per side, then merge. The window must exceed
+	// limit+offset so pagination reaches deep-enough entries on one side.
+	window := limit + offset + 200
+	inbox, err := s.readIndex(bInbox, acc.UUID, acc.UUID, window, 0)
+	if err != nil {
+		return nil, err
+	}
+	sent, err := s.readIndex(bSent, acc.UUID, acc.UUID, window, 0)
+	if err != nil {
+		return nil, err
+	}
+	var merged []ThreadEntry
+	for _, m := range inbox {
+		if strings.EqualFold(m.From, peer) {
+			e := ThreadEntry{MessageSummary: m, Dir: "in"}
+			merged = append(merged, e)
+		}
+	}
+	for _, m := range sent {
+		for _, r := range m.To {
+			if strings.EqualFold(r, peer) {
+				e := ThreadEntry{MessageSummary: m, Dir: "out"}
+				merged = append(merged, e)
+				break
+			}
+		}
+	}
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[i].ReceivedAt > merged[j].ReceivedAt
+	})
+	if offset >= len(merged) {
+		return []ThreadEntry{}, nil
+	}
+	merged = merged[offset:]
+	if len(merged) > limit {
+		merged = merged[:limit]
+	}
+	return merged, nil
+}
+
 // ReadInboxPaged returns up to limit inbox messages for the account, skipping
 // the first offset (newest-first). offset<0 is treated as 0.
 func (s *Store) ReadInboxPaged(address string, limit, offset int) ([]MessageSummary, error) {
