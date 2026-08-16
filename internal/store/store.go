@@ -47,6 +47,9 @@ var (
 	mRegisterIPRateLimit  = []byte("register_ip_rate_limit")
 	mOneclickRegisterEnabled = []byte("oneclick_register_enabled")
 	mShowcaseEnabled      = []byte("showcase_enabled")
+	mDanmakuMode          = []byte("danmaku_default_mode")
+	mDanmakuSpeed         = []byte("danmaku_default_speed")
+	mDanmakuCount         = []byte("danmaku_default_count")
 )
 
 // Store wraps a bbolt database with agentmail's operations.
@@ -306,6 +309,87 @@ func (s *Store) IsShowcaseEnabled() bool {
 // SetShowcaseEnabled toggles the showcase.
 func (s *Store) SetShowcaseEnabled(enabled bool) error {
 	return s.setMetaBool(mShowcaseEnabled, enabled)
+}
+
+// metaStr reads a string meta flag; absent or not in allowed = def.
+func (s *Store) metaStr(key []byte, def string, allowed []string) string {
+	var raw string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if v := mb.Get(key); v != nil {
+			raw = string(v)
+		}
+		return nil
+	})
+	for _, a := range allowed {
+		if raw == a {
+			return raw
+		}
+	}
+	return def
+}
+
+// Danmaku defaults for the portal's showcase danmaku (server default;
+// browsers may override via localStorage).
+var (
+	danmakuModes      = []string{"A", "B"}
+	danmakuSpeeds     = []string{"slow", "medium", "fast"}
+	danmakuCounts     = []string{"few", "normal", "more"}
+)
+
+func (s *Store) GetDanmakuDefaultMode() string   { return s.metaStr(mDanmakuMode, "A", danmakuModes) }
+func (s *Store) GetDanmakuDefaultSpeed() string  { return s.metaStr(mDanmakuSpeed, "medium", danmakuSpeeds) }
+func (s *Store) GetDanmakuDefaultCount() string  { return s.metaStr(mDanmakuCount, "normal", danmakuCounts) }
+
+// SetDanmakuDefaults validates and persists any provided danmaku default.
+// Empty string leaves that field unchanged.
+func (s *Store) SetDanmakuDefaults(mode, speed, count string) error {
+	if mode != "" {
+		if !containsStr(danmakuModes, mode) {
+			return fmt.Errorf("mode must be A or B")
+		}
+	}
+	if speed != "" {
+		if !containsStr(danmakuSpeeds, speed) {
+			return fmt.Errorf("speed must be slow, medium or fast")
+		}
+	}
+	if count != "" {
+		if !containsStr(danmakuCounts, count) {
+			return fmt.Errorf("count must be few, normal or more")
+		}
+	}
+	set := func(key []byte, val string) error {
+		if val == "" {
+			return nil
+		}
+		return s.db.Update(func(tx *bolt.Tx) error {
+			mb := tx.Bucket(bMeta)
+			if mb == nil {
+				return nil
+			}
+			return mb.Put(key, []byte(val))
+		})
+	}
+	if err := set(mDanmakuMode, mode); err != nil {
+		return err
+	}
+	if err := set(mDanmakuSpeed, speed); err != nil {
+		return err
+	}
+	return set(mDanmakuCount, count)
+}
+
+func containsStr(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // IsDirectoryListedEnabled reports whether accounts are allowed to opt

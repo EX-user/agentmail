@@ -344,6 +344,9 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		"directory_listed_enabled":  s.store.IsDirectoryListedEnabled(),
 		"oneclick_register_enabled": s.store.IsOneclickRegisterEnabled(),
 		"showcase_enabled":          s.store.IsShowcaseEnabled(),
+		"danmaku_mode":              s.store.GetDanmakuDefaultMode(),
+		"danmaku_speed":             s.store.GetDanmakuDefaultSpeed(),
+		"danmaku_count":             s.store.GetDanmakuDefaultCount(),
 		"send_rate":                 s.store.GetSendRateLimit(),
 		"byte_rate":                 s.store.GetByteRateLimit(),
 		"register_rate":             s.store.GetRegisterIPRateLimit(),
@@ -414,6 +417,37 @@ func (s *Server) handleAdminClearShowcase(w http.ResponseWriter, r *http.Request
 	_ = s.audit.Record(r.Context(), audit.ActionClearShowcase, "showcase",
 		fmt.Sprintf("by=admin cleared=%d", before))
 	writeJSON(w, http.StatusOK, map[string]any{"cleared": before, "count": 0})
+}
+
+// handleAdminSetDanmaku sets the portal danmaku defaults (server-side
+// defaults; browsers may still override locally).
+//   POST /admin/set-danmaku {"mode":"A"|"B","speed":"slow|medium|fast","count":"few|normal|more"}
+//   All fields optional; only provided fields are updated.
+func (s *Server) handleAdminSetDanmaku(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		Mode  string `json:"mode"`
+		Speed string `json:"speed"`
+		Count string `json:"count"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetDanmakuDefaults(body.Mode, body.Speed, body.Count); err != nil {
+		badRequest(w, err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSetDanmaku, "danmaku",
+		fmt.Sprintf("by=admin mode=%s speed=%s count=%s", body.Mode, body.Speed, body.Count))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode":  s.store.GetDanmakuDefaultMode(),
+		"speed": s.store.GetDanmakuDefaultSpeed(),
+		"count": s.store.GetDanmakuDefaultCount(),
+	})
 }
 
 // handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
