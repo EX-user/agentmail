@@ -174,6 +174,25 @@
     }
   }
 
+  // fmtBytes renders a byte count as a compact human size (12.4 MB).
+  function fmtBytes(n) {
+    if (typeof n !== "number" || isNaN(n) || n < 0) return null;
+    if (n < 1024) return n + " B";
+    const units = ["KB", "MB", "GB", "TB"];
+    let v = n;
+    for (let i = 0; i < units.length; i++) {
+      v = v / 1024;
+      if (v < 1024 || i === units.length - 1) return (Math.round(v * 10) / 10) + " " + units[i];
+    }
+  }
+
+  // storageCard renders the db size stat card when the public stats endpoint
+  // reports db_size_bytes (0/absent means unavailable — no card).
+  function storageCard(sizeBytes) {
+    const human = sizeBytes > 0 ? fmtBytes(sizeBytes) : null;
+    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>storage</span></div>' : "";
+  }
+
   async function loadOverview() {
     const stats = $("#stats");
     const recent = $("#recent-activity");
@@ -182,6 +201,8 @@
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
     const growthP = api("/api/info?query=growth").catch(function () { return null; });
+    // Storage size comes from the public stats payload (both roles see it).
+    const statsP = api("/api/info?query=stats").catch(function () { return null; });
     // Personal summary (own endpoints) — independent of the role branches.
     renderOverviewPersonal();
     // Regular accounts can't read /admin/* — calling it would 401 and the
@@ -192,7 +213,8 @@
         const d = await api("/api/info?query=stats");
         stats.innerHTML =
           '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
-          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>";
+          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>" +
+          storageCard(d.db_size_bytes);
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
@@ -203,9 +225,11 @@
     }
     try {
       const s = await api("/admin/stats");
+      const pub = await statsP;
       stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
-        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>";
+        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>" +
+        storageCard(pub && pub.db_size_bytes);
       renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
@@ -539,11 +563,20 @@
     }
   }
 
+  // revealDetailOnMobile: on narrow screens the detail pane sits below the
+  // list — bring it into view when a message is opened, so users don't miss
+  // that anything happened. No-op on desktop (PC layout unaffected).
+  function revealDetailOnMobile(detailEl) {
+    if (window.innerWidth > 800 || !detailEl || !detailEl.scrollIntoView) return;
+    try { detailEl.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+  }
+
   async function showDetail(id, item) {
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
     detail.textContent = "Loading…";
+    revealDetailOnMobile(detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
       item.classList.remove("unread");
@@ -664,6 +697,7 @@
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.textContent = "Loading…";
+    revealDetailOnMobile(detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);
@@ -1306,37 +1340,10 @@
     }
   }
 
-  // ⚙ popover: segmented controls write localStorage and re-render live.
-  function dmSyncPopover() {
-    const prefs = dmEffective();
-    $$(".dm-seg").forEach(function (seg) {
-      const key = seg.dataset.pref;
-      $$(".dm-seg[data-pref=" + key + "] button").forEach(function (b) {
-        b.classList.toggle("on", b.dataset.v === prefs[key]);
-      });
-    });
-  }
-  $("#btn-dm-gear").addEventListener("click", function (e) {
-    e.stopPropagation();
-    const panel = $("#dm-pref");
-    panel.classList.toggle("hidden");
-    if (!panel.classList.contains("hidden")) dmSyncPopover();
-  });
-  document.addEventListener("click", function (e) {
-    const panel = $("#dm-pref");
-    if (panel.classList.contains("hidden")) return;
-    if (!e.target.closest(".dm-pref") && !e.target.closest(".dm-gear")) panel.classList.add("hidden");
-  });
-  $$(".dm-seg button").forEach(function (b) {
-    b.addEventListener("click", function () {
-      const key = b.closest(".dm-seg").dataset.pref;
-      const cur = dmReadLocal() || {};
-      cur[key] = b.dataset.v;
-      try { localStorage.setItem(DM_PREF_KEY, JSON.stringify(cur)); } catch (_) {}
-      dmSyncPopover();
-      if (dmLastItems && dmLastItems.length) startDanmaku(dmLastItems);
-    });
-  });
+  // The per-visitor ⚙ popover was removed by final decision — danmaku style
+  // comes from site defaults (panel Settings). The localStorage read/write
+  // helpers stay below so a future personal-preference entry point can slot
+  // straight in; any previously saved visitor override keeps working.
 
   // renderShowcaseBar fills the always-open section: a one-line preview of
   // the newest letter under the topic title, then the list — each letter

@@ -53,37 +53,13 @@
         </div>
       </div>
 
-      <!-- Showcase danmaku (v0.4.4): public letters flying across ~4 rows.
-           Pure display, glass capsules, no interaction. Filled by JS from
-           /api/info?query=showcase (mock data until the server ships it).
-           Frozen (hidden) under prefers-reduced-motion. v0.4.10: dual mode
-           (in-flow band or full-page backdrop) + per-visitor preferences
-           via the ⚙ popover (localStorage; server provides defaults). -->
-      <div class="dm-controls">
-        <button id="btn-dm-gear" class="dm-gear" title="Danmaku settings" aria-label="Danmaku settings">⚙</button>
-        <div id="dm-pref" class="dm-pref hidden">
-          <div class="dm-pref-row"><span class="lbl">Mode</span>
-            <span class="dm-seg" data-pref="mode">
-              <button type="button" data-v="A">Band</button>
-              <button type="button" data-v="B">Backdrop</button>
-            </span>
-          </div>
-          <div class="dm-pref-row"><span class="lbl">Speed</span>
-            <span class="dm-seg" data-pref="speed">
-              <button type="button" data-v="slow">Slow</button>
-              <button type="button" data-v="medium">Med</button>
-              <button type="button" data-v="fast">Fast</button>
-            </span>
-          </div>
-          <div class="dm-pref-row"><span class="lbl">Cards</span>
-            <span class="dm-seg" data-pref="count">
-              <button type="button" data-v="few">Few</button>
-              <button type="button" data-v="normal">Normal</button>
-              <button type="button" data-v="more">More</button>
-            </span>
-          </div>
-        </div>
-      </div>
+      <!-- Showcase danmaku (v0.4.4): public letters flying as glass cards.
+           Filled by JS from /api/info?query=showcase. Frozen (hidden) under
+           prefers-reduced-motion. v0.4.10: dual mode (in-flow band or
+           full-page backdrop); the per-visitor ⚙ popover was removed per
+           final decision — style comes from site defaults (panel Settings);
+           the localStorage override logic stays in app.js for a future
+           personal-preference entry point. -->
       <div id="portal-danmaku" class="danmaku" aria-hidden="true"></div>
 
       <div class="portal-section-title"><h2>Live activity</h2><span class="line"></span></div>
@@ -223,8 +199,13 @@
       </div>
       <!-- Personal summary (v0.4.8+, admin feedback: one row of boxes was
            ugly): a single grouped card — "All time" and "Recent traffic"
-           columns of compact stat rows. -->
+           columns of compact stat rows. Subtitle clarifies these are the
+           viewer's own numbers, not system-wide. -->
       <div class="portal-card hidden" id="personal-card" style="max-width:640px; margin-top:16px;">
+        <div class="chart-head" style="margin-bottom:8px;">
+          <span class="t">My activity</span>
+          <span class="u">your personal mail stats</span>
+        </div>
         <div class="my-activity-grid">
           <div>
             <h4 class="my-group-title">All time</h4>
