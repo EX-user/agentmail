@@ -489,7 +489,9 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   to { transform: translateY(-110vh); opacity: 0; }
 }
 
-.portal-wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+/* Explicit stacking: content always paints above the backdrop danmaku
+   (mode B), immune to subtle layer reordering. */
+.portal-wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
 
 /* Hero */
 .portal-hero { text-align: center; padding: 64px 0 40px; }
@@ -703,7 +705,18 @@ nav .tab { flex: 0 0 auto; }
   position: fixed; inset: 0; height: 100vh; margin: 0;
   opacity: 0.35; z-index: -1;
 }
-.danmaku.bg-mode .dm { box-shadow: none; }
+/* Cards must drop backdrop-filter in backdrop mode: inside an opacity<1
+   ancestor Chrome fails to composite backdrop-filtered elements (they can
+   vanish entirely — the production "mode B shows nothing" bug). A slightly
+   more opaque plain fill keeps them readable against the aurora. */
+.danmaku.bg-mode .dm {
+  box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  background: rgba(22, 27, 41, 0.55);
+}
+@media (prefers-color-scheme: light) {
+  .danmaku.bg-mode .dm { background: rgba(255, 255, 255, 0.55); }
+}
 /* Gear control + preference popover (works for guests; writes localStorage). */
 .dm-controls { position: relative; height: 0; }
 .dm-gear {
