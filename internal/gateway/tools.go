@@ -83,12 +83,12 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total). attachments (optional, 1-5 paths) uploads real attachments through the file store — recipients can download them via the codes embedded in the message (1MB per file).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
-				"to":          prop("Recipient address(es), comma-separated string or array", "string", true),
+				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
-				"inline_files": prop("Optional inline text: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
-				"attachments": prop("Optional real attachments: 1-5 local file paths uploaded via the file store; recipients receive download codes in the message (1MB/file)", "string", false),
+				"inline_files": arrayProp("Optional inline text: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total); a comma-separated string is also accepted", false),
+				"attachments": arrayProp("Optional real attachments: 1-5 local file paths uploaded via the file store; recipients receive download codes in the message (1MB/file); a comma-separated string is also accepted", false),
 			}, []string{"access_code", "to", "subject", "body"}),
 		},
 		{
@@ -160,6 +160,17 @@ func prop(desc, typ string, req bool) map[string]any {
 		desc += " (required)"
 	}
 	return map[string]any{"type": typ, "description": desc}
+}
+
+// arrayProp declares a string-array parameter. Clients that strictly follow
+// the schema rejected array inputs when these were declared "string" (three
+// testers tripped on it); a comma-separated single string is still accepted
+// by the tolerant parser.
+func arrayProp(desc string, req bool) map[string]any {
+	if req {
+		desc += " (required)"
+	}
+	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": desc}
 }
 
 // --- tools/call dispatch ---
