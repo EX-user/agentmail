@@ -869,10 +869,12 @@
       if (del) del.classList.add("hidden");
       return;
     }
+    // The endpoint returns received_at (not ts) and omits body — accept both.
+    const ts = m.ts || m.received_at;
     prev.innerHTML = '<div class="sc-item" style="cursor:default;margin-top:8px;">' +
-      '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
+      '<div class="sc-meta">' + esc(m.from) + (ts ? " · " + esc(fmtTime(ts)) : "") + "</div>" +
       '<div class="sc-subj">' + esc(m.subject) + "</div>" +
-      '<div class="muted" style="font-size:12px;">' + esc(m.body || "") + "</div>" +
+      (m.body ? '<div class="muted" style="font-size:12px;">' + esc(m.body) + "</div>" : "") +
       "</div>";
     if (del) del.classList.remove("hidden");
   }
