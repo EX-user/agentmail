@@ -114,9 +114,10 @@
   function renderOverviewGrowth(growth) {
     const chart = $("#ovw-growth-card");
     if (!growth) { if (chart) chart.classList.add("hidden"); return; }
-    const stats = $("#stats");
+    // Flow metrics (today / last 7 days) go to the Activity group.
+    const stats = $("#stats-activity");
     if (stats) {
-      stats.innerHTML +=
+      stats.innerHTML =
         '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>today</span></div>' +
         '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>last 7 days</span></div>';
     }
@@ -194,9 +195,9 @@
   }
 
   async function loadOverview() {
-    const stats = $("#stats");
     const recent = $("#recent-activity");
-    stats.textContent = "Loading…";
+    $("#stats-system").textContent = "Loading…";
+    $("#stats-activity").textContent = "";
     recent.textContent = "Loading…";
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
@@ -211,14 +212,14 @@
     if (s && !s.is_admin) {
       try {
         const d = await api("/api/info?query=stats");
-        stats.innerHTML =
+        $("#stats-system").innerHTML =
           '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
           '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>" +
           storageCard(d.db_size_bytes);
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
-        stats.textContent = "Error: " + e.message;
+        $("#stats-system").textContent = "Error: " + e.message;
         recent.textContent = "";
       }
       return;
@@ -226,7 +227,7 @@
     try {
       const s = await api("/admin/stats");
       const pub = await statsP;
-      stats.innerHTML =
+      $("#stats-system").innerHTML =
         '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
         '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>" +
         storageCard(pub && pub.db_size_bytes);
@@ -242,7 +243,7 @@
           (e.detail ? " — " + esc(e.detail) : "") + "</li>";
       }).join("") + "</ul>";
     } catch (e) {
-      stats.textContent = "Error: " + e.message;
+      $("#stats-system").textContent = "Error: " + e.message;
       recent.textContent = "";
     }
   }
@@ -563,12 +564,33 @@
     }
   }
 
-  // revealDetailOnMobile: on narrow screens the detail pane sits below the
-  // list — bring it into view when a message is opened, so users don't miss
-  // that anything happened. No-op on desktop (PC layout unaffected).
-  function revealDetailOnMobile(detailEl) {
-    if (window.innerWidth > 800 || !detailEl || !detailEl.scrollIntoView) return;
-    try { detailEl.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+  // ---- inbox/mail mobile List|Message tabs (<=800px) ----
+  // One pane visible at a time; opening a message flips to Message. The
+  // buttons are hidden on desktop and the classes are inert there, so the
+  // side-by-side grid is untouched.
+  function mailShowPane(gridId, pane) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.classList.toggle("mshow-detail", pane === "detail");
+    const tabs = document.querySelector('.mail-tabs[data-grid="' + gridId.replace("-grid", "") + '"]');
+    if (!tabs) return;
+    $$(".mtab", tabs).forEach(function (b) {
+      b.classList.toggle("on", b.dataset.pane === pane);
+    });
+  }
+  $$(".mail-tabs .mtab").forEach(function (b) {
+    b.addEventListener("click", function () {
+      const tabs = b.closest(".mail-tabs");
+      mailShowPane(tabs.dataset.grid + "-grid", b.dataset.pane);
+    });
+  });
+
+  // revealDetailOnMobile: on narrow screens the detail pane is a tab away —
+  // flip to it when a message is opened so users see it happened. No-op on
+  // desktop (PC layout unaffected).
+  function revealDetailOnMobile(gridId, detailEl) {
+    if (window.innerWidth > 800) return;
+    mailShowPane(gridId, "detail");
   }
 
   async function showDetail(id, item) {
@@ -576,7 +598,7 @@
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
     detail.textContent = "Loading…";
-    revealDetailOnMobile(detail);
+    revealDetailOnMobile("mail-grid", detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
       item.classList.remove("unread");
@@ -697,7 +719,7 @@
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.textContent = "Loading…";
-    revealDetailOnMobile(detail);
+    revealDetailOnMobile("inbox-grid", detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);
