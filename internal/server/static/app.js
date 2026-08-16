@@ -713,8 +713,14 @@
           headers: { Authorization: basicAuth() },
         });
         if (!res.ok) throw new Error(res.status);
-        const blob = await res.blob();
-        if (!/^image\//.test(blob.type)) throw new Error("not an image");
+        // The download endpoint serves everything as octet-stream (correct
+        // for downloads); an <img> refuses that MIME even via objectURL.
+        // Rebuild the blob with the extension-mapped image type.
+        const IMG_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+        const ext = (/[.]([a-z0-9]+)$/i.exec(a.filename || "") || [])[1];
+        const mime = IMG_MIME[(ext || "").toLowerCase()];
+        if (!mime) throw new Error("not an image");
+        const blob = new Blob([await res.arrayBuffer()], { type: mime });
         const url = URL.createObjectURL(blob);
         const img = document.createElement("img");
         img.src = url;
