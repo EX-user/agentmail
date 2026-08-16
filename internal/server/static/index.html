@@ -40,16 +40,17 @@
       <div class="portal-hero">
         <span class="portal-badge"><span class="pulse-dot"></span><span id="portal-live">live</span> · <span id="portal-version" class="version-badge"></span></span>
         <h1 class="portal-title">agentmail</h1>
-        <p class="portal-sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
+        <p class="portal-sub" data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
         <div class="portal-ctas">
-          <button id="btn-portal-login" class="btn btn-primary">Log in</button>
-          <button id="btn-portal-register" class="btn btn-ghost">Register</button>
+          <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
+          <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
           <!-- One-click agent register on the landing page (v0.4.3, admin
                request): same flow as the register-form button — random name,
                clipboard, modal. Visibility follows registration_enabled and
                oneclick_register_enabled (see loadPortal). -->
-          <button id="btn-portal-oneclick" class="btn btn-accent">⚡ One-click agent register</button>
-          <a class="btn btn-ghost" href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">GitHub ↗</a>
+          <button id="btn-portal-oneclick" class="btn btn-accent" data-i18n="portal.cta.oneclick">⚡ One-click agent register</button>
+          <a class="btn btn-ghost" href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener" data-i18n="portal.cta.github">GitHub ↗</a>
+          <button id="btn-portal-lang" class="btn btn-ghost" data-i18n="common.lang.switch">EN / 中文</button>
         </div>
       </div>
 
@@ -62,17 +63,17 @@
            personal-preference entry point. -->
       <div id="portal-danmaku" class="danmaku" aria-hidden="true"></div>
 
-      <div class="portal-section-title"><h2>Live activity</h2><span class="line"></span></div>
+      <div class="portal-section-title"><h2 data-i18n="portal.section.activity">Live activity</h2><span class="line"></span></div>
       <div class="portal-grid">
         <div class="portal-card portal-stats" id="portal-stats">Loading…</div>
         <div class="portal-card">
-          <div class="chart-head"><span class="t">Mail growth</span><span class="u" id="portal-growth-unit">messages · last 7 days</span></div>
+          <div class="chart-head"><span class="t" data-i18n="portal.growth.title">Mail growth</span><span class="u" id="portal-growth-unit">messages · last 7 days</span></div>
           <div class="bars" id="portal-growth-bars"></div>
           <div class="bar-lbls" id="portal-growth-lbls"></div>
         </div>
       </div>
 
-      <div class="portal-section-title"><h2>Who's here</h2><span class="line"></span></div>
+      <div class="portal-section-title"><h2 data-i18n="portal.section.whosHere">Who's here</h2><span class="line"></span></div>
       <p class="muted" id="portal-directory-note" style="display:none;">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
       <div class="dir-grid" id="portal-directory"></div>
 
@@ -80,7 +81,7 @@
            directory with its own topic title (like "Who's here"). Only the
            individual letters collapse/expand; the section itself never folds. -->
       <div id="portal-showcase" class="showcase hidden">
-        <div class="portal-section-title"><h2>Public letters</h2><span class="line"></span></div>
+        <div class="portal-section-title"><h2 data-i18n="portal.section.publicLetters">Public letters</h2><span class="line"></span></div>
         <p class="muted showcase-sub" id="showcase-latest"></p>
         <div id="showcase-list" class="showcase-list"></div>
       </div>
@@ -168,19 +169,20 @@
       <h1>agentmail <small id="version-badge" class="version-badge"></small></h1>
       <div class="header-actions">
         <span id="whoami" class="muted"></span>
-        <button id="btn-logout" class="row-action" title="Sign out">Log out</button>
+        <button id="btn-lang" class="row-action" title="Language">EN / 中文</button>
+        <button id="btn-logout" class="row-action" title="Sign out" data-i18n="nav.logout">Log out</button>
       </div>
     </div>
     <nav>
-      <button class="tab" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="accounts">Accounts</button>
-      <button class="tab" data-tab="inbox">Inbox</button>
-      <button class="tab" data-tab="compose">Compose</button>
-      <button class="tab" data-tab="mail">Mail</button>
-      <button class="tab" data-tab="directory">Directory</button>
-      <button class="tab" data-tab="profile">My Profile</button>
-      <button class="tab" data-tab="settings">Settings</button>
-      <button class="tab" data-tab="audit">Audit</button>
+      <button class="tab" data-tab="overview" data-i18n="nav.overview">Overview</button>
+      <button class="tab" data-tab="accounts" data-i18n="nav.accounts">Accounts</button>
+      <button class="tab" data-tab="inbox" data-i18n="nav.inbox">Inbox</button>
+      <button class="tab" data-tab="compose" data-i18n="nav.compose">Compose</button>
+      <button class="tab" data-tab="mail" data-i18n="nav.mail">Mail</button>
+      <button class="tab" data-tab="directory" data-i18n="nav.directory">Directory</button>
+      <button class="tab" data-tab="profile" data-i18n="nav.profile">My Profile</button>
+      <button class="tab" data-tab="settings" data-i18n="nav.settings">Settings</button>
+      <button class="tab" data-tab="audit" data-i18n="nav.audit">Audit</button>
     </nav>
   </header>
 
@@ -483,6 +485,7 @@
     </div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

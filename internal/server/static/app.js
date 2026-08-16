@@ -1042,6 +1042,26 @@
 
   // Check initialization state; show setup wizard, login page, or app.
   async function init() {
+    // i18n (v0.4.12): apply the detected language to static text before the
+    // first paint settles, then keep dynamic regions in sync on switch.
+    if (window.I18N) {
+      window.I18N.applyI18nDOM(document);
+      const toggleLang = function () {
+        window.I18N.setLang(window.I18N.lang() === "zh" ? "en" : "zh");
+      };
+      const panelBtn = $("#btn-lang");
+      if (panelBtn) panelBtn.addEventListener("click", toggleLang);
+      const portalBtn = $("#btn-portal-lang");
+      if (portalBtn) portalBtn.addEventListener("click", toggleLang);
+      document.addEventListener("i18n:change", function () {
+        // Re-render whatever view is active so JS-built text follows.
+        if (!$("#portal-page").classList.contains("hidden")) loadPortal();
+        else if (!$("#app-header").classList.contains("hidden")) {
+          const active = $(".tab.active");
+          if (active) activateTab(active.dataset.tab);
+        }
+      });
+    }
     try {
       const st = await api("/api/status");
       if (st.domain) systemDomain = st.domain;
