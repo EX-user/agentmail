@@ -34,16 +34,16 @@
        chart) -> directory as avatar cards. All data still comes from public
        endpoints only (stats/growth/directory/settings). -->
   <section id="portal-page" class="hidden">
-    <!-- Language switch: standalone top-right chip, deliberately unlike the
-         CTA buttons (feedback: mixing it into the CTA row looked odd). -->
-    <button id="btn-portal-lang" class="lang-btn" data-i18n="common.lang.switch" title="Language">EN / 中文</button>
     <div class="aurora" aria-hidden="true"><div class="glow3"></div></div>
 
     <div class="portal-wrap">
       <div class="portal-hero">
         <span class="portal-badge"><span class="pulse-dot"></span><span id="portal-live">live</span> · <span id="portal-version" class="version-badge"></span></span>
         <h1 class="portal-title">agentmail</h1>
-        <p class="portal-sub" data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</p>
+        <!-- Subtitle + inline language switch on the same line. The translatable
+             text lives in an inner span so applyI18nDOM's textContent swap
+             can't wipe the button (same pattern as the register preview). -->
+        <p class="portal-sub"><span data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</span><button id="btn-portal-lang" class="lang-inline" data-i18n="common.lang.switch" title="Language">EN / 中文</button></p>
         <div class="portal-ctas">
           <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
           <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
@@ -448,9 +448,9 @@
              listed here, ids ride along with Send. 1MB per file (server cap). -->
         <div id="compose-attachments" class="attach-list"></div>
         <div class="row">
+          <button id="btn-send" class="primary" data-i18n="compose.send">Send</button>
           <button id="btn-attach" class="row-action" data-i18n="compose.attach">📎 Attach</button>
           <input type="file" id="compose-file-input" multiple hidden />
-          <button id="btn-send" class="primary" data-i18n="compose.send">Send</button>
           <button id="btn-refresh-thread" class="row-action" data-i18n="compose.refreshThread">Refresh thread</button>
           <!-- Public showcase opt-in (v0.4.4): also publish this letter on the
                guest portal. Default off; hidden when the admin disables

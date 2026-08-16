@@ -863,5 +863,15 @@ nav .tab { flex: 0 0 auto; }
 .attach-x {
   background: transparent; border: none; color: var(--muted); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 0 2px;
+  align-self: center; display: inline-flex; align-items: center; height: 20px;
 }
 .attach-x:hover { color: var(--error); }
+
+/* Language switch inline at the subtitle's tail (admin preference). */
+.lang-inline {
+  display: inline-flex; align-items: center; vertical-align: 2px;
+  margin-left: 6px; padding: 2px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+  font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.lang-inline:hover { color: var(--text); border-color: var(--accent); }
