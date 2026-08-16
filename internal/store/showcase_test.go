@@ -164,6 +164,25 @@ func TestDeleteShowcaseEntry(t *testing.T) {
 	}
 }
 
+// TestGetShowcaseEntry covers exact fetch + not-found.
+func TestGetShowcaseEntry(t *testing.T) {
+	s := newShowcaseStore(t)
+	if err := s.TeeShowcase("a@t", []string{"b@t"}, "findme", "body-text"); err != nil {
+		t.Fatalf("tee: %v", err)
+	}
+	entries, _ := s.ListShowcase()
+	e, err := s.GetShowcaseEntry(entries[0].ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if e.Subject != "findme" || e.From != "a@t" {
+		t.Errorf("entry = %+v", e)
+	}
+	if _, err := s.GetShowcaseEntry("NOPE"); err == nil || !errors.Is(err, ErrShowcaseNotFound) {
+		t.Errorf("missing id should be ErrShowcaseNotFound, got %v", err)
+	}
+}
+
 // TestListShowcaseSkipsCorrupt mirrors the growth-scan tolerance.
 func TestListShowcaseSkipsCorrupt(t *testing.T) {
 	s := newShowcaseStore(t)

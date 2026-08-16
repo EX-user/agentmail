@@ -157,6 +157,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/admin/set-danmaku", s.requireInitialized(s.requireAdmin(s.handleAdminSetDanmaku)))
 	mux.HandleFunc("/admin/clear-showcase", s.requireInitialized(s.requireAdmin(s.handleAdminClearShowcase)))
 	mux.HandleFunc("/admin/delete-showcase-item", s.requireInitialized(s.requireAdmin(s.handleAdminDeleteShowcaseItem)))
+	mux.HandleFunc("/admin/showcase-item", s.requireInitialized(s.requireAdmin(s.handleAdminGetShowcaseItem)))
 	mux.HandleFunc("/admin/set-directory-listed", s.requireInitialized(s.requireAdmin(s.handleAdminSetDirectoryListed)))
 	mux.HandleFunc("/admin/set-limits", s.requireInitialized(s.requireAdmin(s.handleAdminSetLimits)))
 
