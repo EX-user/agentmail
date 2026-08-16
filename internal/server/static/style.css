@@ -804,6 +804,7 @@ nav .tab { flex: 0 0 auto; }
 .showcase { margin-top: 26px; }
 .showcase-sub { margin: 0 0 10px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.showcase-admin-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .showcase-list { display: flex; flex-direction: column; gap: 8px; }
 
 .sc-item {

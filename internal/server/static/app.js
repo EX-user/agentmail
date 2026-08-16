@@ -854,6 +854,48 @@
 
   // ---- settings ----
 
+  // renderShowcaseAdminList lists the current public letters under Settings
+  // with per-item delete (feedback: remove a single bad letter without
+  // clearing everything). Items without an id (older server) render without
+  // a delete button. Deleting updates the row locally — no full reload.
+  async function renderShowcaseAdminList() {
+    const wrap = $("#showcase-admin-list");
+    if (!wrap) return;
+    try {
+      const res = await api("/api/info?query=showcase&n=50");
+      const items = (res && res.items) || [];
+      if (!items.length) { wrap.innerHTML = '<p class="muted">No public letters.</p>'; return; }
+      wrap.innerHTML = items.map(function (m) {
+        return '<div class="sc-item" style="cursor:default;">' +
+          '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
+          '<div class="sc-subj">' + esc(m.subject) + "</div>" +
+          (m.id ? '<div class="row" style="margin:6px 0 0;"><button class="row-action" data-del-sc="' + esc(m.id) + '">Delete</button></div>' : "") +
+          "</div>";
+      }).join("");
+      $$("[data-del-sc]", wrap).forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          btn.disabled = true;
+          try {
+            await api("/admin/delete-showcase-item", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: btn.dataset.delSc }),
+          });
+            const row = btn.closest(".sc-item");
+            if (row) row.remove();
+            if (!wrap.querySelector(".sc-item")) wrap.innerHTML = '<p class="muted">No public letters.</p>';
+            toast("Letter removed", "success");
+          } catch (e) {
+            btn.disabled = false;
+            toast("Delete failed: " + e.message, "error");
+          }
+        });
+      });
+    } catch (_) {
+      wrap.innerHTML = "";
+    }
+  }
+
   async function loadSettings() {
     try {
       const s = await api("/admin/settings");
@@ -888,6 +930,8 @@
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
+      // Showcase per-item management list.
+      renderShowcaseAdminList();
     } catch (e) {
       $("#reg-status").textContent = "Error: " + e.message;
     }

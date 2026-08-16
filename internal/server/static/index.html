@@ -362,6 +362,9 @@
           <button id="btn-clear-showcase" class="row-action">Clear showcase</button>
         </div>
         <p class="muted">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
+        <!-- Per-item removal: listed on load, delete buttons appear once the
+             server tags showcase items with ids. -->
+        <div id="showcase-admin-list" class="showcase-admin-list"></div>
       </div>
       <!-- Danmaku defaults (v0.4.10): site-wide initial values; visitors can
            override locally from the portal's ⚙ popover (localStorage). -->
