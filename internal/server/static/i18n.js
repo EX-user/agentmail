@@ -48,6 +48,7 @@
       "common.cancel": "Cancel",
       "common.error": "Error: {msg}",
       "common.lang.switch": "EN / 中文",
+      "attach.clickToDownload": "Click to download",
       // ---- attachments (v0.5.1) ----
       "compose.attach": "📎 Attach",
       "attach.dlFailed": "Download failed: ",
@@ -264,6 +265,7 @@
       "common.cancel": "取消",
       "common.error": "错误：{msg}",
       "common.lang.switch": "EN / 中文",
+      "attach.clickToDownload": "点击下载",
       // ---- attachments (v0.5.1) ----
       "compose.attach": "📎 添加附件",
       "attach.dlFailed": "下载失败：",

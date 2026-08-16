@@ -676,17 +676,62 @@
   // Attachment cards for message detail views. Download goes through an
   // authenticated fetch -> blob -> object URL (plain <a href> would lack the
   // Basic auth header the /api/files route requires).
+  // Image attachments get an inline preview (feedback): authenticated
+  // fetch -> blob -> object URL feeding an <img>. svg is deliberately
+  // excluded (XSS surface, low value); unknown/failed loads fall back to
+  // the plain download card without error toasts.
+  const ATTACH_IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i;
+
+  function attachIsImage(a) {
+    return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
+  }
+
   function attachmentCards(m) {
     const list = (m && m.attachments) || [];
     if (!list.length) return "";
     return '<div class="attach-list">' + list.map(function (a, i) {
-      return '<div class="attach-card">' +
+      const preview = attachIsImage(a) ? '<div class="attach-preview" data-pv="' + i + '"></div>' : "";
+      return '<div class="attach-card attach-card-' + (attachIsImage(a) ? "img" : "file") + '">' +
         '<span class="attach-clip">📎</span>' +
         '<span class="attach-name">' + esc(a.filename) + "</span>" +
         '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
         '<button class="row-action" data-dl="' + i + '">Download</button>' +
+        preview +
         "</div>";
     }).join("") + "</div>";
+  }
+
+  // hydrateAttachmentPreviews loads image blobs (authenticated) into the
+  // preview holders. Clicking a preview triggers the same download flow.
+  function hydrateAttachmentPreviews(root, m) {
+    const list = (m && m.attachments) || [];
+    $$(".attach-preview", root).forEach(async function (holder) {
+      const a = list[+holder.dataset.pv];
+      if (!a) return;
+      try {
+        const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
+          headers: { Authorization: basicAuth() },
+        });
+        if (!res.ok) throw new Error(res.status);
+        const blob = await res.blob();
+        if (!/^image\//.test(blob.type)) throw new Error("not an image");
+        const url = URL.createObjectURL(blob);
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = a.filename;
+        img.title = t("attach.clickToDownload");
+        img.addEventListener("click", function () {
+          const btn = holder.closest(".attach-card").querySelector("[data-dl]");
+          if (btn) btn.click();
+        });
+        holder.appendChild(img);
+        // The detail pane re-renders on message switch; drop the URL then.
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
+      } catch (_) {
+        // Silent fallback: leave the card as a plain download row.
+        holder.remove();
+      }
+    });
   }
 
   function wireAttachmentDownloads(root, m) {
@@ -740,6 +785,7 @@
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
+      hydrateAttachmentPreviews(detail, m);
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
@@ -873,6 +919,7 @@
         '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
+      hydrateAttachmentPreviews(detail, m);
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
