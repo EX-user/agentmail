@@ -34,6 +34,7 @@ const (
 	ActionSetOneclickRegister Action = "set_oneclick_register"
 	ActionSetShowcase        Action = "set_showcase"
 	ActionClearShowcase      Action = "clear_showcase"
+	ActionSetDanmaku         Action = "set_danmaku"
 )
 
 // Entry is one audit record.
