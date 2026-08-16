@@ -12,7 +12,7 @@ import (
 	"github.com/agentmail/agentmail/internal/httpclient"
 )
 
-// Text-attachment limits for send_email file_paths.
+// Text-attachment limits for send_email inline_files.
 const (
 	maxAttachFiles     = 3        // at most 3 files per send
 	maxAttachFileBytes = 100 * 1024 // 100KB per file
@@ -28,7 +28,7 @@ func attachFiles(body string, paths []string) (string, error) {
 		return body, nil
 	}
 	if len(paths) > maxAttachFiles {
-		return "", fmt.Errorf("file_paths: at most %d files allowed, got %d", maxAttachFiles, len(paths))
+		return "", fmt.Errorf("inline_files: at most %d files allowed, got %d", maxAttachFiles, len(paths))
 	}
 	var b strings.Builder
 	b.WriteString(body)
@@ -36,14 +36,14 @@ func attachFiles(body string, paths []string) (string, error) {
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
-			return "", fmt.Errorf("file_paths: cannot read %q: %w", p, err)
+			return "", fmt.Errorf("inline_files: cannot read %q: %w", p, err)
 		}
 		if len(data) > maxAttachFileBytes {
-			return "", fmt.Errorf("file_paths: %q is %d bytes, over the %d-byte per-file limit", p, len(data), maxAttachFileBytes)
+			return "", fmt.Errorf("inline_files: %q is %d bytes, over the %d-byte per-file limit", p, len(data), maxAttachFileBytes)
 		}
 		total += len(data)
 		if total > maxAttachTotal {
-			return "", fmt.Errorf("file_paths: total %d bytes exceeds the %d-byte limit", total, maxAttachTotal)
+			return "", fmt.Errorf("inline_files: total %d bytes exceeds the %d-byte limit", total, maxAttachTotal)
 		}
 		b.WriteString("\n\n--- file: " + filepath.Base(p) + " ---\n")
 		b.Write(data)
@@ -80,14 +80,14 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "send_email",
-			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. file_paths (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total).",
+			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          prop("Recipient address(es), comma-separated string or array", "string", true),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
-				"file_paths":  prop("Optional plain-text attachments: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
+				"inline_files":  prop("Optional plain-text attachments: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
 			}, []string{"access_code", "to", "subject", "body"}),
 		},
 		{
@@ -285,12 +285,12 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	if subject == "" || body == "" {
 		return nil, fmt.Errorf("subject and body are required")
 	}
-	// file_paths (optional, 1-3): append plain-text file contents from the
+	// inline_files (optional, 1-3): append plain-text file contents from the
 	// machine where this gateway runs as delimited blocks after the body.
 	// Validated (existence, per-file and total size) BEFORE consuming the
 	// send, so a bad attachment never burns the access-code budget or sends
 	// a truncated mail.
-	attachPaths := toStringSlice(args["file_paths"])
+	attachPaths := toStringSlice(args["inline_files"])
 	if len(attachPaths) > 0 {
 		merged, err := attachFiles(body, attachPaths)
 		if err != nil {
