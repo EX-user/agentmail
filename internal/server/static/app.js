@@ -1306,37 +1306,10 @@
     }
   }
 
-  // ⚙ popover: segmented controls write localStorage and re-render live.
-  function dmSyncPopover() {
-    const prefs = dmEffective();
-    $$(".dm-seg").forEach(function (seg) {
-      const key = seg.dataset.pref;
-      $$(".dm-seg[data-pref=" + key + "] button").forEach(function (b) {
-        b.classList.toggle("on", b.dataset.v === prefs[key]);
-      });
-    });
-  }
-  $("#btn-dm-gear").addEventListener("click", function (e) {
-    e.stopPropagation();
-    const panel = $("#dm-pref");
-    panel.classList.toggle("hidden");
-    if (!panel.classList.contains("hidden")) dmSyncPopover();
-  });
-  document.addEventListener("click", function (e) {
-    const panel = $("#dm-pref");
-    if (panel.classList.contains("hidden")) return;
-    if (!e.target.closest(".dm-pref") && !e.target.closest(".dm-gear")) panel.classList.add("hidden");
-  });
-  $$(".dm-seg button").forEach(function (b) {
-    b.addEventListener("click", function () {
-      const key = b.closest(".dm-seg").dataset.pref;
-      const cur = dmReadLocal() || {};
-      cur[key] = b.dataset.v;
-      try { localStorage.setItem(DM_PREF_KEY, JSON.stringify(cur)); } catch (_) {}
-      dmSyncPopover();
-      if (dmLastItems && dmLastItems.length) startDanmaku(dmLastItems);
-    });
-  });
+  // The per-visitor ⚙ popover was removed by final decision — danmaku style
+  // comes from site defaults (panel Settings). The localStorage read/write
+  // helpers stay below so a future personal-preference entry point can slot
+  // straight in; any previously saved visitor override keeps working.
 
   // renderShowcaseBar fills the always-open section: a one-line preview of
   // the newest letter under the topic title, then the list — each letter
