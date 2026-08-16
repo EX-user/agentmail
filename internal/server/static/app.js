@@ -240,7 +240,7 @@
       renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
-        recent.textContent = "No activity yet.";
+        recent.textContent = t("ovw.noActivity");
         return;
       }
       recent.innerHTML = "<ul>" + a.entries.map(function (e) {
@@ -267,7 +267,7 @@
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No accounts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">' + t("acc.noAccounts") + '</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -283,11 +283,11 @@
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">Enable</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">Disable</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell" data-label="Address">' + esc(a.address) + "</td>" +
-          '<td data-label="Tags">' + tags.trim() + "</td>" +
-          '<td class="sig-cell" data-label="Signature">' + esc(a.signature || "") + "</td>" +
-          '<td data-label="Created">' + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell" data-label="Actions"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
+          '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(a.signature || "") + "</td>" +
+          '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
@@ -327,11 +327,11 @@
     var rows = [];
     rows.push(
       "<tr>" +
-      '<td class="addr-cell" data-label="Address"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
-      '<td data-label="Tags"><span class="badge-listed">you</span></td>' +
+      '<td class="addr-cell" data-label="' + t("col.address") + '"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
+      '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="Actions"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
       "</tr>"
     );
     try {
@@ -339,7 +339,7 @@
       (data.contacts || []).forEach(function (c) {
         rows.push(
           "<tr>" +
-          '<td class="addr-cell" data-label="Address">' + esc(c) + "</td>" +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
           "<td data-label=\"Tags\"></td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
           "</tr>"
         );
@@ -558,7 +558,7 @@
         item.innerHTML =
           (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
           '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
-          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          '<div class="meta"><b>' + t("mail.from") + "</b> '" + esc(m.from) +
           ' · <b>to:</b> ' + esc((m.to || []).join(", ")) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
@@ -675,7 +675,7 @@
         item.innerHTML =
           (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
           '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
-          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          '<div class="meta"><b>' + t("mail.from") + "</b> '" + esc(m.from) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
         item.addEventListener("click", function () { showInboxDetail(m.id, item, false); });

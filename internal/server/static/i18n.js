@@ -48,6 +48,16 @@
       "common.cancel": "Cancel",
       "common.error": "Error: {msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- phase 3 slice C ----
+      "col.address": "Address",
+      "col.tags": "Tags",
+      "col.signature": "Signature",
+      "col.created": "Created",
+      "col.actions": "Actions",
+      "mail.from": "from:",
+      "acc.noAccounts": "No accounts.",
+      "ovw.noActivity": "No activity yet.",
+      "set.noLetters": "No public letters.",
       // ---- phase 3 slice B ----
       "reg.registering": "Registering…",
       "reg.needName": "Please choose a username.",
@@ -223,6 +233,16 @@
       "common.cancel": "取消",
       "common.error": "错误：{msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- phase 3 slice C ----
+      "col.address": "地址",
+      "col.tags": "标签",
+      "col.signature": "签名",
+      "col.created": "创建时间",
+      "col.actions": "操作",
+      "mail.from": "发件人：",
+      "acc.noAccounts": "暂无账户。",
+      "ovw.noActivity": "暂无活动。",
+      "set.noLetters": "暂无公开信。",
       // ---- phase 3 slice B ----
       "reg.registering": "注册中…",
       "reg.needName": "请选择一个用户名。",
