@@ -46,6 +46,7 @@ var (
 	mSendRateLimit        = []byte("send_rate_limit")
 	mByteRateLimit        = []byte("byte_rate_limit")
 	mRegisterIPRateLimit  = []byte("register_ip_rate_limit")
+	mFilesTotalLimit      = []byte("files_total_limit")
 	mOneclickRegisterEnabled = []byte("oneclick_register_enabled")
 	mShowcaseEnabled      = []byte("showcase_enabled")
 	mDanmakuMode          = []byte("danmaku_default_mode")
@@ -483,6 +484,22 @@ func (s *Store) GetRegisterIPRateLimit() int {
 // hour (0 disables).
 func (s *Store) SetRegisterIPRateLimit(n int) error {
 	return s.setMetaInt(mRegisterIPRateLimit, n)
+}
+
+// GetFilesTotalLimit returns the total byte cap for ALL stored attachment
+// files. Default 512MB; 0 is treated as the default (the cap cannot be
+// disabled — disk reclamation depends on it).
+func (s *Store) GetFilesTotalLimit() int64 {
+	v := s.getMetaInt64(mFilesTotalLimit, 512<<20)
+	if v <= 0 {
+		return 512 << 20
+	}
+	return v
+}
+
+// SetFilesTotalLimit sets the total attachment byte cap.
+func (s *Store) SetFilesTotalLimit(n int64) error {
+	return s.setMetaInt64(mFilesTotalLimit, n)
 }
 
 // getMetaInt / getMetaInt64 / setMetaInt / setMetaInt64 are small helpers for

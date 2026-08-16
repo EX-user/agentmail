@@ -160,18 +160,23 @@ func (s *Server) handleVerifyPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSend posts a message from the authenticated account.
-//   POST /api/send  {"to": [...], "subject": "...", "body": "...", "public": bool}
+//   POST /api/send  {"to": [...], "subject": "...", "body": "...", "public": bool, "attachments": ["fileID", ...]}
 //   -> {"message_id": "..."}
 // public (optional, default false) additionally writes an independent copy
 // to the showcase bucket for the public portal sample — explicit opt-in by
 // the sender; delivery is unaffected either way.
+// attachments (optional) references files the sender previously uploaded;
+// the server validates ownership, embeds the download metadata into the
+// message, and grants the recipients download access in the same
+// transaction.
 func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	from := accountFrom(r.Context())
 	var body struct {
-		To      []string `json:"to"`
-		Subject string   `json:"subject"`
-		Body    string   `json:"body"`
-		Public  bool     `json:"public"`
+		To          []string `json:"to"`
+		Subject     string   `json:"subject"`
+		Body        string   `json:"body"`
+		Public      bool     `json:"public"`
+		Attachments []string `json:"attachments"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -207,7 +212,15 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fromName := localPart(from)
-	res, err := s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
+	var res *store.SendResult
+	var err error
+	if len(body.Attachments) > 0 {
+		// Attachments must reference the sender's own uploaded files; the
+		// store validates ownership and grants recipients download access.
+		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.Subject, body.Body, body.Attachments)
+	} else {
+		res, err = s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
+	}
 	if err != nil {
 		badRequest(w, err.Error())
 		return
@@ -275,14 +288,21 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionGetMessage, who, "id="+id)
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"message_id":  msg.ID,
 		"from":        msg.From,
 		"to":          msg.To,
 		"subject":     msg.Subject,
 		"body":        msg.Body,
 		"received_at": msg.ReceivedAt,
-	})
+	}
+	// Attachments carry the download metadata (id/filename/size/access
+	// code) the recipient needs. Omit the key entirely when there are none
+	// (matches the stored message shape).
+	if len(msg.Attachments) > 0 {
+		resp["attachments"] = msg.Attachments
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleProfileSelf updates the authenticated account's directory visibility

@@ -16,12 +16,23 @@ var ErrMessageNotFound = errors.New("message not found")
 
 // Message is the stored record for one piece of mail.
 type Message struct {
-	ID         string   `json:"id"`          // ULID
-	From       string   `json:"from"`        // sender address
-	To         []string `json:"to"`          // recipient addresses
-	Subject    string   `json:"subject"`
-	Body       string   `json:"body"`
-	ReceivedAt int64    `json:"received_at"` // unix seconds
+	ID          string           `json:"id"`          // ULID
+	From        string           `json:"from"`        // sender address
+	To          []string         `json:"to"`          // recipient addresses
+	Subject     string           `json:"subject"`
+	Body        string           `json:"body"`
+	Attachments []AttachmentMeta `json:"attachments,omitempty"` // metadata only; content lives in the file store
+	ReceivedAt  int64            `json:"received_at"`          // unix seconds
+}
+
+// AttachmentMeta is the message-side projection of an uploaded file: what
+// the recipient needs to download it. The access code is included because
+// download authorization requires it.
+type AttachmentMeta struct {
+	ID         string `json:"id"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+	AccessCode string `json:"access_code"`
 }
 
 // MessageSummary is a lightweight inbox entry (no body).
@@ -33,6 +44,7 @@ type MessageSummary struct {
 	Preview    string   `json:"preview"`
 	ReceivedAt int64    `json:"received_at"`
 	Unread     bool     `json:"unread"`
+	Files      int      `json:"files"` // attachment count (detail fetch lists them)
 }
 
 // SendResult is returned by Send.
@@ -626,6 +638,7 @@ func summarize(m Message) MessageSummary {
 		ID:         m.ID,
 		From:       m.From,
 		To:         m.To,
+		Files:      len(m.Attachments),
 		Subject:    m.Subject,
 		Preview:    preview,
 		ReceivedAt: m.ReceivedAt,

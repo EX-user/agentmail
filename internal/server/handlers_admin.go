@@ -577,6 +577,7 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 		SendRate     *int   `json:"send_rate"`
 		ByteRate     *int64 `json:"byte_rate"`
 		RegisterRate *int   `json:"register_rate"`
+		FilesTotal   *int64 `json:"files_total_limit"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -612,9 +613,20 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.FilesTotal != nil {
+		if *body.FilesTotal < 1<<20 {
+			badRequest(w, "files_total_limit must be >= 1MB")
+			return
+		}
+		if err := s.store.SetFilesTotalLimit(*body.FilesTotal); err != nil {
+			internalError(w, "set files total limit: "+err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"send_rate":     s.store.GetSendRateLimit(),
-		"byte_rate":     s.store.GetByteRateLimit(),
-		"register_rate": s.store.GetRegisterIPRateLimit(),
+		"send_rate":         s.store.GetSendRateLimit(),
+		"byte_rate":         s.store.GetByteRateLimit(),
+		"register_rate":     s.store.GetRegisterIPRateLimit(),
+		"files_total_limit": s.store.GetFilesTotalLimit(),
 	})
 }

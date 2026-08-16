@@ -74,16 +74,22 @@ func (s *Store) SaveFile(owner, filename string, allowed []string, content []byt
 	}
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		fb := tx.Bucket(bFiles)
-		// Quota check: sum the owner's live files.
-		var used int64
+		// Quota checks: per-account AND the global total cap.
+		var used, total int64
 		c := fb.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var fr FileRecord
-			if json.Unmarshal(v, &fr) == nil && fr.Owner == owner {
-				used += fr.Size
+			if json.Unmarshal(v, &fr) == nil {
+				total += fr.Size
+				if fr.Owner == owner {
+					used += fr.Size
+				}
 			}
 		}
 		if used+rec.Size > FileQuotaPerAcct {
+			return ErrQuotaExceeded
+		}
+		if total+rec.Size > s.GetFilesTotalLimit() {
 			return ErrQuotaExceeded
 		}
 		if err := fb.Put([]byte(id), meta); err != nil {
@@ -185,6 +191,150 @@ func (s *Store) CleanupExpiredFiles() (int, error) {
 		return nil
 	})
 	return len(doomed), err
+}
+
+// SendWithAttachments composes a mail whose attachments reference files
+// previously uploaded by the sender. One transaction does everything:
+// validates each file id (must exist and be owned by the sender — an
+// account can never attach someone else's file), snapshots the file
+// metadata into the message (what recipients need to download), extends
+// each file's allowed list with the message's valid recipients, and runs
+// the ordinary send. attachIDs may be empty (then it behaves like Send).
+func (s *Store) SendWithAttachments(from, fromName string, to []string, subject, body string, attachIDs []string) (*SendResult, error) {
+	msgID := newULID()
+	now := s.now().Unix()
+	delivered := 0
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		// Resolve attachments first: all must be the sender's own files.
+		var metas []AttachmentMeta
+		fb := tx.Bucket(bFiles)
+		var fileKeys [][]byte
+		for _, id := range attachIDs {
+			raw := fb.Get([]byte(id))
+			if raw == nil {
+				return fmt.Errorf("attachment %q not found", id)
+			}
+			var fr FileRecord
+			if err := json.Unmarshal(raw, &fr); err != nil {
+				return fmt.Errorf("attachment %q unreadable", id)
+			}
+			if !strings.EqualFold(fr.Owner, from) {
+				return fmt.Errorf("attachment %q is not owned by sender", id)
+			}
+			metas = append(metas, AttachmentMeta{ID: fr.ID, Filename: fr.Filename, Size: fr.Size, AccessCode: fr.AccessCode})
+			fileKeys = append(fileKeys, []byte(id))
+		}
+
+		// Determine the valid recipients up front (mirrors Send's skip
+		// semantics) so allowed-list extension matches actual delivery.
+		var validRecipients []string
+		for _, addr := range to {
+			if _, err := getAccountInTx(tx, addr); err == nil {
+				validRecipients = append(validRecipients, addr)
+			}
+		}
+		if len(validRecipients) == 0 {
+			return fmt.Errorf("no valid recipients among %v", to)
+		}
+
+		// Extend each file's allowed list with the recipients (dedup, owner
+		// address skipped — the owner can always download their own files).
+		for i, key := range fileKeys {
+			raw := fb.Get(key)
+			var fr FileRecord
+			if err := json.Unmarshal(raw, &fr); err != nil {
+				return err
+			}
+			set := map[string]bool{}
+			for _, a := range fr.Allowed {
+				set[strings.ToLower(a)] = true
+			}
+			changed := false
+			for _, addr := range validRecipients {
+				l := strings.ToLower(addr)
+				if !set[l] && !strings.EqualFold(fr.Owner, addr) {
+					set[l] = true
+					changed = true
+				}
+			}
+			if changed {
+				fr.Allowed = make([]string, 0, len(set))
+				for a := range set {
+					fr.Allowed = append(fr.Allowed, a)
+				}
+				sortStrings(fr.Allowed)
+				val, err := json.Marshal(fr)
+				if err != nil {
+					return err
+				}
+				if err := fb.Put(key, val); err != nil {
+					return err
+				}
+			}
+			_ = i
+		}
+
+		// Compose and store the message with attachment metadata.
+		msg := Message{
+			ID:          msgID,
+			From:        from,
+			To:          to,
+			Subject:     subject,
+			Body:        body,
+			Attachments: metas,
+			ReceivedAt:  now,
+		}
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		mb := tx.Bucket(bMessages)
+		if existing := mb.Get([]byte(msgID)); existing != nil {
+			return nil // idempotency guard (same as Send)
+		}
+		if err := mb.Put([]byte(msgID), msgBytes); err != nil {
+			return err
+		}
+		ib := tx.Bucket(bInbox)
+		ub := tx.Bucket(bUnread)
+		for _, addr := range validRecipients {
+			acc, err := getAccountInTx(tx, addr)
+			if err != nil {
+				continue
+			}
+			key := indexKey(acc.UUID, msgID)
+			if err := ib.Put(key, nil); err != nil {
+				return err
+			}
+			if err := ub.Put(key, nil); err != nil {
+				return err
+			}
+			delivered++
+		}
+		sb := tx.Bucket(bSent)
+		if sender, err := getAccountInTx(tx, from); err == nil {
+			key := indexKey(sender.UUID, msgID)
+			if err := sb.Put(key, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("send: %w", err)
+	}
+	if delivered == 0 {
+		return nil, fmt.Errorf("no valid recipients among %v", to)
+	}
+	return &SendResult{MessageID: msgID}, nil
+}
+
+func sortStrings(list []string) {
+	for i := 1; i < len(list); i++ {
+		for j := i; j > 0 && list[j] < list[j-1]; j-- {
+			list[j], list[j-1] = list[j-1], list[j]
+		}
+	}
 }
 
 // randomFileCode mints a 32-hex-char download code.

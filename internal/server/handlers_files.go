@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/agentmail/agentmail/internal/audit"
@@ -113,9 +114,27 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", rec.Filename))
+	w.Header().Set("Content-Disposition", contentDisposition(rec.Filename))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 	_, _ = w.Write(content)
+}
+
+// contentDisposition builds a header-safe Content-Disposition value: an
+// ASCII-safe fallback filename plus RFC 5987 filename* carrying the
+// original (possibly non-ASCII) name. %q alone breaks headers for names
+// with non-ASCII bytes (alice's Phase-1 review note).
+func contentDisposition(name string) string {
+	ascii := make([]rune, 0, len(name))
+	for _, r := range name {
+		if r >= 0x20 && r < 0x7f && r != '"' && r != '\\' {
+			ascii = append(ascii, r)
+		}
+	}
+	fallback := string(ascii)
+	if fallback == "" {
+		fallback = "file"
+	}
+	return fmt.Sprintf("attachment; filename=%q; filename*=UTF-8''%s", fallback, url.PathEscape(name))
 }
 
 // sanitizeFilename strips path separators and control chars from an
