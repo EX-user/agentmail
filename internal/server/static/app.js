@@ -677,6 +677,14 @@
       });
       updateInboxPager(totalPages, inboxPage + 1);
       status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
+      // Avoid the empty detail pane (feedback): preload the newest message.
+      // Desktop shows it right away; mobile stays on the List tab (the
+      // detail is preloaded behind it and opens on tap as usual).
+      {
+        const first = list.querySelector(".mail-item");
+        const newest = msgs[0];
+        if (first && newest) showInboxDetail(newest.id, first, true);
+      }
     } catch (e) {
       list.textContent = "Error: " + e.message;
       status.textContent = "";
@@ -714,12 +722,14 @@
     loadInbox(p - 1); // loadInbox is 0-based
   });
 
-  async function showInboxDetail(id, item) {
+  async function showInboxDetail(id, item, auto) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.textContent = "Loading…";
-    revealDetailOnMobile("inbox-grid", detail);
+    // Auto-preload (newest message on inbox load) stays on the List tab on
+    // mobile — only a user tap flips to Message.
+    if (!auto) revealDetailOnMobile("inbox-grid", detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);

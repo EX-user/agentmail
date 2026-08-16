@@ -666,6 +666,13 @@ nav .tab { flex: 0 0 auto; }
 
 /* Stats row wraps instead of overflowing. */
 
+/* Mail tab selectors overflow on phones (feedback): let the account
+   dropdown take the row's width instead of stretching the page. */
+@media (max-width: 800px) {
+  #tab-mail .row label { flex: 1 1 100%; }
+  #mail-account { width: 100%; max-width: 100%; }
+}
+
 /* Accounts as cards on mobile (feedback): the 5-column table needs
    horizontal dragging at phone widths. <=800px each row becomes a glass
    card; cells stack with small labels from data-label attributes.
