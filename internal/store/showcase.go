@@ -2,10 +2,15 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	bolt "go.etcd.io/bbolt"
 )
+
+// ErrShowcaseNotFound is returned by DeleteShowcaseEntry when no entry has
+// the given id (handler maps it to 404).
+var ErrShowcaseNotFound = errors.New("showcase entry not found")
 
 // bShowcase stores optional public copies of messages (the "showcase" tee:
 // senders can mark a send public, and the portal shows a random sample of
@@ -114,5 +119,17 @@ func (s *Store) ClearShowcase() error {
 		}
 		_, err := tx.CreateBucket(bShowcase)
 		return err
+	})
+}
+
+// DeleteShowcaseEntry removes one public entry by id. ErrShowcaseNotFound
+// when the id is absent, so the handler can answer 404.
+func (s *Store) DeleteShowcaseEntry(id string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		sb := tx.Bucket(bShowcase)
+		if sb.Get([]byte(id)) == nil {
+			return ErrShowcaseNotFound
+		}
+		return sb.Delete([]byte(id))
 	})
 }

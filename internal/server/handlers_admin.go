@@ -450,6 +450,37 @@ func (s *Server) handleAdminSetDanmaku(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminDeleteShowcaseItem removes one showcase entry by id.
+//   POST /admin/delete-showcase-item {"id": "..."} -> {ok: true}; 404 if absent.
+func (s *Server) handleAdminDeleteShowcaseItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct {
+		ID string `json:"id"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(body.ID) == "" {
+		badRequest(w, "id is required")
+		return
+	}
+	if err := s.store.DeleteShowcaseEntry(body.ID); err != nil {
+		if errors.Is(err, store.ErrShowcaseNotFound) {
+			http.Error(w, "showcase entry not found", http.StatusNotFound)
+			return
+		}
+		internalError(w, "delete showcase item: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionDeleteShowcaseItem, "showcase",
+		fmt.Sprintf("by=admin id=%s", body.ID))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
 // Per admin's clarification it does NOT gate the tee or the showcase
 // endpoint — the portal keeps serving public mail regardless.

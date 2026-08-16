@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -134,6 +135,32 @@ func TestClearShowcase(t *testing.T) {
 	}
 	if n, _ := s.CountShowcase(); n != 1 {
 		t.Errorf("post-clear tee count = %d, want 1", n)
+	}
+}
+
+// TestDeleteShowcaseEntry covers exact delete + not-found distinction.
+func TestDeleteShowcaseEntry(t *testing.T) {
+	s := newShowcaseStore(t)
+	if err := s.TeeShowcase("a@t", nil, "one", "b"); err != nil {
+		t.Fatalf("tee1: %v", err)
+	}
+	if err := s.TeeShowcase("a@t", nil, "two", "b"); err != nil {
+		t.Fatalf("tee2: %v", err)
+	}
+	entries, _ := s.ListShowcase()
+	if len(entries) != 2 {
+		t.Fatalf("pre-delete count = %d, want 2", len(entries))
+	}
+	if err := s.DeleteShowcaseEntry(entries[0].ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	// ListShowcase is newest-first, so entries[0] was "two": "one" remains.
+	after, _ := s.ListShowcase()
+	if len(after) != 1 || after[0].Subject != "one" {
+		t.Errorf("post-delete = %+v, want only 'one'", after)
+	}
+	if err := s.DeleteShowcaseEntry(entries[0].ID); err == nil || !errors.Is(err, ErrShowcaseNotFound) {
+		t.Errorf("second delete should be ErrShowcaseNotFound, got %v", err)
 	}
 }
 
