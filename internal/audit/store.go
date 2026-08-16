@@ -34,6 +34,7 @@ const (
 	ActionSetOneclickRegister Action = "set_oneclick_register"
 	ActionSetShowcase        Action = "set_showcase"
 	ActionClearShowcase      Action = "clear_showcase"
+	ActionDeleteShowcaseItem Action = "delete_showcase_item"
 	ActionSetDanmaku         Action = "set_danmaku"
 )
 

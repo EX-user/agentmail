@@ -271,6 +271,7 @@ func (s *Server) infoShowcase(w http.ResponseWriter, r *http.Request) {
 		entries = entries[:n]
 	}
 	type showcaseItem struct {
+		ID      string `json:"id"`
 		From    string `json:"from"`
 		Subject string `json:"subject"`
 		Body    string `json:"body"`
@@ -282,7 +283,7 @@ func (s *Server) infoShowcase(w http.ResponseWriter, r *http.Request) {
 		if runes := []rune(body); len(runes) > showcaseBodyLimit {
 			body = string(runes[:showcaseBodyLimit]) + "…"
 		}
-		items = append(items, showcaseItem{From: e.From, Subject: e.Subject, Body: body, Ts: e.ReceivedAt})
+		items = append(items, showcaseItem{ID: e.ID, From: e.From, Subject: e.Subject, Body: body, Ts: e.ReceivedAt})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"query": "showcase",
