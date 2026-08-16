@@ -253,16 +253,22 @@ h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
   font-size: 13px;
 }
 
-.stats { display: flex; gap: 16px; }
-.stat {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 24px;
-  min-width: 120px;
-  display: flex;
-  flex-direction: column;
+/* Stat groups (feedback): one wide rounded rectangle per group, light
+   vertical dividers between the numbers; flex-wrap keeps everything inside
+   the same container on narrow screens (no lone cards drifting to a new
+   row with their own borders). */
+.stats {
+  display: flex; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 6px 0;
 }
+.stat {
+  background: transparent; border: none; border-radius: 0;
+  padding: 12px 26px; min-width: 0; flex: 1 1 auto;
+  display: flex; flex-direction: column;
+}
+.stat + .stat { border-left: 1px solid var(--border); }
+@media (max-width: 520px) { .stat { padding: 10px 16px; } }
 .stat .num { font-size: 28px; font-weight: 600; }
 .stat span:last-child { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 
@@ -659,7 +665,6 @@ nav .tab { flex: 0 0 auto; }
 }
 
 /* Stats row wraps instead of overflowing. */
-.stats { flex-wrap: wrap; }
 
 /* Accounts as cards on mobile (feedback): the 5-column table needs
    horizontal dragging at phone widths. <=800px each row becomes a glass
