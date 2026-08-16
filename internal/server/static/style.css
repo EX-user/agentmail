@@ -863,6 +863,7 @@ nav .tab { flex: 0 0 auto; }
 .attach-x {
   background: transparent; border: none; color: var(--muted); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 0 2px;
+  align-self: center; display: inline-flex; align-items: center; height: 20px;
 }
 .attach-x:hover { color: var(--error); }
 

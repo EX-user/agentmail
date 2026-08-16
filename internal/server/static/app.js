@@ -2118,7 +2118,11 @@
     status.textContent = t("compose.sending");
     try {
       const sender = getSession();
-      const sendPath = (sender && !sender.is_admin) ? "/api/send" : "/admin/send";
+      // Both roles send via /api/send (the admin credential satisfies
+      // account auth, same as the inbox reads). /admin/send does not parse
+      // the attachments field — routing admins there silently dropped them
+      // (v0.5.1 live bug).
+      const sendPath = "/api/send";
       // Public showcase opt-in (v0.4.4): include the flag when checked; the
       // server ignores it until the showcase tee ships (unknown JSON fields
       // are ignored), so this is safe to send already.
