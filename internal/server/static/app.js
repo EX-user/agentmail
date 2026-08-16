@@ -277,11 +277,11 @@
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">Enable</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">Disable</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell">' + esc(a.address) + "</td>" +
-          "<td>" + tags.trim() + "</td>" +
-          '<td class="sig-cell">' + esc(a.signature || "") + "</td>" +
-          "<td>" + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="addr-cell" data-label="Address">' + esc(a.address) + "</td>" +
+          '<td data-label="Tags">' + tags.trim() + "</td>" +
+          '<td class="sig-cell" data-label="Signature">' + esc(a.signature || "") + "</td>" +
+          '<td data-label="Created">' + fmtTime(a.created_at) + "</td>" +
+          '<td class="actions-cell" data-label="Actions"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
@@ -321,11 +321,11 @@
     var rows = [];
     rows.push(
       "<tr>" +
-      '<td class="addr-cell"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
-      '<td><span class="badge-listed">you</span></td>' +
-      "<td></td>" +
-      "<td></td>" +
-      '<td class="actions-cell"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
+      '<td class="addr-cell" data-label="Address"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
+      '<td data-label="Tags"><span class="badge-listed">you</span></td>' +
+      "<td data-label=\"Signature\"></td>" +
+      "<td data-label=\"Created\"></td>" +
+      '<td class="actions-cell" data-label="Actions"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
       "</tr>"
     );
     try {
@@ -333,8 +333,8 @@
       (data.contacts || []).forEach(function (c) {
         rows.push(
           "<tr>" +
-          '<td class="addr-cell">' + esc(c) + "</td>" +
-          "<td></td><td></td><td></td><td></td>" +
+          '<td class="addr-cell" data-label="Address">' + esc(c) + "</td>" +
+          "<td data-label=\"Tags\"></td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
           "</tr>"
         );
       });

@@ -308,8 +308,7 @@
     <!-- My Profile -->
     <section id="tab-profile" class="tab-panel hidden">
       <h2>My Profile <small class="muted">— your directory visibility and signature</small></h2>
-      <p class="muted">Control your visibility in the public directory and set a signature. These are saved to your own account.</p>
-      <div class="settings-section">
+      <div class="settings-section profile-card">
         <div class="row">
           <label style="flex:0 0 auto">
             <input type="checkbox" id="profile-visible" />
@@ -318,13 +317,14 @@
         </div>
         <div class="row">
           <label>Signature
-            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" maxlength="200" style="width:320px" />
+            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" maxlength="200" />
           </label>
         </div>
         <div class="row">
           <button id="btn-save-profile" class="primary">Save profile</button>
           <span id="profile-status" class="muted"></span>
         </div>
+        <p class="muted" style="margin:6px 0 0; font-size:12px;">Visibility and signature are saved to your own account.</p>
       </div>
     </section>
 
