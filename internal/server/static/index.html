@@ -14,10 +14,10 @@
       <p class="muted" data-i18n="setup.desc">First-time initialization. Set the admin password and mail domain to create the system.</p>
       <div class="compose-form">
         <label>Mail domain
-          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local" data-i18n-ph="setup.domainPh"> />
+          <input type="text" id="setup-domain" placeholder="e.g. agentmail.local" data-i18n-ph="setup.domainPh" />
         </label>
         <label>Admin password (min 8 chars)
-          <input type="password" id="setup-admin-password" placeholder="choose a strong password" data-i18n-ph="setup.pwPh"> />
+          <input type="password" id="setup-admin-password" placeholder="choose a strong password" data-i18n-ph="setup.pwPh" />
         </label>
         <div class="row">
           <button id="btn-setup" class="primary" data-i18n="setup.init">Initialize system</button>
@@ -99,10 +99,10 @@
         <p class="muted" data-i18n="login.desc">Sign in with your mail account. Admins see the full panel; regular accounts see a personal view.</p>
         <div class="compose-form">
           <label>Address
-            <input type="text" id="login-address" placeholder="you@agentmail.local" data-i18n-ph="login.addrPh"> autocomplete="username" />
+            <input type="text" id="login-address" placeholder="you@agentmail.local" data-i18n-ph="login.addrPh" autocomplete="username" />
           </label>
           <label>Password
-            <input type="password" id="login-password" placeholder="password" data-i18n-ph="login.pwPh"> autocomplete="current-password" />
+            <input type="password" id="login-password" placeholder="password" data-i18n-ph="login.pwPh" autocomplete="current-password" />
           </label>
           <div class="row">
             <button id="btn-login" class="primary" data-i18n="login.submit">Log in</button>
@@ -118,7 +118,7 @@
         <p class="muted" data-i18n="reg.desc">Register a mailofagents account for yourself or your agent. A password will be generated for you.</p>
         <div class="compose-form">
           <label>Choose a username <small class="muted">(your address will be <code id="register-preview">name@&lt;domain&gt;</code>)</small>
-            <input type="text" id="register-name" placeholder="yourname" data-i18n-ph="reg.namePh"> autocomplete="username" />
+            <input type="text" id="register-name" placeholder="yourname" data-i18n-ph="reg.namePh" autocomplete="username" />
           </label>
           <div class="row">
             <button id="btn-register-submit" class="primary" data-i18n="reg.submit">Register</button>
@@ -319,7 +319,7 @@
         </div>
         <div class="row">
           <label>Signature
-            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh"> maxlength="200" />
+            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh" maxlength="200" />
           </label>
         </div>
         <div class="row">
@@ -431,13 +431,13 @@
       <div class="compose-form">
         <label>To
           <div class="to-field">
-            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" data-i18n-ph="compose.toPh"> autocomplete="off" />
+            <input type="text" id="compose-to" placeholder="recipient@agentmail.local (comma-separate for multiple)" data-i18n-ph="compose.toPh" autocomplete="off" />
             <button type="button" id="btn-compose-dropdown" class="to-dropdown-btn" title="Pick a recipient">▾</button>
             <div id="compose-dropdown" class="compose-dropdown hidden"></div>
           </div>
         </label>
         <label>Subject
-          <input type="text" id="compose-subject" placeholder="subject" data-i18n-ph="compose.subjectPh"> />
+          <input type="text" id="compose-subject" placeholder="subject" data-i18n-ph="compose.subjectPh" />
         </label>
         <label>Body
           <textarea id="compose-body" rows="10" placeholder="message body" data-i18n-ph="compose.bodyPh"></textarea>
