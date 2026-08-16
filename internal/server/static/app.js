@@ -2218,36 +2218,22 @@
     threadEl.textContent = t("common.loading");
 
     try {
+      // Server-side thread endpoint (v0.5.2): server merges both directions
+      // per peer — replaces the old "fetch 50 inbox + 50 sent, filter
+      // client-side" approach, which missed conversations with low-frequency
+      // contacts that fell outside the 50-message windows.
       const cur = getSession();
       const isRegular = cur && !cur.is_admin;
-      // For admins: read admin's own sent + inbox via /admin/*. For regular
-      // accounts: read their own sent + inbox via /api/sent + /api/inbox.
-      const [sentRes, inboxRes] = isRegular
-        ? await Promise.all([
-            api("/api/sent?limit=50"),
-            api("/api/inbox?limit=50"),
-          ])
-        : await Promise.all([
-            api("/admin/sent?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
-            api("/admin/messages?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
-          ]);
-
-      // sent: admin -> to (match recipient in `to`)
-      const sent = (sentRes.messages || []).filter(function (m) {
-        return (m.to || []).some(function (r) { return r === to; });
-      }).map(function (m) {
-        return { dir: "out", id: m.id, subject: m.subject, preview: m.preview,
-                 ts: m.received_at, peer: to };
-      });
-      // inbox: messages from `to` where admin is a recipient
-      const inbox = (inboxRes.messages || []).filter(function (m) {
-        return m.from === to;
-      }).map(function (m) {
-        return { dir: "in", id: m.id, subject: m.subject, preview: m.preview,
-                 ts: m.received_at, peer: to, from: m.from, unread: m.unread };
-      });
-
-      const all = sent.concat(inbox).sort(function (a, b) { return b.ts - a.ts; });
+      const threadRes = isRegular
+        ? await api("/api/thread?with=" + encodeURIComponent(to) + "&limit=50")
+        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + systemDomain) +
+            "&with=" + encodeURIComponent(to) + "&limit=50");
+      const all = (threadRes.messages || []).map(function (m) {
+        return m.dir === "out"
+          ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: to }
+          : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
+              peer: to, from: m.from, unread: m.unread };
+      }).sort(function (a, b) { return b.ts - a.ts; });
       if (!all.length) {
         threadEl.className = "thread-list muted";
         threadEl.textContent = "No conversation with " + to + " yet.";
