@@ -48,6 +48,11 @@
       "common.cancel": "Cancel",
       "common.error": "Error: {msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- attachments (v0.5.1) ----
+      "compose.attach": "📎 Attach",
+      "attach.dlFailed": "Download failed: ",
+      "attach.tooLarge": "file too large (1MB limit)",
+      "attach.upFailed": "upload failed",
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "Compose",
       "act.resetPw": "Reset password",
@@ -259,6 +264,11 @@
       "common.cancel": "取消",
       "common.error": "错误：{msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- attachments (v0.5.1) ----
+      "compose.attach": "📎 添加附件",
+      "attach.dlFailed": "下载失败：",
+      "attach.tooLarge": "文件过大（限 1MB）",
+      "attach.upFailed": "上传失败",
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "写邮件",
       "act.resetPw": "重置密码",

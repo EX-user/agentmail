@@ -606,6 +606,118 @@
     mailShowPane(gridId, "detail");
   }
 
+  // ---- compose attachments (v0.5.1) ----
+  // Picked files upload immediately (multipart, Basic auth); chips show
+  // name/size with a remove ×; ids join the Send body. Failed uploads
+  // surface as error chips; nothing blocks composing without attachments.
+  let composeAttachmentIds = [];
+
+  function renderComposeAttachments(items) {
+    const wrap = $("#compose-attachments");
+    wrap.innerHTML = items.map(function (a, i) {
+      return '<div class="attach-card' + (a.error ? " attach-error" : "") + '">' +
+        '<span class="attach-clip">📎</span>' +
+        '<span class="attach-name">' + esc(a.filename) + "</span>" +
+        (a.error
+          ? '<span class="attach-size">' + esc(a.error) + "</span>"
+          : '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>") +
+        '<button type="button" class="attach-x" data-rm="' + i + '" title="Remove">×</button>' +
+        "</div>";
+    }).join("");
+    $$("[data-rm]", wrap).forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const i = +btn.dataset.rm;
+        composeAttachmentItems.splice(i, 1);
+        composeAttachmentIds = composeAttachmentItems.filter(function (a) { return a.id; }).map(function (a) { return a.id; });
+        renderComposeAttachments(composeAttachmentItems);
+      });
+    });
+  }
+
+  let composeAttachmentItems = [];
+
+  $("#btn-attach").addEventListener("click", function () {
+    $("#compose-file-input").click();
+  });
+
+  $("#compose-file-input").addEventListener("change", async function () {
+    const files = Array.from(this.files || []);
+    this.value = "";
+    for (const f of files) {
+      const item = { filename: f.name, size: f.size };
+      composeAttachmentItems.push(item);
+      renderComposeAttachments(composeAttachmentItems);
+      try {
+        const fd = new FormData();
+        fd.append("file", f, f.name);
+        const res = await fetch("/api/files/upload", {
+          method: "POST",
+          headers: { Authorization: basicAuth() },
+          body: fd,
+        });
+        if (!res.ok) {
+          let msg = res.status + " " + res.statusText;
+          try { const tx = await res.text(); if (tx) msg = tx; } catch (_) {}
+          throw new Error(msg);
+        }
+        const meta = await res.json();
+        item.id = meta.id;
+        item.size = meta.size;
+        composeAttachmentIds = composeAttachmentItems.filter(function (a) { return a.id; }).map(function (a) { return a.id; });
+        renderComposeAttachments(composeAttachmentItems);
+      } catch (e) {
+        item.error = (e.message || "").indexOf("too large") >= 0 ? t("attach.tooLarge") : t("attach.upFailed");
+        renderComposeAttachments(composeAttachmentItems);
+      }
+    }
+  });
+
+  // ---- attachments (v0.5.1) ----
+  // Attachment cards for message detail views. Download goes through an
+  // authenticated fetch -> blob -> object URL (plain <a href> would lack the
+  // Basic auth header the /api/files route requires).
+  function attachmentCards(m) {
+    const list = (m && m.attachments) || [];
+    if (!list.length) return "";
+    return '<div class="attach-list">' + list.map(function (a, i) {
+      return '<div class="attach-card">' +
+        '<span class="attach-clip">📎</span>' +
+        '<span class="attach-name">' + esc(a.filename) + "</span>" +
+        '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
+        '<button class="row-action" data-dl="' + i + '">Download</button>' +
+        "</div>";
+    }).join("") + "</div>";
+  }
+
+  function wireAttachmentDownloads(root, m) {
+    const list = (m && m.attachments) || [];
+    $$(".attach-card [data-dl]", root).forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const a = list[+btn.dataset.dl];
+        if (!a) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
+            headers: { Authorization: basicAuth() },
+          });
+          if (!res.ok) throw new Error(res.status + " " + res.statusText);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = a.filename || "attachment";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+        } catch (e) {
+          toast(t("attach.dlFailed") + e.message, "error");
+        }
+        btn.disabled = false;
+      });
+    });
+  }
+
   async function showDetail(id, item) {
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
@@ -626,7 +738,8 @@
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+      wireAttachmentDownloads(detail, m);
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
@@ -758,7 +871,8 @@
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+      wireAttachmentDownloads(detail, m);
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
@@ -2011,6 +2125,7 @@
       const payload = { to: to, subject: subject, body: bodyText };
       const pub = $("#compose-public");
       if (pub && pub.checked) payload.public = true;
+      if (composeAttachmentIds.length) payload.attachments = composeAttachmentIds.slice();
       const res = await api(sendPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2021,6 +2136,9 @@
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
+      composeAttachmentItems = [];
+      composeAttachmentIds = [];
+      renderComposeAttachments(composeAttachmentItems);
       loadComposeThread();
     } catch (e) {
       status.textContent = t("common.error", { msg: e.message });

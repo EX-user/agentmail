@@ -847,3 +847,21 @@ nav .tab { flex: 0 0 auto; }
 /* Storage stat: unit in small type inside the big number (v0.4.12.1) —
    keeps size/baseline aligned with the other stat cards. */
 .stat .stat-unit { font-size: 15px; font-weight: 500; color: var(--muted); }
+
+/* Attachments (v0.5.1): chips in compose, cards in message detail. */
+.attach-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.attach-card {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: 13px; max-width: 100%;
+}
+.attach-card.attach-error { border-color: var(--error); }
+.attach-clip { flex: 0 0 auto; }
+.attach-name { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px;
+  overflow-wrap: anywhere; }
+.attach-size { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+.attach-x {
+  background: transparent; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 2px;
+}
+.attach-x:hover { color: var(--error); }
