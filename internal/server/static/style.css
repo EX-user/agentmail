@@ -831,3 +831,15 @@ nav .tab { flex: 0 0 auto; }
   font-size: 13px; color: var(--muted); cursor: pointer; user-select: none;
 }
 .public-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+/* Language switch chips (v0.4.12.1): small standalone pill, top-right —
+   visually distinct from CTA/action buttons (feedback). */
+.lang-btn {
+  position: absolute; top: 14px; right: 16px; z-index: 5;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+  color: var(--muted); font-size: 12px; font-family: inherit;
+  padding: 4px 12px; cursor: pointer;
+}
+.lang-btn:hover { color: var(--text); border-color: var(--accent); }
+#app-header .lang-btn { position: static; padding: 4px 10px; font-size: 11px; }
+#portal-page { position: relative; }

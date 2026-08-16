@@ -48,6 +48,14 @@
       "common.cancel": "Cancel",
       "common.error": "Error: {msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- v0.4.12.1 hotfix ----
+      "act.compose": "Compose",
+      "act.resetPw": "Reset password",
+      "act.enable": "Enable",
+      "act.disable": "Disable",
+      "act.changePw": "Change password",
+      "pager.prev": "← Prev",
+      "pager.next": "Next →",
       // ---- phase 3 closing slice ----
       "mail.allAccounts": "All accounts",
       "set.regOpen": "Open (anyone can register)",
@@ -251,6 +259,14 @@
       "common.cancel": "取消",
       "common.error": "错误：{msg}",
       "common.lang.switch": "EN / 中文",
+      // ---- v0.4.12.1 hotfix ----
+      "act.compose": "写邮件",
+      "act.resetPw": "重置密码",
+      "act.enable": "启用",
+      "act.disable": "停用",
+      "act.changePw": "修改密码",
+      "pager.prev": "← 上一页",
+      "pager.next": "下一页 →",
       // ---- phase 3 closing slice ----
       "mail.allAccounts": "全部账户",
       "set.regOpen": "开放（任何人可注册）",
