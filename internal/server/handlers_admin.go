@@ -141,14 +141,18 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"id":          msg.ID,
 		"from":        msg.From,
 		"to":          msg.To,
 		"subject":     msg.Subject,
 		"body":        msg.Body,
 		"received_at": msg.ReceivedAt,
-	})
+	}
+	if len(msg.Attachments) > 0 {
+		resp["attachments"] = msg.Attachments
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleAdminStats returns overall counts for the overview page.
@@ -287,9 +291,10 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		To      []string `json:"to"`
-		Subject string   `json:"subject"`
-		Body    string   `json:"body"`
+		To          []string `json:"to"`
+		Subject     string   `json:"subject"`
+		Body        string   `json:"body"`
+		Attachments []string `json:"attachments"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -323,7 +328,15 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fromName := localPart(from)
-	res, err := s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
+	var res *store.SendResult
+	var err error
+	if len(body.Attachments) > 0 {
+		// API parity with /api/send: attachments must be the admin's own
+		// uploads; the store validates ownership and grants recipients.
+		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.Subject, body.Body, body.Attachments)
+	} else {
+		res, err = s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
+	}
 	if err != nil {
 		badRequest(w, err.Error())
 		return
