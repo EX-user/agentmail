@@ -24,7 +24,7 @@
           <span id="setup-status" class="muted"></span>
         </div>
       </div>
-      <p class="muted setup-note">This creates the admin account (admin@&lt;domain&gt;) with the password you choose. After setup, the panel asks for these credentials to log in. You can register more accounts from the panel.</p>
+      <p class="muted setup-note" data-i18n="setup.note">This creates the admin account (admin@&lt;domain&gt;) with the password you choose. After setup, the panel asks for these credentials to log in. You can register more accounts from the panel.</p>
     </div>
   </section>
 
@@ -74,7 +74,7 @@
       </div>
 
       <div class="portal-section-title"><h2 data-i18n="portal.section.whosHere">Who's here</h2><span class="line"></span></div>
-      <p class="muted" id="portal-directory-note" style="display:none;">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
+      <p class="muted" id="portal-directory-note" style="display:none;" data-i18n="portal.dirNote">Listed accounts opted into the public directory. Toggle yours from the panel's Profile tab.</p>
       <div class="dir-grid" id="portal-directory"></div>
 
       <!-- Showcase bar (v0.4.4, admin polish): always-open section below the
@@ -86,7 +86,7 @@
         <div id="showcase-list" class="showcase-list"></div>
       </div>
 
-      <footer class="portal-footer">open source · <a href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">EX-user/agentmail</a></footer>
+      <footer class="portal-footer"><span data-i18n="portal.footer">open source ·</span> <a href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener">EX-user/agentmail</a></footer>
     </div>
   </section>
 
@@ -326,7 +326,7 @@
           <button id="btn-save-profile" class="primary" data-i18n="prof.save">Save profile</button>
           <span id="profile-status" class="muted"></span>
         </div>
-        <p class="muted" style="margin:6px 0 0; font-size:12px;">Visibility and signature are saved to your own account.</p>
+        <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prof.note">Visibility and signature are saved to your own account.</p>
       </div>
     </section>
 
@@ -355,21 +355,21 @@
           <span id="listed-status" class="muted">Loading…</span>
           <button id="btn-toggle-listed" class="row-action hidden"></button>
         </div>
-        <p class="muted">When off, accounts cannot newly opt into the public directory. Already-listed accounts stay listed.</p>
+        <p class="muted" data-i18n="set.dirDesc">When off, accounts cannot newly opt into the public directory. Already-listed accounts stay listed.</p>
       </div>
       <div class="settings-section">
         <h3 data-i18n="set.showcase">Showcase</h3>
         <div class="row">
-          <span id="showcase-admin-status" class="muted">Public letters shown on the guest portal.</span>
+          <span id="showcase-admin-status" class="muted" data-i18n="set.showcaseStatus">Public letters shown on the guest portal.</span>
           <button id="btn-clear-showcase" class="row-action" data-i18n="set.clearShowcase">Clear showcase</button>
         </div>
-        <p class="muted">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
+        <p class="muted" data-i18n="set.showcaseDesc">Removes every public letter from the portal (danmaku + Public letters). Irreversible — asks for confirmation first.</p>
         <!-- Per-item removal by id (feedback: search-style, no full list). -->
         <div class="row" style="margin-top:10px;">
-          <label>Showcase id:
+          <label><span data-i18n="set.scId">Showcase id:</span>
             <input type="text" id="showcase-id-input" placeholder="01M…" style="width:280px" />
           </label>
-          <button id="btn-search-showcase-item" class="row-action">Find</button>
+          <button id="btn-search-showcase-item" class="row-action" data-i18n="set.find">Find</button>
           <button id="btn-delete-showcase-item" class="row-action hidden">Delete</button>
         </div>
         <div id="showcase-item-preview"></div>
@@ -381,39 +381,39 @@
         <div class="row">
           <label>Mode:
             <select id="dm-default-mode">
-              <option value="A">Band (in-flow)</option>
-              <option value="B">Backdrop (full page)</option>
+              <option value="A" data-i18n="set.dmBand">Band (in-flow)</option>
+              <option value="B" data-i18n="set.dmBackdrop">Backdrop (full page)</option>
             </select>
           </label>
           <label>Speed:
             <select id="dm-default-speed">
-              <option value="slow">Slow</option>
-              <option value="medium">Medium</option>
-              <option value="fast">Fast</option>
+              <option value="slow" data-i18n="set.dmSlow">Slow</option>
+              <option value="medium" data-i18n="set.dmMedium">Medium</option>
+              <option value="fast" data-i18n="set.dmFast">Fast</option>
             </select>
           </label>
           <label>Cards:
             <select id="dm-default-count">
-              <option value="few">Few</option>
-              <option value="normal">Normal</option>
-              <option value="more">More</option>
+              <option value="few" data-i18n="set.dmFew">Few</option>
+              <option value="normal" data-i18n="set.dmNormal">Normal</option>
+              <option value="more" data-i18n="set.dmMore">More</option>
             </select>
           </label>
           <button id="btn-save-danmaku" class="row-action" data-i18n="set.dmSave">Save defaults</button>
           <span id="danmaku-admin-status" class="muted"></span>
         </div>
-        <p class="muted">Initial danmaku style for visitors who haven't set their own preference.</p>
+        <p class="muted" data-i18n="set.danmakuDesc">Initial danmaku style for visitors who haven't set their own preference.</p>
       </div>
       <div class="settings-section">
         <h3 data-i18n="set.rateLimits">Rate limits</h3>
         <div class="row">
           <label>Send limit:
             <input type="number" id="send-rate-input" value="500" min="1" style="width:80px" />
-            <small class="muted">/hour per account</small>
+            <small class="muted" data-i18n="set.perHour">/hour per account</small>
           </label>
           <label>Byte limit:
             <input type="number" id="byte-rate-input" value="1" min="1" style="width:80px" />
-            <small class="muted">MB/hour per account</small>
+            <small class="muted" data-i18n="set.mbPerHour">MB/hour per account</small>
           </label>
           <label>Register limit:
             <input type="number" id="register-rate-input" value="5" min="0" style="width:80px" />
@@ -451,7 +451,7 @@
                per admin feedback (was "Public showcase"). -->
           <label id="compose-public-wrap" class="public-toggle" style="display:none;">
             <input type="checkbox" id="compose-public" />
-            Make this letter public
+            <span data-i18n="compose.public">Make this letter public</span>
           </label>
           <span id="compose-status" class="muted"></span>
         </div>
