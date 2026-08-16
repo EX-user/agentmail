@@ -75,6 +75,12 @@
     return d.toLocaleString();
   }
 
+  // i18n shortcut (v0.4.12): dynamic strings go through the dictionary;
+  // before i18n.js loads or if unavailable, fall back to the key.
+  function t(key, vars) {
+    return window.I18N ? window.I18N.t(key, vars) : key;
+  }
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -118,8 +124,8 @@
     const stats = $("#stats-activity");
     if (stats) {
       stats.innerHTML =
-        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>today</span></div>' +
-        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>last 7 days</span></div>';
+        '<div class="stat"><span class="num">' + esc(growth.today) + '</span><span>' + t("lbl.today") + '</span></div>' +
+        '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>' + t("lbl.week") + '</span></div>';
     }
     if (chart) {
       drawGrowthDays((growth.days && growth.days.length)
@@ -146,15 +152,15 @@
         api("/api/mygrowth").catch(function () { return null; }),
       ]);
       const allTime = [];
-      if (con) allTime.push({ num: con.count, label: "contacts" });
-      if (inb) allTime.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: "received" });
-      if (inb && inb.unread_count) allTime.push({ num: inb.unread_count, label: "unread" });
-      if (sent) allTime.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: "sent" });
+      if (con) allTime.push({ num: con.count, label: t("lbl.contacts") });
+      if (inb) allTime.push({ num: inb.total_count != null ? inb.total_count : inb.count, label: t("lbl.received") });
+      if (inb && inb.unread_count) allTime.push({ num: inb.unread_count, label: t("lbl.unread") });
+      if (sent) allTime.push({ num: sent.total_count != null ? sent.total_count : sent.count, label: t("lbl.sent") });
       const recent = myg ? [
-        { num: myg.today_in, label: "today in" },
-        { num: myg.today_out, label: "today out" },
-        { num: myg.week_in, label: "last 7 days in" },
-        { num: myg.week_out, label: "last 7 days out" },
+        { num: myg.today_in, label: t("lbl.todayIn") },
+        { num: myg.today_out, label: t("lbl.todayOut") },
+        { num: myg.week_in, label: t("lbl.weekIn") },
+        { num: myg.week_out, label: t("lbl.weekOut") },
       ] : [];
       const renderRows = function (rows) {
         return rows.map(function (c) {
@@ -191,14 +197,14 @@
   // reports db_size_bytes (0/absent means unavailable — no card).
   function storageCard(sizeBytes) {
     const human = sizeBytes > 0 ? fmtBytes(sizeBytes) : null;
-    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>storage</span></div>' : "";
+    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>' + t("lbl.storage") + '</span></div>' : "";
   }
 
   async function loadOverview() {
     const recent = $("#recent-activity");
-    $("#stats-system").textContent = "Loading…";
+    $("#stats-system").textContent = t("common.loading");
     $("#stats-activity").textContent = "";
-    recent.textContent = "Loading…";
+    recent.textContent = t("common.loading");
     const s = getSession();
     // Growth enrichment runs for both roles (public endpoint).
     const growthP = api("/api/info?query=growth").catch(function () { return null; });
@@ -213,13 +219,13 @@
       try {
         const d = await api("/api/info?query=stats");
         $("#stats-system").innerHTML =
-          '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>accounts</span></div>" +
-          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>messages</span></div>" +
+          '<div class="stat"><span class="num">' + esc(d.account_count) + "</span><span>" + t("lbl.accounts") + "</span></div>" +
+          '<div class="stat"><span class="num">' + esc(d.message_count) + "</span><span>" + t("lbl.messages") + "</span></div>" +
           storageCard(d.db_size_bytes);
         renderOverviewGrowth(await growthP);
         recent.innerHTML = '<p class="muted">Sign in to an admin account to see system activity.</p>';
       } catch (e) {
-        $("#stats-system").textContent = "Error: " + e.message;
+        $("#stats-system").textContent = t("common.error", { msg: e.message });
         recent.textContent = "";
       }
       return;
@@ -228,13 +234,13 @@
       const s = await api("/admin/stats");
       const pub = await statsP;
       $("#stats-system").innerHTML =
-        '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>accounts</span></div>" +
-        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>messages</span></div>" +
+        '<div class="stat"><span class="num">' + esc(s.accounts) + "</span><span>" + t("lbl.accounts") + "</span></div>" +
+        '<div class="stat"><span class="num">' + esc(s.messages) + "</span><span>" + t("lbl.messages") + "</span></div>" +
         storageCard(pub && pub.db_size_bytes);
       renderOverviewGrowth(await growthP);
       const a = await api("/admin/audit?limit=20");
       if (!a.entries || !a.entries.length) {
-        recent.textContent = "No activity yet.";
+        recent.textContent = t("ovw.noActivity");
         return;
       }
       recent.innerHTML = "<ul>" + a.entries.map(function (e) {
@@ -243,7 +249,7 @@
           (e.detail ? " — " + esc(e.detail) : "") + "</li>";
       }).join("") + "</ul>";
     } catch (e) {
-      $("#stats-system").textContent = "Error: " + e.message;
+      $("#stats-system").textContent = t("common.error", { msg: e.message });
       recent.textContent = "";
     }
   }
@@ -261,7 +267,7 @@
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No accounts.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">' + t("acc.noAccounts") + '</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -277,11 +283,11 @@
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">Enable</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">Disable</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell" data-label="Address">' + esc(a.address) + "</td>" +
-          '<td data-label="Tags">' + tags.trim() + "</td>" +
-          '<td class="sig-cell" data-label="Signature">' + esc(a.signature || "") + "</td>" +
-          '<td data-label="Created">' + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell" data-label="Actions"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
+          '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(a.signature || "") + "</td>" +
+          '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
@@ -321,11 +327,11 @@
     var rows = [];
     rows.push(
       "<tr>" +
-      '<td class="addr-cell" data-label="Address"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
-      '<td data-label="Tags"><span class="badge-listed">you</span></td>' +
+      '<td class="addr-cell" data-label="' + t("col.address") + '"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
+      '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="Actions"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
       "</tr>"
     );
     try {
@@ -333,7 +339,7 @@
       (data.contacts || []).forEach(function (c) {
         rows.push(
           "<tr>" +
-          '<td class="addr-cell" data-label="Address">' + esc(c) + "</td>" +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
           "<td data-label=\"Tags\"></td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
           "</tr>"
         );
@@ -418,7 +424,7 @@
       toast("Password reset");
     } catch (e) {
       box.className = "callout error";
-      box.textContent = "Error: " + e.message;
+      box.textContent = t("common.error", { msg: e.message });
       box.classList.remove("hidden");
     }
   }
@@ -475,7 +481,7 @@
       sel.innerHTML = "";
       // "All accounts" pseudo-option: iterate every account on Load.
       const all = document.createElement("option");
-      all.value = "__all__"; all.textContent = "All accounts";
+      all.value = "__all__"; all.textContent = t("mail.allAccounts");
       sel.appendChild(all);
       (data.accounts || []).forEach(function (a) {
         const o = document.createElement("option");
@@ -501,9 +507,9 @@
     const limit = parseInt($("#mail-limit").value, 10) || 50;
     const list = $("#mail-list");
     const detail = $("#mail-detail");
-    detail.innerHTML = "Select a message to view its body.";
-    if (!account) { list.textContent = "No account selected."; return; }
-    list.textContent = "Loading…";
+    detail.innerHTML = t("mail.selectHint");
+    if (!account) { list.textContent = t("mail.noAccount"); return; }
+    list.textContent = t("common.loading");
     try {
       const s = getSession();
       const isRegular = s && !s.is_admin;
@@ -544,7 +550,7 @@
       msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
       msgs = dedup;
 
-      if (!msgs.length) { list.textContent = "No messages."; return; }
+      if (!msgs.length) { list.textContent = t("mail.noMessages"); return; }
       list.innerHTML = "";
       msgs.forEach(function (m) {
         const item = document.createElement("div");
@@ -552,7 +558,7 @@
         item.innerHTML =
           (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
           '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
-          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          '<div class="meta"><b>' + t("mail.from") + "</b> '" + esc(m.from) +
           ' · <b>to:</b> ' + esc((m.to || []).join(", ")) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
@@ -560,7 +566,7 @@
         list.appendChild(item);
       });
     } catch (e) {
-      list.textContent = "Error: " + e.message;
+      list.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -597,7 +603,7 @@
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
-    detail.textContent = "Loading…";
+    detail.textContent = t("common.loading");
     revealDetailOnMobile("mail-grid", detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
@@ -615,7 +621,7 @@
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>";
     } catch (e) {
-      detail.textContent = "Error: " + e.message;
+      detail.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -635,8 +641,8 @@
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
-    detail.innerHTML = "Select a message to view its body.";
-    status.textContent = "Loading…";
+    detail.innerHTML = t("mail.selectHint");
+    status.textContent = t("common.loading");
     list.textContent = "";
     // Both admins and regular accounts read their own inbox via /api/inbox
     // (the admin credential satisfies account auth). showInboxDetail uses the
@@ -648,7 +654,7 @@
       const total = data.total_count || 0;
       const totalPages = Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE));
       if (!msgs.length && inboxPage === 0) {
-        list.textContent = "No messages.";
+        list.textContent = t("mail.noMessages");
         updateInboxPager(1, 1);
         status.textContent = unreadCount ? (unreadCount + " unread") : "";
         return;
@@ -657,7 +663,7 @@
         // Past the end (e.g. mail was deleted): clamp to last page.
         const last = totalPages - 1;
         if (inboxPage > last) { inboxPage = last; loadInbox(inboxPage); return; }
-        list.textContent = "No more messages.";
+        list.textContent = t("mail.noMore");
         updateInboxPager(totalPages, inboxPage + 1);
         status.textContent = "";
         return;
@@ -669,7 +675,7 @@
         item.innerHTML =
           (m.unread ? '<span class="unread-dot" title="unread">●</span>' : "") +
           '<div class="subj">' + esc(m.subject || "(no subject)") + "</div>" +
-          '<div class="meta"><b>from:</b> ' + esc(m.from) +
+          '<div class="meta"><b>' + t("mail.from") + "</b> '" + esc(m.from) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
         item.addEventListener("click", function () { showInboxDetail(m.id, item, false); });
@@ -686,7 +692,7 @@
         if (first && newest) showInboxDetail(newest.id, first, true);
       }
     } catch (e) {
-      list.textContent = "Error: " + e.message;
+      list.textContent = t("common.error", { msg: e.message });
       status.textContent = "";
     }
   }
@@ -726,7 +732,7 @@
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
-    detail.textContent = "Loading…";
+    detail.textContent = t("common.loading");
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -751,7 +757,7 @@
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
     } catch (e) {
-      detail.textContent = "Error: " + e.message;
+      detail.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -811,7 +817,7 @@
 
   async function loadProfile() {
     const status = $("#profile-status");
-    status.textContent = "Loading…";
+    status.textContent = t("common.loading");
     status.className = "muted";
     try {
       const p = await api("/api/profile/self");
@@ -819,7 +825,7 @@
       $("#profile-signature").value = p.signature || "";
       status.textContent = "";
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -827,7 +833,7 @@
     const status = $("#profile-status");
     const btn = $("#btn-save-profile");
     btn.disabled = true;
-    status.textContent = "Saving…";
+    status.textContent = t("set.saving");
     status.className = "muted";
     try {
       const body = {
@@ -840,10 +846,10 @@
         body: JSON.stringify(body),
       });
       $("#profile-signature").value = res.signature || "";
-      status.textContent = "Saved.";
+      status.textContent = t("set.saved");
       toast("Profile saved");
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     } finally {
       btn.disabled = false;
     }
@@ -854,47 +860,67 @@
 
   // ---- settings ----
 
-  // renderShowcaseAdminList lists the current public letters under Settings
-  // with per-item delete (feedback: remove a single bad letter without
-  // clearing everything). Items without an id (older server) render without
-  // a delete button. Deleting updates the row locally — no full reload.
-  async function renderShowcaseAdminList() {
-    const wrap = $("#showcase-admin-list");
-    if (!wrap) return;
-    try {
-      const res = await api("/api/info?query=showcase&n=50");
-      const items = (res && res.items) || [];
-      if (!items.length) { wrap.innerHTML = '<p class="muted">No public letters.</p>'; return; }
-      wrap.innerHTML = items.map(function (m) {
-        return '<div class="sc-item" style="cursor:default;">' +
-          '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
-          '<div class="sc-subj">' + esc(m.subject) + "</div>" +
-          (m.id ? '<div class="row" style="margin:6px 0 0;"><button class="row-action" data-del-sc="' + esc(m.id) + '">Delete</button></div>' : "") +
-          "</div>";
-      }).join("");
-      $$("[data-del-sc]", wrap).forEach(function (btn) {
-        btn.addEventListener("click", async function () {
-          btn.disabled = true;
-          try {
-            await api("/admin/delete-showcase-item", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: btn.dataset.delSc }),
-          });
-            const row = btn.closest(".sc-item");
-            if (row) row.remove();
-            if (!wrap.querySelector(".sc-item")) wrap.innerHTML = '<p class="muted">No public letters.</p>';
-            toast("Letter removed", "success");
-          } catch (e) {
-            btn.disabled = false;
-            toast("Delete failed: " + e.message, "error");
-          }
-        });
-      });
-    } catch (_) {
-      wrap.innerHTML = "";
+  // Showcase per-item removal — search-style (feedback): admin enters an id,
+  // Find fetches it (GET /admin/showcase-item?id=), the preview shows the
+  // letter, Delete removes it (POST /admin/delete-showcase-item) and clears
+  // the preview. 404 reports "id not found".
+  let showcaseFoundId = null;
+
+  function renderShowcaseItemPreview(m) {
+    const prev = $("#showcase-item-preview");
+    const del = $("#btn-delete-showcase-item");
+    showcaseFoundId = (m && m.id) || null;
+    if (!m) {
+      prev.innerHTML = "";
+      if (del) del.classList.add("hidden");
+      return;
     }
+    // The endpoint returns received_at (not ts) and omits body — accept both.
+    const ts = m.ts || m.received_at;
+    prev.innerHTML = '<div class="sc-item" style="cursor:default;margin-top:8px;">' +
+      '<div class="sc-meta">' + esc(m.from) + (ts ? " · " + esc(fmtTime(ts)) : "") + "</div>" +
+      '<div class="sc-subj">' + esc(m.subject) + "</div>" +
+      (m.body ? '<div class="muted" style="font-size:12px;">' + esc(m.body) + "</div>" : "") +
+      "</div>";
+    if (del) del.classList.remove("hidden");
   }
+
+  $("#btn-search-showcase-item").addEventListener("click", async function () {
+    const id = ($("#showcase-id-input").value || "").trim();
+    const btn = $("#btn-search-showcase-item");
+    if (!id) { renderShowcaseItemPreview(null); return; }
+    btn.disabled = true;
+    try {
+      const res = await api("/admin/showcase-item?id=" + encodeURIComponent(id));
+      // Accept both {item:{...}} and a flat item object.
+      const m = (res && res.item) || res;
+      renderShowcaseItemPreview(m && m.id ? m : null);
+      if (!m || !m.id) toast(t("toast.idNotFound"), "error");
+    } catch (e) {
+      renderShowcaseItemPreview(null);
+      toast(/404|not found/i.test(e.message || "") ? "id not found" : "Search failed: " + e.message, "error");
+    }
+    btn.disabled = false;
+  });
+
+  $("#btn-delete-showcase-item").addEventListener("click", async function () {
+    if (!showcaseFoundId) return;
+    const btn = $("#btn-delete-showcase-item");
+    btn.disabled = true;
+    try {
+      await api("/admin/delete-showcase-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: showcaseFoundId }),
+      });
+      $("#showcase-id-input").value = "";
+      renderShowcaseItemPreview(null);
+      toast(t("toast.letterRemoved"), "success");
+    } catch (e) {
+      toast("Delete failed: " + e.message, "error");
+    }
+    btn.disabled = false;
+  });
 
   async function loadSettings() {
     try {
@@ -902,11 +928,11 @@
       const regStatus = $("#reg-status");
       const regBtn = $("#btn-toggle-registration");
       if (s.registration_enabled) {
-        regStatus.textContent = "Open (anyone can register)";
-        regBtn.textContent = "Disable registration";
+        regStatus.textContent = t("set.regOpen");
+        regBtn.textContent = t("set.regDisable");
       } else {
-        regStatus.textContent = "Closed (only admin can register)";
-        regBtn.textContent = "Enable registration";
+        regStatus.textContent = t("set.regClosed");
+        regBtn.textContent = t("set.regEnable");
       }
       regBtn.classList.remove("hidden");
 
@@ -914,11 +940,11 @@
       const listedStatus = $("#listed-status");
       const listedBtn = $("#btn-toggle-listed");
       if (s.directory_listed_enabled) {
-        listedStatus.textContent = "Open (accounts can list themselves)";
-        listedBtn.textContent = "Disable listing";
+        listedStatus.textContent = t("set.listedOpen");
+        listedBtn.textContent = t("set.listedDisable");
       } else {
-        listedStatus.textContent = "Closed (accounts cannot newly list)";
-        listedBtn.textContent = "Enable listing";
+        listedStatus.textContent = t("set.listedClosed");
+        listedBtn.textContent = t("set.listedEnable");
       }
       listedBtn.classList.remove("hidden");
 
@@ -930,10 +956,8 @@
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
-      // Showcase per-item management list.
-      renderShowcaseAdminList();
     } catch (e) {
-      $("#reg-status").textContent = "Error: " + e.message;
+      $("#reg-status").textContent = t("common.error", { msg: e.message });
     }
   }
 
@@ -943,7 +967,7 @@
     const status = $("#danmaku-admin-status");
     const btn = $("#btn-save-danmaku");
     btn.disabled = true;
-    status.textContent = "Saving…";
+    status.textContent = t("set.saving");
     try {
       await api("/admin/set-danmaku", {
         method: "POST",
@@ -954,11 +978,11 @@
           count: $("#dm-default-count").value,
         }),
       });
-      status.textContent = "Saved.";
-      toast("Danmaku defaults saved", "success");
+      status.textContent = t("set.saved");
+      toast(t("toast.saved"), "success");
     } catch (e) {
       status.textContent = "Save failed: " + e.message;
-      toast("Save danmaku defaults failed", "error");
+      toast(t("toast.saveFailed"), "error");
     }
     btn.disabled = false;
   });
@@ -1002,15 +1026,15 @@
     const status = $("#showcase-admin-status");
     const btn = $("#btn-clear-showcase");
     btn.disabled = true;
-    status.textContent = "Clearing…";
+    status.textContent = t("set.clearing");
     try {
       const res = await api("/admin/clear-showcase", { method: "POST" });
       const n = (res && (res.cleared != null ? res.cleared : res.count)) || 0;
-      status.textContent = "Cleared " + n + " public letter" + (n === 1 ? "" : "s") + ".";
-      toast("Showcase cleared (" + n + ")", "success");
+      status.textContent = t("set.clearedN", { n: n });
+      toast(t("toast.showcaseCleared", { n: n }), "success");
     } catch (e) {
       status.textContent = "Clear failed: " + e.message;
-      toast("Clear showcase failed", "error");
+      toast(t("toast.clearFailed"), "error");
     }
     btn.disabled = false;
   });
@@ -1034,7 +1058,7 @@
       $("#limits-status").textContent = "✓ Saved";
       toast("Limits saved");
     } catch (e) {
-      $("#limits-status").textContent = "Error: " + e.message;
+      $("#limits-status").textContent = t("common.error", { msg: e.message });
     }
   });
 
@@ -1042,6 +1066,26 @@
 
   // Check initialization state; show setup wizard, login page, or app.
   async function init() {
+    // i18n (v0.4.12): apply the detected language to static text before the
+    // first paint settles, then keep dynamic regions in sync on switch.
+    if (window.I18N) {
+      window.I18N.applyI18nDOM(document);
+      const toggleLang = function () {
+        window.I18N.setLang(window.I18N.lang() === "zh" ? "en" : "zh");
+      };
+      const panelBtn = $("#btn-lang");
+      if (panelBtn) panelBtn.addEventListener("click", toggleLang);
+      const portalBtn = $("#btn-portal-lang");
+      if (portalBtn) portalBtn.addEventListener("click", toggleLang);
+      document.addEventListener("i18n:change", function () {
+        // Re-render whatever view is active so JS-built text follows.
+        if (!$("#portal-page").classList.contains("hidden")) loadPortal();
+        else if (!$("#app-header").classList.contains("hidden")) {
+          const active = $(".tab.active");
+          if (active) activateTab(active.dataset.tab);
+        }
+      });
+    }
     try {
       const st = await api("/api/status");
       if (st.domain) systemDomain = st.domain;
@@ -1115,7 +1159,7 @@
 
     // Live badge: today's mail count in the hero chip.
     if (growthRes && typeof growthRes.today === "number") {
-      $("#portal-live").textContent = growthRes.today + " mails today";
+      $("#portal-live").textContent = t("portal.badge.mailsToday", { n: growthRes.today });
     }
 
     // Stats column: account/message totals + growth buckets, with a count-up
@@ -1123,13 +1167,13 @@
     const statsEl = $("#portal-stats");
     if (statsRes) {
       const cards = [
-        { num: statsRes.account_count, label: "accounts" },
-        { num: statsRes.message_count, label: "messages" },
+        { num: statsRes.account_count, label: t("lbl.accounts") },
+        { num: statsRes.message_count, label: t("lbl.messages") },
       ];
       if (growthRes) {
         cards.push(
-          { num: growthRes.today, label: "today", hot: true },
-          { num: growthRes.week, label: "last 7 days" }
+          { num: growthRes.today, label: t("lbl.today"), hot: true },
+          { num: growthRes.week, label: t("lbl.week") }
         );
       }
       statsEl.innerHTML = cards.map(function (c) {
@@ -1138,7 +1182,7 @@
       }).join("");
       animateCountUps(statsEl);
     } else {
-      statsEl.textContent = "Stats unavailable right now.";
+      statsEl.textContent = t("portal.statsUnavailable");
     }
 
     // Growth chart: 7 daily bars when the server sends a days array; falls
@@ -1150,10 +1194,10 @@
     const dirEl = $("#portal-directory");
     const entries = (dirRes && dirRes.entries) || [];
     if (!dirRes) {
-      dirEl.innerHTML = '<p class="muted">Directory unavailable right now.</p>';
+      dirEl.innerHTML = '<p class="muted">' + t("portal.statsUnavailable") + "</p>";
     } else if (!entries.length) {
       $("#portal-directory-note").style.display = "";
-      dirEl.innerHTML = '<p class="muted">No listed accounts yet.</p>';
+      dirEl.innerHTML = '<p class="muted">' + t("portal.noListed") + "</p>";
     } else {
       dirEl.innerHTML = entries.map(function (e) {
         return '<div class="dir-card">' + portalAvatar(e.address) +
@@ -1222,15 +1266,15 @@
     let days = (growthRes && growthRes.days) || [];
     if (!days.length && growthRes) {
       days = [
-        { date: "today", count: growthRes.today },
-        { date: "week", count: growthRes.week },
+        { date: t("lbl.today"), count: growthRes.today },
+        { date: t("lbl.week"), count: growthRes.week },
       ];
-      if (unitEl) unitEl.textContent = "messages · today / 7 days";
+      if (unitEl) unitEl.textContent = t("portal.growth.todayWeek");
     }
     if (!days.length) {
       barsEl.innerHTML = "";
       lblsEl.innerHTML = "";
-      if (unitEl) unitEl.textContent = "growth unavailable right now";
+      if (unitEl) unitEl.textContent = t("portal.growth.unavailable");
       return;
     }
     drawGrowthDays(days, barsEl, lblsEl);
@@ -1427,7 +1471,7 @@
   // never collapses (admin polish request).
   function renderShowcaseBar(items) {
     $("#showcase-latest").textContent = items.length
-      ? "Newest — " + items[0].from + " · " + items[0].subject
+      ? t("portal.newest") + items[0].from + " · " + items[0].subject
       : "";
     const list = $("#showcase-list");
     list.innerHTML = items.map(function (m, i) {
@@ -1618,7 +1662,7 @@
   $("#btn-oneclick-copy").addEventListener("click", function () {
     copyText($("#oneclick-prompt").textContent).then(function (ok) {
       const st = $("#oneclick-copy-status");
-      st.textContent = ok ? "copied!" : "copy failed — select the text manually";
+      st.textContent = ok ? t("common.copied") : t("common.copyManual");
       setTimeout(function () { st.textContent = ""; }, 2000);
     });
   });
@@ -1645,7 +1689,7 @@
       if (statusEl) statusEl.textContent = msg;
       else if (msg) toast(msg, isError ? "error" : "");
     };
-    say("registering…");
+    say(t("reg.registering"));
     // Register logic merged from Devi's v0.4.1 quickRegister: random name
     // with 409 collision auto-retry (up to 3 fresh names) and a friendly
     // 429 message for the per-IP rate limit; presentation is Felix's modal.
@@ -1671,8 +1715,8 @@
       }
     }
     const msg = /too many/i.test((last && last.message) || "")
-      ? "Too many registrations from your address — try again in a while."
-      : "failed: " + ((last && last.message) || "unknown error");
+      ? t("reg.rateLimited")
+      : t("common.failed") + ((last && last.message) || "unknown error");
     say(msg, true);
   }
 
@@ -1689,14 +1733,14 @@
   $("#btn-copy-prompt").addEventListener("click", function () {
     const text = $("#agent-prompt").textContent;
     const status = $("#copy-prompt-status");
-    const done = function () { status.textContent = "copied!"; setTimeout(function () { status.textContent = ""; }, 1500); };
+    const done = function () { status.textContent = t("common.copied"); setTimeout(function () { status.textContent = ""; }, 1500); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { status.textContent = "copy failed"; });
+      navigator.clipboard.writeText(text).then(done, function () { status.textContent = t("common.copyFailed"); });
     } else {
       // Fallback: select the pre block.
       const range = document.createRange(); range.selectNode($("#agent-prompt"));
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      try { document.execCommand("copy"); done(); } catch (_) { status.textContent = "copy failed"; }
+      try { document.execCommand("copy"); done(); } catch (_) { status.textContent = t("common.copyFailed"); }
       sel.removeAllRanges();
     }
   });
@@ -1803,12 +1847,12 @@
   $("#btn-register-submit").addEventListener("click", async function () {
     const name = ($("#register-name").value || "").trim();
     const status = $("#register-status");
-    if (!name) { status.textContent = "Please choose a username."; return; }
+    if (!name) { status.textContent = t("reg.needName"); return; }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
-      status.textContent = "Username must be ASCII letters, digits, '-' or '_'.";
+      status.textContent = t("reg.nameRule");
       return;
     }
-    status.textContent = "Registering…";
+    status.textContent = t("reg.registering");
     try {
       const res = await api("/api/register", {
         method: "POST",
@@ -1852,7 +1896,7 @@
       // where the admin can sign in with the password just chosen.
       setTimeout(function () { window.location.reload(); }, 1500);
     } catch (e) {
-      status.textContent = "Error: " + e.message;
+      status.textContent = t("common.error", { msg: e.message });
     }
   });
 
@@ -1941,16 +1985,16 @@
     const bodyText = $("#compose-body").value;
     const status = $("#compose-status");
 
-    if (!toRaw) { status.textContent = "Error: To is required."; return; }
-    if (!subject) { status.textContent = "Error: Subject is required."; return; }
-    if (!bodyText) { status.textContent = "Error: Body is required."; return; }
+    if (!toRaw) { status.textContent = t("compose.needTo"); return; }
+    if (!subject) { status.textContent = t("compose.needSubject"); return; }
+    if (!bodyText) { status.textContent = t("compose.needBody"); return; }
 
     // Comma-separated list of addresses, trimmed, de-duplicated.
     const to = Array.from(new Set(
       toRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     ));
 
-    status.textContent = "Sending…";
+    status.textContent = t("compose.sending");
     try {
       const sender = getSession();
       const sendPath = (sender && !sender.is_admin) ? "/api/send" : "/admin/send";
@@ -1965,15 +2009,15 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      status.textContent = "Sent. message_id=" + res.message_id;
-      toast("Message sent", "success");
+      status.textContent = t("compose.sent", { id: res.message_id });
+      toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       loadComposeThread();
     } catch (e) {
-      status.textContent = "Error: " + e.message;
-      toast("Send failed", "error");
+      status.textContent = t("common.error", { msg: e.message });
+      toast(t("toast.sendFailed"), "error");
     }
   });
 
@@ -1995,7 +2039,7 @@
     }
     titleEl.textContent = "Conversation with " + to;
     threadEl.className = "thread-list";
-    threadEl.textContent = "Loading…";
+    threadEl.textContent = t("common.loading");
 
     try {
       const cur = getSession();
@@ -2112,7 +2156,7 @@
     if (full.classList.contains("hidden")) {
       // Expand: load body on first time, then show.
       if (!loaded) {
-        full.textContent = "Loading…";
+        full.textContent = t("common.loading");
         try {
           const cur = getSession();
           const path = (cur && !cur.is_admin)
@@ -2122,11 +2166,11 @@
           full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>";
           item.dataset.loaded = "1";
         } catch (e) {
-          full.textContent = "Error: " + e.message;
+          full.textContent = t("common.error", { msg: e.message });
         }
       }
       full.classList.remove("hidden");
-      toggle.textContent = "▴ click to collapse";
+      toggle.textContent = t("thread.collapse");
       // On expand, locally mark this thread item as read (remove unread dot/bold).
       // This is pure UI feedback; backend read state is owned by each account
       // reading via its own /api/message call. Admin viewing does not mutate it.
@@ -2137,7 +2181,7 @@
     } else {
       // Collapse.
       full.classList.add("hidden");
-      toggle.textContent = "▾ click to expand";
+      toggle.textContent = t("thread.expand");
     }
   }
 })();
