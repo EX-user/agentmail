@@ -677,6 +677,14 @@
       });
       updateInboxPager(totalPages, inboxPage + 1);
       status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
+      // Avoid the empty detail pane (feedback): preload the newest message.
+      // Desktop shows it right away; mobile stays on the List tab (the
+      // detail is preloaded behind it and opens on tap as usual).
+      {
+        const first = list.querySelector(".mail-item");
+        const newest = msgs[0];
+        if (first && newest) showInboxDetail(newest.id, first, true);
+      }
     } catch (e) {
       list.textContent = "Error: " + e.message;
       status.textContent = "";
@@ -714,12 +722,14 @@
     loadInbox(p - 1); // loadInbox is 0-based
   });
 
-  async function showInboxDetail(id, item) {
+  async function showInboxDetail(id, item, auto) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.textContent = "Loading…";
-    revealDetailOnMobile("inbox-grid", detail);
+    // Auto-preload (newest message on inbox load) stays on the List tab on
+    // mobile — only a user tap flips to Message.
+    if (!auto) revealDetailOnMobile("inbox-grid", detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);
@@ -844,6 +854,48 @@
 
   // ---- settings ----
 
+  // renderShowcaseAdminList lists the current public letters under Settings
+  // with per-item delete (feedback: remove a single bad letter without
+  // clearing everything). Items without an id (older server) render without
+  // a delete button. Deleting updates the row locally — no full reload.
+  async function renderShowcaseAdminList() {
+    const wrap = $("#showcase-admin-list");
+    if (!wrap) return;
+    try {
+      const res = await api("/api/info?query=showcase&n=50");
+      const items = (res && res.items) || [];
+      if (!items.length) { wrap.innerHTML = '<p class="muted">No public letters.</p>'; return; }
+      wrap.innerHTML = items.map(function (m) {
+        return '<div class="sc-item" style="cursor:default;">' +
+          '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
+          '<div class="sc-subj">' + esc(m.subject) + "</div>" +
+          (m.id ? '<div class="row" style="margin:6px 0 0;"><button class="row-action" data-del-sc="' + esc(m.id) + '">Delete</button></div>' : "") +
+          "</div>";
+      }).join("");
+      $$("[data-del-sc]", wrap).forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          btn.disabled = true;
+          try {
+            await api("/admin/delete-showcase-item", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: btn.dataset.delSc }),
+          });
+            const row = btn.closest(".sc-item");
+            if (row) row.remove();
+            if (!wrap.querySelector(".sc-item")) wrap.innerHTML = '<p class="muted">No public letters.</p>';
+            toast("Letter removed", "success");
+          } catch (e) {
+            btn.disabled = false;
+            toast("Delete failed: " + e.message, "error");
+          }
+        });
+      });
+    } catch (_) {
+      wrap.innerHTML = "";
+    }
+  }
+
   async function loadSettings() {
     try {
       const s = await api("/admin/settings");
@@ -878,6 +930,8 @@
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
+      // Showcase per-item management list.
+      renderShowcaseAdminList();
     } catch (e) {
       $("#reg-status").textContent = "Error: " + e.message;
     }
