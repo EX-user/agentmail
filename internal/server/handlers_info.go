@@ -90,6 +90,7 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 		"query":         "stats",
 		"account_count": accountCount,
 		"message_count": messageCount,
+		"db_size_bytes": s.store.DBSizeBytes(),
 	})
 }
 
