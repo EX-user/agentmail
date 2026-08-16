@@ -86,7 +86,7 @@ func (s *Store) SaveFile(owner, filename string, allowed []string, content []byt
 				}
 			}
 		}
-		if used+rec.Size > FileQuotaPerAcct {
+		if used+rec.Size > s.GetFileQuotaPerAcct() {
 			return ErrQuotaExceeded
 		}
 		if total+rec.Size > s.GetFilesTotalLimit() {

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -77,6 +78,13 @@ type InboxResponse struct {
 	Count    int              `json:"count"`
 }
 
+type AttachmentInfo struct {
+	ID         string `json:"id"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+	AccessCode string `json:"access_code"`
+}
+
 type MessageResponse struct {
 	MessageID string `json:"message_id"`
 	From      string `json:"from"`
@@ -84,6 +92,7 @@ type MessageResponse struct {
 	Subject   string `json:"subject"`
 	Body      string `json:"body"`
 	ReceivedAt int64 `json:"received_at"`
+	Attachments []AttachmentInfo `json:"attachments"`
 }
 
 // --- API methods ---
@@ -107,15 +116,65 @@ func (c *Client) VerifyPassword(address, password string) error {
 // Send posts a message as authUser. authUser:authPass is sent as Basic auth;
 // the server treats the authed user as the sender. public=true additionally
 // writes a showcase copy (portal sample) — explicit sender opt-in.
-func (c *Client) Send(authUser, authPass string, to []string, subject, body string, public bool) (*SendResponse, error) {
-	var out SendResponse
-	err := c.do("POST", "/api/send", basicAuth(authUser, authPass), nil, map[string]any{
+// attachments references previously uploaded file IDs (server validates
+// they belong to the sender and grants recipients download access).
+func (c *Client) Send(authUser, authPass string, to []string, subject, body string, public bool, attachments []string) (*SendResponse, error) {
+	payload := map[string]any{
 		"to":      to,
 		"subject": subject,
 		"body":    body,
 		"public":  public,
-	}, &out)
+	}
+	if len(attachments) > 0 {
+		payload["attachments"] = attachments
+	}
+	var out SendResponse
+	err := c.do("POST", "/api/send", basicAuth(authUser, authPass), nil, payload, &out)
 	return &out, err
+}
+
+// UploadResponse mirrors POST /api/files/upload.
+type UploadResponse struct {
+	ID         string `json:"id"`
+	AccessCode string `json:"access_code"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+}
+
+// UploadFile posts one file as multipart to /api/files/upload.
+func (c *Client) UploadFile(authUser, authPass, filename string, content []byte) (*UploadResponse, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := fw.Write(content); err != nil {
+		return nil, fmt.Errorf("write form file: %w", err)
+	}
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", c.baseURL+"/api/files/upload", &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Authorization", basicAuth(authUser, authPass))
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("upload: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	var out UploadResponse
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // Inbox lists the authed user's inbox.

@@ -47,6 +47,7 @@ var (
 	mByteRateLimit        = []byte("byte_rate_limit")
 	mRegisterIPRateLimit  = []byte("register_ip_rate_limit")
 	mFilesTotalLimit      = []byte("files_total_limit")
+	mFileQuotaPerAcct     = []byte("file_quota_per_acct")
 	mOneclickRegisterEnabled = []byte("oneclick_register_enabled")
 	mShowcaseEnabled      = []byte("showcase_enabled")
 	mDanmakuMode          = []byte("danmaku_default_mode")
@@ -500,6 +501,22 @@ func (s *Store) GetFilesTotalLimit() int64 {
 // SetFilesTotalLimit sets the total attachment byte cap.
 func (s *Store) SetFilesTotalLimit(n int64) error {
 	return s.setMetaInt64(mFilesTotalLimit, n)
+}
+
+// GetFileQuotaPerAcct returns the per-account attachment byte quota.
+// Default 20MB; <= 0 falls back to the default (the quota cannot be
+// disabled — a single account could otherwise exhaust the total cap).
+func (s *Store) GetFileQuotaPerAcct() int64 {
+	v := s.getMetaInt64(mFileQuotaPerAcct, FileQuotaPerAcct)
+	if v <= 0 {
+		return FileQuotaPerAcct
+	}
+	return v
+}
+
+// SetFileQuotaPerAcct sets the per-account attachment byte quota.
+func (s *Store) SetFileQuotaPerAcct(n int64) error {
+	return s.setMetaInt64(mFileQuotaPerAcct, n)
 }
 
 // getMetaInt / getMetaInt64 / setMetaInt / setMetaInt64 are small helpers for
