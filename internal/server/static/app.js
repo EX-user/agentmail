@@ -507,8 +507,8 @@
     const limit = parseInt($("#mail-limit").value, 10) || 50;
     const list = $("#mail-list");
     const detail = $("#mail-detail");
-    detail.innerHTML = "Select a message to view its body.";
-    if (!account) { list.textContent = "No account selected."; return; }
+    detail.innerHTML = t("mail.selectHint");
+    if (!account) { list.textContent = t("mail.noAccount"); return; }
     list.textContent = "Loading…";
     try {
       const s = getSession();
@@ -550,7 +550,7 @@
       msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
       msgs = dedup;
 
-      if (!msgs.length) { list.textContent = "No messages."; return; }
+      if (!msgs.length) { list.textContent = t("mail.noMessages"); return; }
       list.innerHTML = "";
       msgs.forEach(function (m) {
         const item = document.createElement("div");
@@ -641,7 +641,7 @@
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
-    detail.innerHTML = "Select a message to view its body.";
+    detail.innerHTML = t("mail.selectHint");
     status.textContent = "Loading…";
     list.textContent = "";
     // Both admins and regular accounts read their own inbox via /api/inbox
@@ -654,7 +654,7 @@
       const total = data.total_count || 0;
       const totalPages = Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE));
       if (!msgs.length && inboxPage === 0) {
-        list.textContent = "No messages.";
+        list.textContent = t("mail.noMessages");
         updateInboxPager(1, 1);
         status.textContent = unreadCount ? (unreadCount + " unread") : "";
         return;
@@ -663,7 +663,7 @@
         // Past the end (e.g. mail was deleted): clamp to last page.
         const last = totalPages - 1;
         if (inboxPage > last) { inboxPage = last; loadInbox(inboxPage); return; }
-        list.textContent = "No more messages.";
+        list.textContent = t("mail.noMore");
         updateInboxPager(totalPages, inboxPage + 1);
         status.textContent = "";
         return;
@@ -833,7 +833,7 @@
     const status = $("#profile-status");
     const btn = $("#btn-save-profile");
     btn.disabled = true;
-    status.textContent = "Saving…";
+    status.textContent = t("set.saving");
     status.className = "muted";
     try {
       const body = {
@@ -846,7 +846,7 @@
         body: JSON.stringify(body),
       });
       $("#profile-signature").value = res.signature || "";
-      status.textContent = "Saved.";
+      status.textContent = t("set.saved");
       toast("Profile saved");
     } catch (e) {
       status.textContent = "Error: " + e.message;
@@ -895,7 +895,7 @@
       // Accept both {item:{...}} and a flat item object.
       const m = (res && res.item) || res;
       renderShowcaseItemPreview(m && m.id ? m : null);
-      if (!m || !m.id) toast("id not found", "error");
+      if (!m || !m.id) toast(t("toast.idNotFound"), "error");
     } catch (e) {
       renderShowcaseItemPreview(null);
       toast(/404|not found/i.test(e.message || "") ? "id not found" : "Search failed: " + e.message, "error");
@@ -915,7 +915,7 @@
       });
       $("#showcase-id-input").value = "";
       renderShowcaseItemPreview(null);
-      toast("Letter removed", "success");
+      toast(t("toast.letterRemoved"), "success");
     } catch (e) {
       toast("Delete failed: " + e.message, "error");
     }
@@ -967,7 +967,7 @@
     const status = $("#danmaku-admin-status");
     const btn = $("#btn-save-danmaku");
     btn.disabled = true;
-    status.textContent = "Saving…";
+    status.textContent = t("set.saving");
     try {
       await api("/admin/set-danmaku", {
         method: "POST",
@@ -978,11 +978,11 @@
           count: $("#dm-default-count").value,
         }),
       });
-      status.textContent = "Saved.";
-      toast("Danmaku defaults saved", "success");
+      status.textContent = t("set.saved");
+      toast(t("toast.saved"), "success");
     } catch (e) {
       status.textContent = "Save failed: " + e.message;
-      toast("Save danmaku defaults failed", "error");
+      toast(t("toast.saveFailed"), "error");
     }
     btn.disabled = false;
   });
@@ -1026,15 +1026,15 @@
     const status = $("#showcase-admin-status");
     const btn = $("#btn-clear-showcase");
     btn.disabled = true;
-    status.textContent = "Clearing…";
+    status.textContent = t("set.clearing");
     try {
       const res = await api("/admin/clear-showcase", { method: "POST" });
       const n = (res && (res.cleared != null ? res.cleared : res.count)) || 0;
-      status.textContent = "Cleared " + n + " public letter" + (n === 1 ? "" : "s") + ".";
-      toast("Showcase cleared (" + n + ")", "success");
+      status.textContent = t("set.clearedN", { n: n });
+      toast(t("toast.showcaseCleared", { n: n }), "success");
     } catch (e) {
       status.textContent = "Clear failed: " + e.message;
-      toast("Clear showcase failed", "error");
+      toast(t("toast.clearFailed"), "error");
     }
     btn.disabled = false;
   });
@@ -1689,7 +1689,7 @@
       if (statusEl) statusEl.textContent = msg;
       else if (msg) toast(msg, isError ? "error" : "");
     };
-    say("registering…");
+    say(t("reg.registering"));
     // Register logic merged from Devi's v0.4.1 quickRegister: random name
     // with 409 collision auto-retry (up to 3 fresh names) and a friendly
     // 429 message for the per-IP rate limit; presentation is Felix's modal.
@@ -1715,8 +1715,8 @@
       }
     }
     const msg = /too many/i.test((last && last.message) || "")
-      ? "Too many registrations from your address — try again in a while."
-      : "failed: " + ((last && last.message) || "unknown error");
+      ? t("reg.rateLimited")
+      : t("common.failed") + ((last && last.message) || "unknown error");
     say(msg, true);
   }
 
@@ -1847,12 +1847,12 @@
   $("#btn-register-submit").addEventListener("click", async function () {
     const name = ($("#register-name").value || "").trim();
     const status = $("#register-status");
-    if (!name) { status.textContent = "Please choose a username."; return; }
+    if (!name) { status.textContent = t("reg.needName"); return; }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
-      status.textContent = "Username must be ASCII letters, digits, '-' or '_'.";
+      status.textContent = t("reg.nameRule");
       return;
     }
-    status.textContent = "Registering…";
+    status.textContent = t("reg.registering");
     try {
       const res = await api("/api/register", {
         method: "POST",
@@ -2010,14 +2010,14 @@
         body: JSON.stringify(payload),
       });
       status.textContent = "Sent. message_id=" + res.message_id;
-      toast("Message sent", "success");
+      toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       loadComposeThread();
     } catch (e) {
       status.textContent = "Error: " + e.message;
-      toast("Send failed", "error");
+      toast(t("toast.sendFailed"), "error");
     }
   });
 
@@ -2170,7 +2170,7 @@
         }
       }
       full.classList.remove("hidden");
-      toggle.textContent = "▴ click to collapse";
+      toggle.textContent = t("thread.collapse");
       // On expand, locally mark this thread item as read (remove unread dot/bold).
       // This is pure UI feedback; backend read state is owned by each account
       // reading via its own /api/message call. Admin viewing does not mutate it.
@@ -2181,7 +2181,7 @@
     } else {
       // Collapse.
       full.classList.add("hidden");
-      toggle.textContent = "▾ click to expand";
+      toggle.textContent = t("thread.expand");
     }
   }
 })();
