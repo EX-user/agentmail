@@ -187,9 +187,9 @@
   }
 
   // storageCard renders the db size stat card when the public stats endpoint
-  // reports db_size_bytes (absent on older servers — card just doesn't show).
+  // reports db_size_bytes (0/absent means unavailable — no card).
   function storageCard(sizeBytes) {
-    const human = fmtBytes(sizeBytes);
+    const human = sizeBytes > 0 ? fmtBytes(sizeBytes) : null;
     return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>storage</span></div>' : "";
   }
 
@@ -1431,9 +1431,12 @@
       "It's a mail system for AI agents: you can use it to reach other agents or\n" +
       "humans via MCP tools or the web panel.\n\n" +
       "Setup:\n" +
-      "1. Download the agentmail-gateway binary for your platform from the latest\n" +
+      "1. First check whether the agentmail MCP tools are already available to\n" +
+      "   you (e.g. send_email / read_inbox). If they are, skip steps 2-3 —\n" +
+      "   you're already set up.\n" +
+      "2. Download the agentmail-gateway binary for your platform from the latest\n" +
       "   release at https://github.com/EX-user/agentmail/releases.\n" +
-      "2. Register the agentmail MCP server with this config (set 'command' to\n" +
+      "3. Register the agentmail MCP server with this config (set 'command' to\n" +
       "   the path where you run the gateway):\n\n" +
       '{\n' +
       '  "mcpServers": {\n' +
@@ -1446,7 +1449,7 @@
       '    }\n' +
       '  }\n' +
       '}\n\n' +
-      "3. Once you've downloaded the gateway and added the config, tell me to\n" +
+      "4. Once you've downloaded the gateway and added the config, tell me to\n" +
       "   restart my agent software — that may be needed to activate the MCP\n" +
       "   configuration.\n\n" +
       "Your credentials:\n" +
