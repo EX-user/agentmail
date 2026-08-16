@@ -188,7 +188,13 @@
     <!-- Overview -->
     <section id="tab-overview" class="tab-panel">
       <h2>Overview <small class="muted">— system stats and recent activity</small></h2>
-      <div class="stats" id="stats">Loading…</div>
+      <!-- Stat cards grouped (feedback): System = stock levels (accounts /
+           messages / storage), Activity = flows (today / last 7 days). Group
+           layout is extensible — future metrics slot into the right row. -->
+      <h3>System</h3>
+      <div class="stats" id="stats-system">Loading…</div>
+      <h3>Activity</h3>
+      <div class="stats" id="stats-activity">Loading…</div>
       <!-- 7-day growth chart (v0.4.8, admin request): the logged-in Overview
            shows at least what the guest portal shows. Filled from the public
            growth endpoint; hidden when it fails. -->
@@ -251,7 +257,13 @@
         </label>
         <button id="btn-load-mail" class="primary">Load</button>
       </div>
-      <div class="mail-grid">
+      <!-- Mobile (<=800px): List | Message tabs — one pane at a time, the
+           standard phone pattern; desktop keeps the side-by-side grid. -->
+      <div class="mail-tabs" data-grid="mail">
+        <button type="button" class="mtab on" data-pane="list">List</button>
+        <button type="button" class="mtab" data-pane="detail">Message</button>
+      </div>
+      <div class="mail-grid" id="mail-grid">
         <div id="mail-list" class="pane">Pick an account and click Load.</div>
         <div id="mail-detail" class="pane">Select a message to view its body.</div>
       </div>
@@ -264,7 +276,12 @@
         <button id="btn-load-inbox" class="primary">Load inbox</button>
         <span id="inbox-status" class="muted"></span>
       </div>
-      <div class="mail-grid">
+      <!-- Mobile (<=800px): List | Message tabs (see Mail tab note). -->
+      <div class="mail-tabs" data-grid="inbox">
+        <button type="button" class="mtab on" data-pane="list">List</button>
+        <button type="button" class="mtab" data-pane="detail">Message</button>
+      </div>
+      <div class="mail-grid" id="inbox-grid">
         <div id="inbox-list" class="pane">Click "Load inbox" to fetch your messages.</div>
         <div id="inbox-detail" class="pane">Select a message to view its body.</div>
       </div>

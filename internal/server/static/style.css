@@ -284,12 +284,28 @@ th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: v
 td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; color: var(--muted); }
 
 .mail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 800px) { .mail-grid { grid-template-columns: 1fr; } }
-/* Inbox/Mail mobile pass (v0.4.11): stacked panes shouldn't force two
-   300px-min blocks — compact the list pane and cap heights so the detail
-   area is reachable; tighter list rows fit more per screen. PC untouched. */
+/* Mobile inbox/mail (v0.4.12 hotfix): List | Message tabs — the stacked
+   two-pane layout hid the detail area below a long list. One pane shows at
+   a time; opening a message flips to Message. Desktop (grid side-by-side)
+   is untouched — tabs and pane-switching CSS apply only <=800px. */
+.mail-tabs { display: none; }
 @media (max-width: 800px) {
-  .pane { min-height: 160px; max-height: 46vh; }
+  .mail-tabs { display: flex; gap: 0; margin-bottom: 10px; }
+  .mtab {
+    flex: 1; padding: 8px 0; font-size: 13px; font-family: inherit; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+  }
+  .mtab:first-child { border-radius: 6px 0 0 6px; }
+  .mtab:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+  .mtab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .mail-grid.mshow-detail > .pane:first-child { display: none; }
+  .mail-grid:not(.mshow-detail) > .pane:last-child { display: none; }
+  .pane { min-height: 240px; max-height: none; }
+}
+@media (max-width: 800px) { .mail-grid { grid-template-columns: 1fr; } }
+/* Inbox/Mail mobile: superseded by the List|Message tab pattern above —
+   keep only the tighter list rows. */
+@media (max-width: 800px) {
   .mail-item { padding: 8px; }
   .mail-item .meta, .mail-item .prev { font-size: 11px; }
 }
