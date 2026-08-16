@@ -450,6 +450,37 @@ func (s *Server) handleAdminSetDanmaku(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminGetShowcaseItem fetches one showcase entry by id (the admin's
+// search-then-delete flow).
+//   GET /admin/showcase-item?id=... -> {id, from, subject, received_at}; 404 if absent.
+// Body is deliberately omitted — the delete flow does not need it.
+func (s *Server) handleAdminGetShowcaseItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		badRequest(w, "id is required")
+		return
+	}
+	e, err := s.store.GetShowcaseEntry(id)
+	if err != nil {
+		if errors.Is(err, store.ErrShowcaseNotFound) {
+			http.Error(w, "showcase entry not found", http.StatusNotFound)
+			return
+		}
+		internalError(w, "get showcase item: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":           e.ID,
+		"from":         e.From,
+		"subject":      e.Subject,
+		"received_at":  e.ReceivedAt,
+	})
+}
+
 // handleAdminDeleteShowcaseItem removes one showcase entry by id.
 //   POST /admin/delete-showcase-item {"id": "..."} -> {ok: true}; 404 if absent.
 func (s *Server) handleAdminDeleteShowcaseItem(w http.ResponseWriter, r *http.Request) {

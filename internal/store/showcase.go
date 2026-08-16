@@ -133,3 +133,23 @@ func (s *Store) DeleteShowcaseEntry(id string) error {
 		return sb.Delete([]byte(id))
 	})
 }
+
+// GetShowcaseEntry fetches one public entry by id (admin lookup for the
+// search-then-delete flow). ErrShowcaseNotFound when absent.
+func (s *Store) GetShowcaseEntry(id string) (*ShowcaseEntry, error) {
+	var e ShowcaseEntry
+	err := s.db.View(func(tx *bolt.Tx) error {
+		raw := tx.Bucket(bShowcase).Get([]byte(id))
+		if raw == nil {
+			return ErrShowcaseNotFound
+		}
+		if err := json.Unmarshal(raw, &e); err != nil {
+			return fmt.Errorf("corrupt showcase entry %q: %w", id, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
