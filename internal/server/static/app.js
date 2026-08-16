@@ -280,14 +280,14 @@
         const toggleBtn = a.is_admin
           ? "" // admin cannot be disabled (lockout guard), so no toggle button
           : a.disabled
-            ? '<button class="row-action" data-enable="' + esc(a.address) + '">Enable</button>'
-            : '<button class="row-action" data-disable="' + esc(a.address) + '">Disable</button>';
+            ? '<button class="row-action" data-enable="' + esc(a.address) + '">' + t("act.enable") + '</button>'
+            : '<button class="row-action" data-disable="' + esc(a.address) + '">' + t("act.disable") + '</button>';
         return "<tr" + rowCls + ">" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
           '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(a.signature || "") + "</td>" +
           '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
-          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">Compose</button><button class="row-action" data-reset="' + esc(a.address) + '">Reset password</button>' +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">' + t("act.compose") + '</button><button class="row-action" data-reset="' + esc(a.address) + '">' + t("act.resetPw") + '</button>' +
           toggleBtn + "</td>" +
           "</tr>";
       }).join("");
@@ -331,7 +331,7 @@
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">Change password</button></td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
     try {
@@ -802,7 +802,7 @@
         return "<tr>" +
           '<td class="addr-cell">' + esc(e.address) + "</td>" +
           '<td class="sig-cell">' + esc(e.signature || "") + "</td>" +
-          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">Compose</button></td>' +
+          '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button></td>' +
           "</tr>";
       }).join("");
       $$("[data-compose]", tbody).forEach(function (btn) {
