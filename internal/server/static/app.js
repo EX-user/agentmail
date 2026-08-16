@@ -676,17 +676,62 @@
   // Attachment cards for message detail views. Download goes through an
   // authenticated fetch -> blob -> object URL (plain <a href> would lack the
   // Basic auth header the /api/files route requires).
+  // Image attachments get an inline preview (feedback): authenticated
+  // fetch -> blob -> object URL feeding an <img>. svg is deliberately
+  // excluded (XSS surface, low value); unknown/failed loads fall back to
+  // the plain download card without error toasts.
+  const ATTACH_IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i;
+
+  function attachIsImage(a) {
+    return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
+  }
+
   function attachmentCards(m) {
     const list = (m && m.attachments) || [];
     if (!list.length) return "";
     return '<div class="attach-list">' + list.map(function (a, i) {
-      return '<div class="attach-card">' +
+      const preview = attachIsImage(a) ? '<div class="attach-preview" data-pv="' + i + '"></div>' : "";
+      return '<div class="attach-card attach-card-' + (attachIsImage(a) ? "img" : "file") + '">' +
         '<span class="attach-clip">📎</span>' +
         '<span class="attach-name">' + esc(a.filename) + "</span>" +
         '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
         '<button class="row-action" data-dl="' + i + '">Download</button>' +
+        preview +
         "</div>";
     }).join("") + "</div>";
+  }
+
+  // hydrateAttachmentPreviews loads image blobs (authenticated) into the
+  // preview holders. Clicking a preview triggers the same download flow.
+  function hydrateAttachmentPreviews(root, m) {
+    const list = (m && m.attachments) || [];
+    $$(".attach-preview", root).forEach(async function (holder) {
+      const a = list[+holder.dataset.pv];
+      if (!a) return;
+      try {
+        const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
+          headers: { Authorization: basicAuth() },
+        });
+        if (!res.ok) throw new Error(res.status);
+        const blob = await res.blob();
+        if (!/^image\//.test(blob.type)) throw new Error("not an image");
+        const url = URL.createObjectURL(blob);
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = a.filename;
+        img.title = t("attach.clickToDownload");
+        img.addEventListener("click", function () {
+          const btn = holder.closest(".attach-card").querySelector("[data-dl]");
+          if (btn) btn.click();
+        });
+        holder.appendChild(img);
+        // The detail pane re-renders on message switch; drop the URL then.
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
+      } catch (_) {
+        // Silent fallback: leave the card as a plain download row.
+        holder.remove();
+      }
+    });
   }
 
   function wireAttachmentDownloads(root, m) {
@@ -740,6 +785,7 @@
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
+      hydrateAttachmentPreviews(detail, m);
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
@@ -873,6 +919,7 @@
         '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
+      hydrateAttachmentPreviews(detail, m);
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
@@ -2171,36 +2218,22 @@
     threadEl.textContent = t("common.loading");
 
     try {
+      // Server-side thread endpoint (v0.5.2): server merges both directions
+      // per peer — replaces the old "fetch 50 inbox + 50 sent, filter
+      // client-side" approach, which missed conversations with low-frequency
+      // contacts that fell outside the 50-message windows.
       const cur = getSession();
       const isRegular = cur && !cur.is_admin;
-      // For admins: read admin's own sent + inbox via /admin/*. For regular
-      // accounts: read their own sent + inbox via /api/sent + /api/inbox.
-      const [sentRes, inboxRes] = isRegular
-        ? await Promise.all([
-            api("/api/sent?limit=50"),
-            api("/api/inbox?limit=50"),
-          ])
-        : await Promise.all([
-            api("/admin/sent?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
-            api("/admin/messages?account=" + encodeURIComponent("admin@" + systemDomain) + "&limit=50"),
-          ]);
-
-      // sent: admin -> to (match recipient in `to`)
-      const sent = (sentRes.messages || []).filter(function (m) {
-        return (m.to || []).some(function (r) { return r === to; });
-      }).map(function (m) {
-        return { dir: "out", id: m.id, subject: m.subject, preview: m.preview,
-                 ts: m.received_at, peer: to };
-      });
-      // inbox: messages from `to` where admin is a recipient
-      const inbox = (inboxRes.messages || []).filter(function (m) {
-        return m.from === to;
-      }).map(function (m) {
-        return { dir: "in", id: m.id, subject: m.subject, preview: m.preview,
-                 ts: m.received_at, peer: to, from: m.from, unread: m.unread };
-      });
-
-      const all = sent.concat(inbox).sort(function (a, b) { return b.ts - a.ts; });
+      const threadRes = isRegular
+        ? await api("/api/thread?with=" + encodeURIComponent(to) + "&limit=50")
+        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + systemDomain) +
+            "&with=" + encodeURIComponent(to) + "&limit=50");
+      const all = (threadRes.messages || []).map(function (m) {
+        return m.dir === "out"
+          ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: to }
+          : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
+              peer: to, from: m.from, unread: m.unread };
+      }).sort(function (a, b) { return b.ts - a.ts; });
       if (!all.length) {
         threadEl.className = "thread-list muted";
         threadEl.textContent = "No conversation with " + to + " yet.";
