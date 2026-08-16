@@ -80,14 +80,15 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "send_email",
-			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total).",
+			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total). attachments (optional, 1-5 paths) uploads real attachments through the file store — recipients can download them via the codes embedded in the message (1MB per file).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          prop("Recipient address(es), comma-separated string or array", "string", true),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
-				"inline_files":  prop("Optional plain-text attachments: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
+				"inline_files": prop("Optional inline text: 1-3 local file paths whose contents are appended to the body as '--- file: <name> ---' blocks (100KB/file, 200KB total)", "string", false),
+				"attachments": prop("Optional real attachments: 1-5 local file paths uploaded via the file store; recipients receive download codes in the message (1MB/file)", "string", false),
 			}, []string{"access_code", "to", "subject", "body"}),
 		},
 		{
@@ -298,10 +299,37 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 		}
 		body = merged
 	}
+	// attachments (optional, 1-5 local paths): true attachments via the
+	// v0.5 file store. Each file is read (bounded), uploaded to the server
+	// as the sender, and the returned IDs ride the send — the server
+	// validates ownership and grants recipients download access. Uploads
+	// happen BEFORE the send, so a mid-way failure sends nothing (any
+	// already-uploaded orphans TTL out after 30 days).
+	filePaths := toStringSlice(args["attachments"])
+	var fileIDs []string
+	if len(filePaths) > 0 {
+		if len(filePaths) > 5 {
+			return nil, fmt.Errorf("attachments: at most 5 files per send, got %d", len(filePaths))
+		}
+		for _, p := range filePaths {
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return nil, fmt.Errorf("attachments: cannot read %q: %w", p, err)
+			}
+			if int64(len(data)) > 1024*1024 {
+				return nil, fmt.Errorf("attachments: %q is over the 1MB per-file limit", p)
+			}
+			up, err := client.UploadFile(entry.Address, entry.Password, filepath.Base(p), data)
+			if err != nil {
+				return nil, fmt.Errorf("attachments: upload %q: %w", p, err)
+			}
+			fileIDs = append(fileIDs, up.ID)
+		}
+	}
 	// public (optional, default false): additionally publish a showcase copy
 	// for the portal sample — the sender's explicit opt-in.
 	public, _ := args["public"].(bool)
-	res, err := client.Send(entry.Address, entry.Password, to, subject, body, public)
+	res, err := client.Send(entry.Address, entry.Password, to, subject, body, public, fileIDs)
 	if err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
