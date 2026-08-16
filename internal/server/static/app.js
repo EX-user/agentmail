@@ -197,7 +197,14 @@
   // reports db_size_bytes (0/absent means unavailable — no card).
   function storageCard(sizeBytes) {
     const human = sizeBytes > 0 ? fmtBytes(sizeBytes) : null;
-    return human ? '<div class="stat"><span class="num" style="font-size:22px;">' + esc(human) + '</span><span>' + t("lbl.storage") + '</span></div>' : "";
+    if (!human) return "";
+    // Split value/unit so the number matches the other cards' size and
+    // baseline; only the unit renders small (feedback: "59.4 MB" misaligned).
+    const m = /^(\d+(?:\.\d+)?)\s*(.+)$/.exec(human);
+    const numHTML = m
+      ? esc(m[1]) + ' <small class="stat-unit">' + esc(m[2]) + "</small>"
+      : esc(human);
+    return '<div class="stat"><span class="num">' + numHTML + "</span><span>" + t("lbl.storage") + "</span></div>";
   }
 
   async function loadOverview() {
