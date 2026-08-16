@@ -1649,8 +1649,8 @@
     const prompt = buildAgentPrompt(address, password);
     $("#oneclick-prompt").textContent = prompt;
     $("#oneclick-hint").textContent = copied
-      ? "Copied to your clipboard — paste it straight into Codex, Claude Code, ZCode, or any other agent client."
-      : "Your clipboard couldn't be written automatically (browser permission) — use the Copy button below.";
+      ? t("oneclick.copiedHint")
+      : t("oneclick.manualHint");
     $("#oneclick-copy-status").textContent = "";
     $("#oneclick-modal").classList.remove("hidden");
     $("#btn-oneclick-close").focus();
