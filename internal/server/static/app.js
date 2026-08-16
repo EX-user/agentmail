@@ -1189,8 +1189,14 @@
 
   // startDanmaku fills the band with flying multi-line cards (admin's
   // clarified design): line 1 from + date, line 2 subject, lines 3-4 body
-  // preview. Initial vertical position is randomized within the band
-  // (admin: no fixed lanes), items cycle so traffic stays continuous.
+  // preview. Optimization pass (admin feedback: heavy overlap on mobile,
+  // differing perceived speed):
+  // - speed is defined in px/second and duration derived from the actual
+  //   crossing distance, so narrow and wide viewports share the same tempo
+  //   (previously a fixed duration made mobile visibly slower);
+  // - vertical placement is slotted (2 slots) with jitter inside each slot,
+  //   and cards are staggered evenly across the cycle, so same-slot cards
+  //   rarely collide; mobile also flies fewer cards (less crowding).
   // Pure decoration: pointer-events none, aria-hidden, skipped entirely for
   // reduced-motion users.
   function startDanmaku(items) {
@@ -1198,10 +1204,17 @@
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     band.innerHTML = "";
     if (reduce) return;
-    const TARGET = 6;
-    // Random top anywhere the card fully fits (card ~106px tall).
+    const isNarrow = window.innerWidth < 520;
+    const cardW = isNarrow ? 280 : 320;
+    const TARGET = isNarrow ? 4 : 6;
+    const SLOTS = 2;
     const bandH = band.clientHeight || 300;
-    const topMax = Math.max(bandH - 116, 8);
+    // Per-slot vertical room: card (~106px) must fully fit inside its slot.
+    const slotTop = 8;
+    const slotH = Math.max(Math.floor((bandH - 16) / SLOTS), 110);
+    const slotJitter = Math.max(slotH - 116, 0);
+    // Even phase spread across the cycle keeps same-slot cards apart.
+    const phase = (i) => (i / TARGET);
     for (let i = 0; i < TARGET; i++) {
       const m = items[i % items.length];
       const el = document.createElement("span");
@@ -1214,10 +1227,14 @@
         '<div class="dm-head">' + esc(m.from) + (dateStr ? " · " + esc(dateStr) : "") + "</div>" +
         '<div class="dm-subj">' + esc(m.subject) + "</div>" +
         '<div class="dm-body">' + esc(m.body || "") + "</div>";
-      el.style.top = Math.round(8 + Math.random() * (topMax - 8)) + "px";
-      const dur = 30 + Math.random() * 16; // seconds to cross (cards are bigger now)
-      el.style.animationDuration = dur + "s";
-      el.style.animationDelay = (-Math.random() * dur) + "s";
+      const slot = Math.floor(i / Math.ceil(TARGET / SLOTS)) % SLOTS;
+      el.style.top = Math.round(slotTop + slot * slotH + Math.random() * slotJitter) + "px";
+      // Same perceived speed everywhere: px/s -> duration from real distance.
+      const speed = 42 + Math.random() * 22; // px/s, slight variety
+      const dist = window.innerWidth + cardW;
+      const dur = dist / speed;
+      el.style.animationDuration = dur.toFixed(2) + "s";
+      el.style.animationDelay = (-(phase(i) + Math.random() * 0.12) * dur).toFixed(2) + "s";
       band.appendChild(el);
     }
   }
