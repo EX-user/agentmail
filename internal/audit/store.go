@@ -36,6 +36,8 @@ const (
 	ActionClearShowcase      Action = "clear_showcase"
 	ActionDeleteShowcaseItem Action = "delete_showcase_item"
 	ActionSetDanmaku         Action = "set_danmaku"
+	ActionFileUpload         Action = "file_upload"
+	ActionFileDownload       Action = "file_download"
 )
 
 // Entry is one audit record.

@@ -138,6 +138,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/contacts", s.requireInitialized(s.requireAccount(s.handleContacts)))
 	mux.HandleFunc("/api/sent", s.requireInitialized(s.requireAccount(s.handleSent)))
 	mux.HandleFunc("/api/mygrowth", s.requireInitialized(s.requireAccount(s.handleMyGrowth)))
+	mux.HandleFunc("/api/files/upload", s.requireInitialized(s.requireAccount(s.handleFileUpload)))
+	mux.HandleFunc("/api/files/", s.requireInitialized(s.requireAccount(s.handleFileDownload)))
 	mux.HandleFunc("/api/password", s.requireInitialized(s.requireAccount(s.handleChangePassword)))
 
 	// Admin API (admin Basic auth) — requires initialization.
@@ -209,6 +211,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	// File TTL: sweep expired uploads at startup, then daily.
+	go s.filesTTLLoop(ctx)
 	go func() {
 		<-ctx.Done()
 		shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -216,6 +220,28 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		_ = srv.Shutdown(shut)
 	}()
 	return srv.ListenAndServe()
+}
+
+// filesTTLLoop evicts expired attachment files at startup and every 24h.
+func (s *Server) filesTTLLoop(ctx context.Context) {
+	sweep := func() {
+		if n, err := s.store.CleanupExpiredFiles(); err != nil {
+			fmt.Printf("files ttl sweep error: %v\n", err)
+		} else if n > 0 {
+			fmt.Printf("files ttl sweep: evicted %d expired files\n", n)
+		}
+	}
+	sweep()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			sweep()
+		}
+	}
 }
 
 // requireAccount wraps a handler so that it only runs after a valid non-admin
