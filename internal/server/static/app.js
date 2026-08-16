@@ -854,47 +854,65 @@
 
   // ---- settings ----
 
-  // renderShowcaseAdminList lists the current public letters under Settings
-  // with per-item delete (feedback: remove a single bad letter without
-  // clearing everything). Items without an id (older server) render without
-  // a delete button. Deleting updates the row locally — no full reload.
-  async function renderShowcaseAdminList() {
-    const wrap = $("#showcase-admin-list");
-    if (!wrap) return;
-    try {
-      const res = await api("/api/info?query=showcase&n=50");
-      const items = (res && res.items) || [];
-      if (!items.length) { wrap.innerHTML = '<p class="muted">No public letters.</p>'; return; }
-      wrap.innerHTML = items.map(function (m) {
-        return '<div class="sc-item" style="cursor:default;">' +
-          '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
-          '<div class="sc-subj">' + esc(m.subject) + "</div>" +
-          (m.id ? '<div class="row" style="margin:6px 0 0;"><button class="row-action" data-del-sc="' + esc(m.id) + '">Delete</button></div>' : "") +
-          "</div>";
-      }).join("");
-      $$("[data-del-sc]", wrap).forEach(function (btn) {
-        btn.addEventListener("click", async function () {
-          btn.disabled = true;
-          try {
-            await api("/admin/delete-showcase-item", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: btn.dataset.delSc }),
-          });
-            const row = btn.closest(".sc-item");
-            if (row) row.remove();
-            if (!wrap.querySelector(".sc-item")) wrap.innerHTML = '<p class="muted">No public letters.</p>';
-            toast("Letter removed", "success");
-          } catch (e) {
-            btn.disabled = false;
-            toast("Delete failed: " + e.message, "error");
-          }
-        });
-      });
-    } catch (_) {
-      wrap.innerHTML = "";
+  // Showcase per-item removal — search-style (feedback): admin enters an id,
+  // Find fetches it (GET /admin/showcase-item?id=), the preview shows the
+  // letter, Delete removes it (POST /admin/delete-showcase-item) and clears
+  // the preview. 404 reports "id not found".
+  let showcaseFoundId = null;
+
+  function renderShowcaseItemPreview(m) {
+    const prev = $("#showcase-item-preview");
+    const del = $("#btn-delete-showcase-item");
+    showcaseFoundId = (m && m.id) || null;
+    if (!m) {
+      prev.innerHTML = "";
+      if (del) del.classList.add("hidden");
+      return;
     }
+    prev.innerHTML = '<div class="sc-item" style="cursor:default;margin-top:8px;">' +
+      '<div class="sc-meta">' + esc(m.from) + (m.ts ? " · " + esc(fmtTime(m.ts)) : "") + "</div>" +
+      '<div class="sc-subj">' + esc(m.subject) + "</div>" +
+      '<div class="muted" style="font-size:12px;">' + esc(m.body || "") + "</div>" +
+      "</div>";
+    if (del) del.classList.remove("hidden");
   }
+
+  $("#btn-search-showcase-item").addEventListener("click", async function () {
+    const id = ($("#showcase-id-input").value || "").trim();
+    const btn = $("#btn-search-showcase-item");
+    if (!id) { renderShowcaseItemPreview(null); return; }
+    btn.disabled = true;
+    try {
+      const res = await api("/admin/showcase-item?id=" + encodeURIComponent(id));
+      // Accept both {item:{...}} and a flat item object.
+      const m = (res && res.item) || res;
+      renderShowcaseItemPreview(m && m.id ? m : null);
+      if (!m || !m.id) toast("id not found", "error");
+    } catch (e) {
+      renderShowcaseItemPreview(null);
+      toast(/404|not found/i.test(e.message || "") ? "id not found" : "Search failed: " + e.message, "error");
+    }
+    btn.disabled = false;
+  });
+
+  $("#btn-delete-showcase-item").addEventListener("click", async function () {
+    if (!showcaseFoundId) return;
+    const btn = $("#btn-delete-showcase-item");
+    btn.disabled = true;
+    try {
+      await api("/admin/delete-showcase-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: showcaseFoundId }),
+      });
+      $("#showcase-id-input").value = "";
+      renderShowcaseItemPreview(null);
+      toast("Letter removed", "success");
+    } catch (e) {
+      toast("Delete failed: " + e.message, "error");
+    }
+    btn.disabled = false;
+  });
 
   async function loadSettings() {
     try {
@@ -930,8 +948,6 @@
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
-      // Showcase per-item management list.
-      renderShowcaseAdminList();
     } catch (e) {
       $("#reg-status").textContent = "Error: " + e.message;
     }
