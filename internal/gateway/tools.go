@@ -462,22 +462,24 @@ func (s *Server) toolWaitForNewMail(ctx context.Context, args map[string]any) (a
 			if len(res.Messages) > 0 {
 				newLast = res.Messages[0].ID // inbox is newest-first
 			}
-			return map[string]any{"messages": fresh, "count": len(fresh), "last_seen_id": newLast}, nil
+			// If the poll window was full, there may be MORE messages older
+			// than the window but still newer than since_id — surface that
+			// instead of silently skipping them.
+			more := len(res.Messages) == 50
+			return map[string]any{"messages": fresh, "count": len(fresh), "last_seen_id": newLast, "possibly_more": more}, nil
 		}
 
-		// Stop if the timeout fired or the caller cancelled. Return the current
-		// newest id so the caller can resume from it on the next call (passing
-		// it as since_id) instead of re-baselining and missing in-between mail.
-		currentNewest := sinceID
-		if len(res.Messages) > 0 {
-			currentNewest = res.Messages[0].ID
-		}
+		// Stop if the timeout fired or the caller cancelled. Return the
+		// CALLER'S since_id unchanged: nothing was delivered, so the baseline
+		// must not move. (The old code recomputed it from the inbox newest,
+		// which can be OLDER than since_id — e.g. when since_id came from a
+		// different ULID space — silently rewinding the caller's baseline.)
 		if time.Now().After(deadline) {
-			return map[string]any{"messages": []any{}, "count": 0, "timed_out": true, "last_seen_id": currentNewest}, nil
+			return map[string]any{"messages": []any{}, "count": 0, "timed_out": true, "last_seen_id": sinceID}, nil
 		}
 		select {
 		case <-ctx.Done():
-			return map[string]any{"messages": []any{}, "count": 0, "cancelled": true, "last_seen_id": currentNewest}, nil
+			return map[string]any{"messages": []any{}, "count": 0, "cancelled": true, "last_seen_id": sinceID}, nil
 		case <-ticker.C:
 			// continue to next loop iteration
 		}

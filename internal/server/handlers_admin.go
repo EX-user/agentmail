@@ -155,6 +155,35 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// handleAdminThread returns the bilateral conversation between an arbitrary
+// account and a peer (admin view).
+//   GET /admin/thread?account=X&with=Y&limit=50&offset=0
+func (s *Server) handleAdminThread(w http.ResponseWriter, r *http.Request) {
+	account := strings.TrimSpace(r.URL.Query().Get("account"))
+	peer := strings.TrimSpace(r.URL.Query().Get("with"))
+	if account == "" || peer == "" {
+		badRequest(w, "account and with are required")
+		return
+	}
+	limit := queryInt(r, "limit", 50)
+	offset := queryInt(r, "offset", 0)
+	entries, err := s.store.ReadThread(account, peer, limit, offset)
+	if err != nil {
+		if errors.Is(err, store.ErrAccountNotFound) {
+			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+		internalError(w, "read thread: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"account":  account,
+		"peer":     peer,
+		"messages": entries,
+		"count":    len(entries),
+	})
+}
+
 // handleAdminStats returns overall counts for the overview page.
 //   GET /admin/stats  -> {"accounts": N, "messages": N}
 func (s *Server) handleAdminStats(w http.ResponseWriter, r *http.Request) {
