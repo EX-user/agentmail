@@ -788,13 +788,7 @@
     }
     try {
       const m = await api("/admin/message?id=" + encodeURIComponent(id));
-      detail.innerHTML = inboxNavRow();
-      {
-        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
-        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
-        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-      }
-      detail.innerHTML +=
+      detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
@@ -960,7 +954,9 @@
       // The Inbox tab is the viewer's own mail, so /api/message works for both
       // roles (admin satisfies account auth).
       const m = await api("/api/message?id=" + encodeURIComponent(id));
-      detail.innerHTML =
+      // Final render includes the nav row (earlier only the loading frame
+      // had it — data arrival wiped it; feedback root cause).
+      detail.innerHTML = inboxNavRow() +
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
@@ -969,12 +965,21 @@
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      {
+        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
+        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
+        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
+      }
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
     } catch (e) {
-      detail.textContent = t("common.error", { msg: e.message });
+      // Keep the nav row on errors too — the reader can still step away.
+      detail.innerHTML = inboxNavRow() + '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
+      const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
+      if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
+      if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
     }
   }
 
@@ -1835,7 +1840,10 @@
     $("#register-form-block").classList.add("hidden");
     const sb = $("#register-success-block");
     $("#register-success-address").textContent = address;
-    $("#register-success-password").textContent = password;
+    // Human-set passwords never echo back (server returns none) — the page
+    // just reminds the user to keep it; server-generated ones (one-click)
+    // still show once.
+    $("#register-success-password").textContent = password || t("reg.pwUserSet");
     // Agent setup section: a single ready-to-paste prompt that carries both
     // the account credentials and the MCP config inline.
     $("#agent-prompt").textContent = buildAgentPrompt(address, password);
@@ -2078,20 +2086,25 @@
 
   $("#btn-register-submit").addEventListener("click", async function () {
     const name = ($("#register-name").value || "").trim();
+    const pw = $("#register-password").value || "";
     const status = $("#register-status");
     if (!name) { status.textContent = t("reg.needName"); return; }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       status.textContent = t("reg.nameRule");
       return;
     }
+    // Human registrations choose their own password (required, min 8 —
+    // mirrors the setup rule). Agents use the one-click flow instead.
+    if (pw.length < 8) { status.textContent = t("reg.pwTooShort"); return; }
     status.textContent = t("reg.registering");
     try {
       const res = await api("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name }),
+        body: JSON.stringify({ name: name, password: pw }),
       });
       status.textContent = "";
+      $("#register-password").value = "";
       showRegisterSuccess(res.address, res.password);
     } catch (e) {
       status.textContent = "Registration failed: " + e.message;

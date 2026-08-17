@@ -122,6 +122,14 @@
           <label><span data-i18n="reg.chooseName">Choose a username</span> <small class="muted"><span data-i18n="reg.addrPreviewPre">(your address will be </span><code id="register-preview">name@&lt;domain&gt;</code><span data-i18n="reg.addrPreviewPost">)</span></small>
             <input type="text" id="register-name" placeholder="yourname" data-i18n-ph="reg.namePh" autocomplete="username" />
           </label>
+          <!-- Human registration sets its own password (required; min 8 —
+               same rule as setup). Agents use the one-click flow below,
+               which keeps server-generated passwords. Structured as its own
+               label block so future channels (v0.6 "register and belong")
+               can extend the form without disturbing this one. -->
+          <label><span data-i18n="reg.passwordLabel">Password (you choose it)</span>
+            <input type="password" id="register-password" placeholder="at least 8 characters" data-i18n-ph="reg.pwUserPh" autocomplete="new-password" />
+          </label>
           <div class="row">
             <button id="btn-register-submit" class="primary" data-i18n="reg.submit">Register</button>
             <button id="btn-register-cancel" class="row-action" data-i18n="reg.back">Back to login</button>
