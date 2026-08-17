@@ -446,11 +446,12 @@ func (s *Server) handleAccountInfo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"query":     "self",
-			"address":   acc.Address,
-			"is_admin":  acc.IsAdmin,
-			"visible":   acc.Visible,
-			"signature": acc.Signature,
+			"query":           "self",
+			"address":         acc.Address,
+			"is_admin":        acc.IsAdmin,
+			"visible":         acc.Visible,
+			"signature":       acc.Signature,
+			"files_used_bytes": s.store.AccountFilesUsed(acc.Address),
 		})
 
 	case "directory":
