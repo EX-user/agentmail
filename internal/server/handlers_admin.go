@@ -150,7 +150,15 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 		"received_at": msg.ReceivedAt,
 	}
 	if len(msg.Attachments) > 0 {
-		resp["attachments"] = msg.Attachments
+		type attOut struct {
+			store.AttachmentMeta
+			ExpiresAt int64 `json:"expires_at"`
+		}
+		out := make([]attOut, 0, len(msg.Attachments))
+		for _, a := range msg.Attachments {
+			out = append(out, attOut{AttachmentMeta: a, ExpiresAt: s.store.AttachmentExpiresAt(a)})
+		}
+		resp["attachments"] = out
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
