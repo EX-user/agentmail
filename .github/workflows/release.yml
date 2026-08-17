@@ -48,10 +48,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-          cache: true
+      # NOTE: no actions/setup-go — its codeload tarball download was
+      # persistently 429-rate-limited tonight (3 runs, always at least one
+      # job dead at this step). Hosted ubuntu runners ship a preinstalled Go
+      # (>= the module's 1.22 floor), so use it directly. The version line
+      # keeps what we actually built with visible in the log.
+      - name: Go toolchain (runner-preinstalled)
+        run: go version
 
       - name: Build both binaries
         env:
