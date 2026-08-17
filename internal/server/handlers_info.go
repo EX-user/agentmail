@@ -76,10 +76,11 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":       "status",
-		"version":     Version,
-		"domain":      s.domain(),
-		"initialized": s.store.IsInitialized(),
+		"query":                         "status",
+		"version":                       Version,
+		"domain":                        s.domain(),
+		"initialized":                   s.store.IsInitialized(),
+		"suggested_min_gateway_version": SuggestedMinGatewayVersion,
 	})
 }
 

@@ -23,9 +23,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 //   GET /api/status -> {"initialized": bool, "domain": "..."}
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"initialized": s.store.IsInitialized(),
-		"domain":      s.domain(),
-		"version":     Version,
+		"initialized":                  s.store.IsInitialized(),
+		"domain":                       s.domain(),
+		"version":                      Version,
+		"suggested_min_gateway_version": SuggestedMinGatewayVersion,
 	})
 }
 
