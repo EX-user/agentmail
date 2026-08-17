@@ -135,7 +135,7 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "server_info",
-			Description: "Query the server for SYSTEM-level structured information. Pass query to select what to return: \"status\" (version/domain), \"stats\" (account/message counts), \"settings\" (registration/rate limits), \"accounts\" (full account list, admin only), \"audit\" (recent audit log, admin only), \"help\" (list all queries). Admin-only queries require access_code from an admin account. This tool covers system-wide info; for ACCOUNT-level queries (your own profile, the public directory) use account_info instead. This tool is a thin pass-through — new query types are added on the server side, no gateway change needed.",
+			Description: "Query the server for SYSTEM-level structured information. Pass query to select what to return: \"status\" (version/domain, plus this gateway's own gateway_version and the server's suggested_min_gateway_version — swap the gateway binary when gateway_version is older), \"stats\" (account/message counts), \"settings\" (registration/rate limits), \"accounts\" (full account list, admin only), \"audit\" (recent audit log, admin only), \"help\" (list all queries). Admin-only queries require access_code from an admin account. This tool covers system-wide info; for ACCOUNT-level queries (your own profile, the public directory) use account_info instead. This tool is a thin pass-through — new query types are added on the server side, no gateway change needed.",
 			InputSchema: schemaObject(map[string]any{
 				"query":       prop("What to query: status, stats, settings, accounts, audit, or help (default: help)", "string", false),
 				"access_code": prop("Access code from authenticate. Required for admin-only queries (accounts, audit). Omit for public queries.", "string", false),
@@ -709,6 +709,12 @@ func (s *Server) toolServerInfo(ctx context.Context, args map[string]any) (any, 
 	result, err := client.InfoRaw(authUser, authPass, query)
 	if err != nil {
 		return nil, fmt.Errorf("server_info: %w", err)
+	}
+	// Augment the status query with the gateway's own version so callers can
+	// compare gateway vs server in one response (server side reports
+	// suggested_min_gateway_version; both halves of the pair are visible here).
+	if query == "status" && result != nil {
+		result["gateway_version"] = Version
 	}
 	return result, nil
 }

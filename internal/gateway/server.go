@@ -29,6 +29,13 @@ import (
 // CodeTTL is how long an access code stays valid.
 var CodeTTL = time.Hour
 
+// Version is the agentmail-gateway version. Overridden at build time via
+// -ldflags "-X github.com/agentmail/agentmail/internal/gateway.Version=v0.1.2".
+// Reported in the MCP initialize handshake and via server_info(query="status")
+// alongside the server's suggested_min_gateway_version, so agents and ops can
+// tell whether the gateway binary is due for a swap.
+var Version = "dev"
+
 // CodeMaxCalls is how many tool calls one access code may serve.
 var CodeMaxCalls = 20
 
@@ -254,7 +261,7 @@ func (s *Server) handleInitialize(req rpcRequest) rpcResponse {
 	return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]any{"name": "agentmail", "version": "0.1.0"},
+		"serverInfo":      map[string]any{"name": "agentmail", "version": Version},
 		"instructions":    agentmailInstructions,
 	}}
 }

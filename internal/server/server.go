@@ -26,6 +26,14 @@ import (
 // -ldflags "-X github.com/agentmail/agentmail/internal/server.Version=v0.1.2".
 var Version = "dev"
 
+// SuggestedMinGatewayVersion is the minimum agentmail-gateway version this
+// server release pairs with. Surfaced in /api/status and /api/info so agents
+// (and ops) can compare against the gateway's self-reported version and know
+// when the gateway binary is due for a swap. Bumped per release when the
+// gateway half of a feature ships; overridden at build time via
+// -ldflags "-X github.com/agentmail/agentmail/internal/server.SuggestedMinGatewayVersion=v0.5.5".
+var SuggestedMinGatewayVersion = "dev"
+
 // MaxSignatureLen is the maximum number of characters allowed in an account's
 // directory signature. Enforced in handleProfileSelf before persisting.
 const MaxSignatureLen = 200
