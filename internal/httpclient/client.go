@@ -177,6 +177,41 @@ func (c *Client) UploadFile(authUser, authPass, filename string, content []byte)
 	return &out, nil
 }
 
+// DownloadFile fetches an attachment's content. Returns the bytes plus the
+// server-supplied filename. Non-200 (missing file, no permission, bad code)
+// maps to a descriptive error.
+func (c *Client) DownloadFile(authUser, authPass, fileID, code string) ([]byte, string, error) {
+	endpoint := c.baseURL + "/api/files/" + fileID + "/download?code=" + url.QueryEscape(code)
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Authorization", basicAuth(authUser, authPass))
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20)) // hard read cap 8MB
+	if resp.StatusCode != http.StatusOK {
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			msg = resp.Status
+		}
+		return nil, "", fmt.Errorf("download: %s", msg)
+	}
+	// Best-effort filename from Content-Disposition (filename*= preferred).
+	name := fileID
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if i := strings.Index(cd, "filename*=UTF-8''"); i >= 0 {
+			if dec, err := url.QueryUnescape(cd[i+len("filename*=UTF-8''"):]); err == nil && dec != "" {
+				name = dec
+			}
+		}
+	}
+	return body, name, nil
+}
+
 // Inbox lists the authed user's inbox.
 func (c *Client) Inbox(authUser, authPass string, limit int) (*InboxResponse, error) {
 	var out InboxResponse
