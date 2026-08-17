@@ -890,11 +890,10 @@ nav .tab { flex: 0 0 auto; }
 .attach-ttl { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
 .attach-ttl-over { color: var(--error); }
 
-/* Inbox prev/next (v0.5.4): phones only — desktop shows list+detail
-   side-by-side, where the nav is redundant. */
-.inbox-nav { display: none; }
+/* Inbox prev/next (v0.5.4.1): visible on every width — desktop readers
+   want it too (feedback). The pager-hide stays phone-only (tabs layout). */
+.inbox-nav { display: flex; }
 @media (max-width: 800px) {
-  .inbox-nav { display: flex; }
   /* The pager belongs to the List tab; hide it while reading a message. */
   #inbox-grid.mshow-detail ~ .inbox-pager { display: none; }
 }
