@@ -897,3 +897,10 @@ nav .tab { flex: 0 0 auto; }
   /* The pager belongs to the List tab; hide it while reading a message. */
   #inbox-grid.mshow-detail ~ .inbox-pager { display: none; }
 }
+
+/* Inbox unread badge (v0.5.5): red dot + count on the nav tab. */
+.tab-badge {
+  display: inline-block; min-width: 18px; padding: 1px 5px; margin-left: 6px;
+  border-radius: 999px; background: var(--error); color: #fff;
+  font-size: 11px; font-weight: 700; text-align: center; line-height: 1.4;
+}
