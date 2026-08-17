@@ -788,13 +788,7 @@
     }
     try {
       const m = await api("/admin/message?id=" + encodeURIComponent(id));
-      detail.innerHTML = inboxNavRow();
-      {
-        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
-        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
-        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-      }
-      detail.innerHTML +=
+      detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
@@ -960,7 +954,9 @@
       // The Inbox tab is the viewer's own mail, so /api/message works for both
       // roles (admin satisfies account auth).
       const m = await api("/api/message?id=" + encodeURIComponent(id));
-      detail.innerHTML =
+      // Final render includes the nav row (earlier only the loading frame
+      // had it — data arrival wiped it; feedback root cause).
+      detail.innerHTML = inboxNavRow() +
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
@@ -969,12 +965,21 @@
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      {
+        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
+        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
+        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
+      }
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
     } catch (e) {
-      detail.textContent = t("common.error", { msg: e.message });
+      // Keep the nav row on errors too — the reader can still step away.
+      detail.innerHTML = inboxNavRow() + '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
+      const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
+      if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
+      if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
     }
   }
 
