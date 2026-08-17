@@ -104,7 +104,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Password string `json:"password"` // optional: use the caller-chosen password
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -120,7 +121,23 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := s.store.CreateAccount(name, s.domain(), false)
+	// Optional caller-chosen password: when present it must meet the same
+	// minimum as everywhere else, and the response omits it (the caller
+	// already knows it — the field's absence is the frontend's branch
+	// signal). Absent/empty keeps the generated one-time password flow
+	// (one-click register depends on it).
+	chosePassword := strings.TrimSpace(body.Password) != ""
+	var res *store.CreateAccountResult
+	var err error
+	if chosePassword {
+		if len(body.Password) < store.MinPasswordLength {
+			badRequest(w, fmt.Sprintf("password must be at least %d chars", store.MinPasswordLength))
+			return
+		}
+		res, err = s.store.CreateAccountWithPassword(name, s.domain(), false, body.Password)
+	} else {
+		res, err = s.store.CreateAccount(name, s.domain(), false)
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrAccountExists) {
 			conflict(w, "account already exists")
@@ -129,11 +146,15 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "create account: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionRegister, res.Address, "name="+name)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"address":  res.Address,
-		"password": res.Password,
-	})
+	_ = s.audit.Record(r.Context(), audit.ActionRegister, res.Address,
+		"name="+name+" chose_password="+fmt.Sprint(chosePassword))
+	resp := map[string]any{
+		"address": res.Address,
+	}
+	if !chosePassword {
+		resp["password"] = res.Password
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleVerifyPassword checks a credential pair.
