@@ -145,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Admin API (admin Basic auth) — requires initialization.
 	mux.HandleFunc("/admin/messages", s.requireInitialized(s.requireAdmin(s.handleAdminMessages)))
+mux.HandleFunc("/admin/messages-all", s.requireInitialized(s.requireAdmin(s.handleAdminMessagesAll)))
 	mux.HandleFunc("/admin/sent", s.requireInitialized(s.requireAdmin(s.handleAdminSent)))
 	mux.HandleFunc("/admin/message", s.requireInitialized(s.requireAdmin(s.handleAdminMessage)))
 mux.HandleFunc("/admin/thread", s.requireInitialized(s.requireAdmin(s.handleAdminThread)))
