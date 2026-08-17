@@ -221,7 +221,7 @@ func (s *Store) SendWithAttachments(from, fromName string, to []string, subject,
 			if !strings.EqualFold(fr.Owner, from) {
 				return fmt.Errorf("attachment %q is not owned by sender", id)
 			}
-			metas = append(metas, AttachmentMeta{ID: fr.ID, Filename: fr.Filename, Size: fr.Size, AccessCode: fr.AccessCode})
+			metas = append(metas, AttachmentMeta{ID: fr.ID, Filename: fr.Filename, Size: fr.Size, AccessCode: fr.AccessCode, CreatedAt: fr.CreatedAt})
 			fileKeys = append(fileKeys, []byte(id))
 		}
 
@@ -335,6 +335,23 @@ func sortStrings(list []string) {
 			list[j], list[j-1] = list[j-1], list[j]
 		}
 	}
+}
+
+
+// AccountFilesUsed returns the total bytes of the account's live files.
+func (s *Store) AccountFilesUsed(owner string) int64 {
+	var used int64
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bFiles).Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var fr FileRecord
+			if json.Unmarshal(v, &fr) == nil && strings.EqualFold(fr.Owner, owner) {
+				used += fr.Size
+			}
+		}
+		return nil
+	})
+	return used
 }
 
 // randomFileCode mints a 32-hex-char download code.

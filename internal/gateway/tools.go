@@ -2,12 +2,14 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/agentmail/agentmail/internal/httpclient"
 )
@@ -80,7 +82,7 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "send_email",
-			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total). attachments (optional, 1-5 paths) uploads real attachments through the file store — recipients can download them via the codes embedded in the message (1MB per file).",
+			Description: "Send a plain-text email from the account bound to the access code. Set public=true to additionally publish a copy to the public showcase (portal sample) — an explicit opt-in; delivery is unaffected. inline_files (optional, 1-3 paths) reads plain-text files on the machine where the gateway runs and appends each as a delimited block at the end of the body (100KB per file, 200KB total) — inline text becomes part of the body and never expires. attachments (optional, 1-5 paths) uploads real attachments through the file store — recipients can download them via the codes embedded in the message (1MB per file); attachments are stored server-side with a 30-day TTL and storage caps, so for text you want preserved verbatim prefer inline_files.",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
@@ -102,11 +104,20 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 		},
 		{
 			Name:        "get_message",
-			Description: "Fetch the full body of a single message by id.",
+			Description: "Fetch the full body of a single message by id. Messages with files include an 'attachments' array [{id, filename, size, access_code}] — download each via the download_attachment tool or HTTP GET /api/files/{id}/download?code={access_code} (Basic auth).",
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"message_id":  prop("Message id from read_inbox", "string", true),
 			}, []string{"access_code", "message_id"}),
+		},
+		{
+			Name:        "download_attachment",
+			Description: "Download one attachment by file id. Text files with valid UTF-8 content are returned inline; anything else (binary) comes back base64-encoded with a byte count. Files over 512KB are refused — fetch those via HTTP GET /api/files/{id}/download?code={code} instead. Requires the account to be the file owner or a recipient of the message that carried it (the access_code from that message's attachments entry must also match).",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate", "string", true),
+				"file_id":     prop("File id from a message's attachments entry", "string", true),
+				"code":        prop("The attachment's access_code from the same attachments entry", "string", true),
+			}, []string{"access_code", "file_id", "code"}),
 		},
 		{
 			Name:        "wait_for_new_mail",
@@ -203,6 +214,9 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result, err = s.toolSend(ctx, args)
 	case "read_inbox":
 		result, err = s.toolReadInbox(ctx, args)
+	case "download_attachment":
+		result, err = s.toolDownloadAttachment(ctx, args)
+
 	case "get_message":
 		result, err = s.toolGetMessage(ctx, args)
 	case "wait_for_new_mail":
@@ -381,6 +395,47 @@ func (s *Server) toolReadInbox(ctx context.Context, args map[string]any) (any, e
 		msgs = filtered
 	}
 	return map[string]any{"messages": msgs, "count": len(msgs)}, nil
+}
+
+// toolDownloadAttachment fetches one attachment for the account bound to
+// the access code. Valid-UTF-8 text is returned inline; binary comes back
+// base64-encoded with a byte count. Over 512KB is refused (context-blowup
+// guard — the caller is pointed at the HTTP endpoint instead).
+func (s *Server) toolDownloadAttachment(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	if err != nil {
+		return nil, err
+	}
+	client := s.getClient(entry.ServerURL)
+	fileID := str(args["file_id"])
+	code := str(args["code"])
+	if fileID == "" || code == "" {
+		return nil, fmt.Errorf("file_id and code are required")
+	}
+	content, filename, err := client.DownloadFile(entry.Address, entry.Password, fileID, code)
+	if err != nil {
+		return nil, fmt.Errorf("download_attachment: %w (check the file_id/access_code pair from the message's attachments entry)", err)
+	}
+	const maxInline = 512 * 1024
+	if len(content) > maxInline {
+		return nil, fmt.Errorf("download_attachment: %d bytes exceeds the 512KB inline limit — use HTTP GET /api/files/%s/download?code=%s with Basic auth instead", len(content), fileID, code)
+	}
+	if utf8.Valid(content) {
+		return map[string]any{
+			"file_id":  fileID,
+			"filename": filename,
+			"encoding": "utf-8",
+			"bytes":    len(content),
+			"content":  string(content),
+		}, nil
+	}
+	return map[string]any{
+		"file_id":  fileID,
+		"filename": filename,
+		"encoding": "base64",
+		"bytes":    len(content),
+		"content":  base64.StdEncoding.EncodeToString(content),
+	}, nil
 }
 
 func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, error) {

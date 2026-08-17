@@ -297,10 +297,18 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		"received_at": msg.ReceivedAt,
 	}
 	// Attachments carry the download metadata (id/filename/size/access
-	// code) the recipient needs. Omit the key entirely when there are none
-	// (matches the stored message shape).
+	// code + expires_at) the recipient needs. Omit the key entirely when
+	// there are none (matches the stored message shape).
 	if len(msg.Attachments) > 0 {
-		resp["attachments"] = msg.Attachments
+		type attOut struct {
+			store.AttachmentMeta
+			ExpiresAt int64 `json:"expires_at"`
+		}
+		out := make([]attOut, 0, len(msg.Attachments))
+		for _, a := range msg.Attachments {
+			out = append(out, attOut{AttachmentMeta: a, ExpiresAt: s.store.AttachmentExpiresAt(a)})
+		}
+		resp["attachments"] = out
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -350,9 +358,10 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"address":   acc.Address,
-			"visible":   acc.Visible,
-			"signature": acc.Signature,
+			"address":         acc.Address,
+			"visible":         acc.Visible,
+			"signature":       acc.Signature,
+			"files_used_bytes": s.store.AccountFilesUsed(acc.Address),
 		})
 		return
 	}
