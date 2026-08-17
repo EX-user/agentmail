@@ -89,6 +89,31 @@
 
   // ---- tab switching ----
 
+  // ---- inbox unread badge (v0.5.5) ----
+  // Red dot + count on the Inbox nav tab. Refreshes after each inbox load
+  // and on a slow poll (60s) while logged in; hidden at zero.
+  function setInboxBadge(n) {
+    const tab = $(".tab[data-tab=inbox]");
+    if (!tab) return;
+    let badge = $(".tab-badge", tab);
+    if (!n) { if (badge) badge.remove(); return; }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "tab-badge";
+      tab.appendChild(badge);
+    }
+    badge.textContent = n > 99 ? "99+" : String(n);
+  }
+
+  async function refreshInboxBadge() {
+    if (!getSession()) { setInboxBadge(0); return; }
+    try {
+      const d = await api("/api/inbox?limit=1");
+      setInboxBadge(d.unread_count || 0);
+    } catch (_) { /* badge is best-effort */ }
+  }
+  setInterval(refreshInboxBadge, 60000);
+
   function activateTab(name) {
     $$(".tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.tab === name);
@@ -860,6 +885,7 @@
       });
       updateInboxPager(totalPages, inboxPage + 1);
       status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
+      setInboxBadge(unreadCount);
       // Avoid the empty detail pane (feedback): preload the newest message.
       // Desktop shows it right away; mobile stays on the List tab (the
       // detail is preloaded behind it and opens on tap as usual).
@@ -2041,6 +2067,7 @@
     if (s) {
       $("#whoami").textContent = s.address + (s.is_admin ? " (admin)" : "");
       applyRole(!!s.is_admin);
+      refreshInboxBadge();
     }
   }
 
