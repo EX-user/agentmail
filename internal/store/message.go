@@ -33,6 +33,21 @@ type AttachmentMeta struct {
 	Filename   string `json:"filename"`
 	Size       int64  `json:"size"`
 	AccessCode string `json:"access_code"`
+	CreatedAt  int64  `json:"created_at,omitempty"` // upload time; 0 on legacy entries (pre-v0.5.3)
+}
+
+// AttachmentExpiresAt derives the expiry timestamp for one attachment
+// meta. Legacy entries (CreatedAt == 0) resolve via the live file record;
+// if that is gone too (already evicted), 0 is returned and callers may
+// treat the attachment as expired.
+func (s *Store) AttachmentExpiresAt(m AttachmentMeta) int64 {
+	if m.CreatedAt != 0 {
+		return m.CreatedAt + int64(FileTTL.Seconds())
+	}
+	if fr, err := s.GetFileMeta(m.ID); err == nil {
+		return fr.CreatedAt + int64(FileTTL.Seconds())
+	}
+	return 0
 }
 
 // MessageSummary is a lightweight inbox entry (no body).
