@@ -1870,9 +1870,12 @@
     // just reminds the user to keep it; server-generated ones (one-click)
     // still show once.
     $("#register-success-password").textContent = password || t("reg.pwUserSet");
-    // Agent setup section: a single ready-to-paste prompt that carries both
-    // the account credentials and the MCP config inline.
-    $("#agent-prompt").textContent = buildAgentPrompt(address, password);
+    // Agent prompt block no longer shows on the human register channel —
+    // that content lives in the one-click agent flow's modal only
+    // (feedback). Hidden here so the block can stay in the markup for
+    // potential agent-channel reuse.
+    const details = $("#agent-setup-details");
+    if (details) details.classList.add("hidden");
     sb.classList.remove("hidden");
   }
 
