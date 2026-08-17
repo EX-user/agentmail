@@ -192,6 +192,30 @@ func (s *Server) handleAdminThread(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminMessagesAll returns the newest messages across all accounts
+// in ONE request (replaces the per-account fan-out that saturated the
+// server on the admin Mail page's "All accounts" view).
+//   GET /admin/messages-all?limit=50&folder=all|inbox|sent
+//     -> {"messages": [...MessageSummary], "count": N, "total_count": T}
+func (s *Server) handleAdminMessagesAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	limit := queryInt(r, "limit", 50)
+	folder := strings.TrimSpace(r.URL.Query().Get("folder"))
+	msgs, total, err := s.store.ReadAllAccountsMessages(folder, limit)
+	if err != nil {
+		internalError(w, "read all messages: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages":    msgs,
+		"count":       len(msgs),
+		"total_count": total,
+	})
+}
+
 // handleAdminStats returns overall counts for the overview page.
 //   GET /admin/stats  -> {"accounts": N, "messages": N}
 func (s *Server) handleAdminStats(w http.ResponseWriter, r *http.Request) {

@@ -141,6 +141,51 @@ func (s *Store) Send(from, fromName string, to []string, subject, body string) (
 	return &SendResult{MessageID: msgID}, nil
 }
 
+
+// ReadAllAccountsMessages returns the newest messages across EVERY
+// account, filtered by folder ("inbox" = delivered to at least one
+// existing recipient, "sent" = sent by an existing account, "all" =
+// everything), newest-first, capped at limit. One reverse cursor pass
+// over the global message bucket replaces the 2-requests-per-account
+// fan-out that saturated the server on the admin Mail page.
+func (s *Store) ReadAllAccountsMessages(folder string, limit int) ([]MessageSummary, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	folder = strings.ToLower(strings.TrimSpace(folder))
+	if folder == "" {
+		folder = "all"
+	}
+	var out []MessageSummary
+	total := 0
+	err := s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMessages)
+		c := mb.Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			var m Message
+			if json.Unmarshal(v, &m) != nil {
+				continue // corrupt record
+			}
+			switch folder {
+			case "inbox":
+				if len(m.To) == 0 {
+					continue
+				}
+			case "sent":
+				if m.From == "" {
+					continue
+				}
+			}
+			total++
+			if len(out) < limit {
+				out = append(out, summarize(m))
+			}
+		}
+		return nil
+	})
+	return out, total, err
+}
+
 // ReadInbox returns up to limit most-recent inbox messages for the account
 // with the given address. limit<=0 defaults to 20. Unread status reflects the
 // inbox owner's view (the account itself).
