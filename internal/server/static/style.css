@@ -885,3 +885,7 @@ nav .tab { flex: 0 0 auto; }
   cursor: pointer;
 }
 .attach-preview img:hover { border-color: var(--accent); }
+
+/* Attachment TTL badge (v0.5.3). */
+.attach-ttl { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
+.attach-ttl-over { color: var(--error); }

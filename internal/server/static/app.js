@@ -686,6 +686,18 @@
     return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
   }
 
+  // attachTTLBadge renders the remaining validity under the file TTL
+  // (v0.5.3): "约 N 天后过期" / "已过期" once past. Absent expires_at
+  // (older server) shows nothing.
+  function attachTTLBadge(a) {
+    if (!a || !a.expires_at) return "";
+    const exp = new Date(typeof a.expires_at === "number" ? a.expires_at * 1000 : a.expires_at);
+    if (isNaN(exp.getTime())) return "";
+    const days = Math.floor((exp.getTime() - Date.now()) / 86400000);
+    const txt = days < 0 ? t("attach.expired") : t("attach.expiresIn", { n: days });
+    return '<span class="attach-ttl' + (days < 0 ? " attach-ttl-over" : "") + '">' + txt + "</span>";
+  }
+
   function attachmentCards(m) {
     const list = (m && m.attachments) || [];
     if (!list.length) return "";
@@ -695,6 +707,7 @@
         '<span class="attach-clip">📎</span>' +
         '<span class="attach-name">' + esc(a.filename) + "</span>" +
         '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
+        attachTTLBadge(a) +
         '<button class="row-action" data-dl="' + i + '">Download</button>' +
         preview +
         "</div>";
@@ -998,6 +1011,22 @@
       $("#profile-visible").checked = !!p.visible;
       $("#profile-signature").value = p.signature || "";
       status.textContent = "";
+      // Attachment quota (v0.5.3): used from self info, cap from public
+      // settings — hidden until the server reports the usage field.
+      try {
+        const [self, set] = await Promise.all([
+          api("/api/account/info?query=self").catch(function () { return null; }),
+          api("/api/info?query=settings").catch(function () { return null; }),
+        ]);
+        const used = self && (self.files_used_bytes != null ? self.files_used_bytes : self.files_used);
+        const cap = set && (set.file_quota_per_acct != null ? set.file_quota_per_acct : set.file_quota);
+        const row = $("#attach-quota-row");
+        if (row && typeof used === "number" && typeof cap === "number" && cap > 0) {
+          $("#attach-quota-value").textContent = fmtBytes(used) + " / " + fmtBytes(cap) +
+            (used >= cap ? " (" + t("attach.quotaFull") + ")" : "");
+          row.style.display = "";
+        }
+      } catch (_) { /* quota row is optional */ }
     } catch (e) {
       status.textContent = t("common.error", { msg: e.message });
     }
@@ -2331,7 +2360,11 @@
             ? "/api/message?id=" + encodeURIComponent(mid)
             : "/admin/message?id=" + encodeURIComponent(mid);
           const m = await api(path);
-          full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>";
+          // v0.5.3: thread expansion shows attachments too (parity with the
+          // inbox/mail detail panes), including image previews.
+          full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+          wireAttachmentDownloads(full, m);
+          hydrateAttachmentPreviews(full, m);
           item.dataset.loaded = "1";
         } catch (e) {
           full.textContent = t("common.error", { msg: e.message });

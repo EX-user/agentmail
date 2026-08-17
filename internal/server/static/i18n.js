@@ -48,6 +48,10 @@
       "common.cancel": "Cancel",
       "common.error": "Error: {msg}",
       "common.lang.switch": "EN / 中文",
+      "prof.attachQuota": "Attachments",
+      "attach.quotaFull": "full",
+      "attach.expiresIn": "~{n}d left",
+      "attach.expired": "expired",
       "attach.clickToDownload": "Click to download",
       // ---- attachments (v0.5.1) ----
       "compose.attach": "📎 Attach",
@@ -277,6 +281,10 @@
       "common.cancel": "取消",
       "common.error": "错误：{msg}",
       "common.lang.switch": "EN / 中文",
+      "prof.attachQuota": "附件用量",
+      "attach.quotaFull": "已满",
+      "attach.expiresIn": "约 {n} 天后过期",
+      "attach.expired": "已过期",
       "attach.clickToDownload": "点击下载",
       // ---- attachments (v0.5.1) ----
       "compose.attach": "📎 添加附件",
