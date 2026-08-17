@@ -521,41 +521,33 @@
       const s = getSession();
       const isRegular = s && !s.is_admin;
 
-      // Build the set of (account, folder) queries to run.
-      // - account="__all__": iterate every account (admin only).
-      // - folder="all": mix inbox + sent for the selected account.
-      var accounts = [];
-      if (account === "__all__") {
-        const all = await api("/admin/accounts");
-        accounts = (all.accounts || []).map(function (a) { return a.address; });
-      } else {
-        accounts = [account];
-      }
-      const folders = folder === "all" ? ["inbox", "sent"] : [folder];
-
-      // Fire all queries, then merge by time (newest first).
-      var requests = [];
-      accounts.forEach(function (acc) {
-        folders.forEach(function (f) {
-          requests.push({ acc: acc, f: f });
-        });
-      });
-      const results = await Promise.all(requests.map(function (r) {
-        const path = isRegular
-          ? (r.f === "sent" ? "/api/sent?limit=" + limit : "/api/inbox?limit=" + limit)
-          : (r.f === "sent"
-              ? "/admin/sent?account=" + encodeURIComponent(r.acc) + "&limit=" + limit
-              : "/admin/messages?account=" + encodeURIComponent(r.acc) + "&limit=" + limit);
-        return api(path).then(function (d) { return d.messages || []; })
-          .catch(function () { return []; });
-      }));
       var msgs = [];
-      results.forEach(function (arr) { msgs = msgs.concat(arr); });
-      msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
-      // De-duplicate by id (a message can appear in both inbox and sent views).
-      var seen = {}, dedup = [];
-      msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
-      msgs = dedup;
+      if (account === "__all__" && !isRegular) {
+        // Aggregated endpoint (v0.5.4): one server-side merged scan replaces
+        // the old fan-out of 2 requests per account (50+ accounts = 100+
+        // concurrent bbolt scans saturating the server).
+        const d = await api("/admin/messages-all?limit=" + limit +
+          (folder === "all" ? "" : "&folder=" + encodeURIComponent(folder)));
+        msgs = d.messages || [];
+      } else {
+        // Single account: one or two direct queries, merged by time.
+        const folders = folder === "all" ? ["inbox", "sent"] : [folder];
+        const results = await Promise.all(folders.map(function (f) {
+          const path = isRegular
+            ? (f === "sent" ? "/api/sent?limit=" + limit : "/api/inbox?limit=" + limit)
+            : (f === "sent"
+                ? "/admin/sent?account=" + encodeURIComponent(account) + "&limit=" + limit
+                : "/admin/messages?account=" + encodeURIComponent(account) + "&limit=" + limit);
+          return api(path).then(function (d) { return d.messages || []; })
+            .catch(function () { return []; });
+        }));
+        results.forEach(function (arr) { msgs = msgs.concat(arr); });
+        msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
+        // De-duplicate by id (a message can appear in both inbox and sent views).
+        var seen = {}, dedup = [];
+        msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
+        msgs = dedup;
+      }
 
       if (!msgs.length) { list.textContent = t("mail.noMessages"); return; }
       list.innerHTML = "";
@@ -796,7 +788,13 @@
     }
     try {
       const m = await api("/admin/message?id=" + encodeURIComponent(id));
-      detail.innerHTML =
+      detail.innerHTML = inboxNavRow();
+      {
+        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
+        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
+        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
+      }
+      detail.innerHTML +=
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
@@ -913,11 +911,43 @@
     loadInbox(p - 1); // loadInbox is 0-based
   });
 
+  // inboxStepNav (v0.5.4): 上一封/下一封 along the current list order; at a
+  // page edge it flips the pager and opens the boundary message. The nav row
+  // lives atop the detail pane (CSS shows it only <=800px on phones).
+  function inboxStepNav(item, dir) {
+    const items = $$(".mail-item", $("#inbox-list"));
+    const idx = items.indexOf(item);
+    const nextIdx = idx + dir;
+    if (nextIdx >= 0 && nextIdx < items.length) {
+      items[nextIdx].click();
+      return;
+    }
+    const page = dir < 0 ? inboxPage - 1 : inboxPage + 1;
+    if (page < 0) { toast(t("inbox.noNewer"), "error"); return; }
+    loadInbox(page).then(function () {
+      const fresh = $$(".mail-item", $("#inbox-list"));
+      const target = dir < 0 ? fresh[fresh.length - 1] : fresh[0];
+      if (target) target.click();
+      else toast(t("inbox.noMore"), "error");
+    });
+  }
+
+  function inboxNavRow() {
+    return '<div class="row inbox-nav" style="margin:0 0 8px; justify-content:space-between;">' +
+      '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
+      '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
+      "</div>";
+  }
+
   async function showInboxDetail(id, item, auto) {
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
-    detail.textContent = t("common.loading");
+    detail.innerHTML = inboxNavRow();
+    const navPrev = $('[data-nav="-1"]', detail), navNext = $('[data-nav="1"]', detail);
+    if (navPrev) navPrev.addEventListener("click", function () { inboxStepNav(item, -1); });
+    if (navNext) navNext.addEventListener("click", function () { inboxStepNav(item, 1); });
+    detail.insertAdjacentHTML("beforeend", '<div class="inbox-loading">' + t("common.loading") + "</div>");
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
