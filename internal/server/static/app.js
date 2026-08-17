@@ -1011,15 +1011,14 @@
       $("#profile-visible").checked = !!p.visible;
       $("#profile-signature").value = p.signature || "";
       status.textContent = "";
-      // Attachment quota (v0.5.3): used from self info, cap from public
-      // settings — hidden until the server reports the usage field.
+      // Attachment quota (v0.5.3): used bytes come from THIS endpoint's
+      // response (p — /api/profile/self carries files_used_bytes); the cap
+      // from public settings. Reading /api/account/info here was wrong
+      // (that MCP-side endpoint has no usage field).
       try {
-        const [self, set] = await Promise.all([
-          api("/api/account/info?query=self").catch(function () { return null; }),
-          api("/api/info?query=settings").catch(function () { return null; }),
-        ]);
-        const used = self && (self.files_used_bytes != null ? self.files_used_bytes : self.files_used);
-        const cap = set && (set.file_quota_per_acct != null ? set.file_quota_per_acct : set.file_quota);
+        const set = await api("/api/info?query=settings").catch(function () { return null; });
+        const used = p.files_used_bytes;
+        const cap = set && set.file_quota_per_acct;
         const row = $("#attach-quota-row");
         if (row && typeof used === "number" && typeof cap === "number" && cap > 0) {
           $("#attach-quota-value").textContent = fmtBytes(used) + " / " + fmtBytes(cap) +
