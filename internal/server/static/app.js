@@ -1835,7 +1835,10 @@
     $("#register-form-block").classList.add("hidden");
     const sb = $("#register-success-block");
     $("#register-success-address").textContent = address;
-    $("#register-success-password").textContent = password;
+    // Human-set passwords never echo back (server returns none) — the page
+    // just reminds the user to keep it; server-generated ones (one-click)
+    // still show once.
+    $("#register-success-password").textContent = password || t("reg.pwUserSet");
     // Agent setup section: a single ready-to-paste prompt that carries both
     // the account credentials and the MCP config inline.
     $("#agent-prompt").textContent = buildAgentPrompt(address, password);
@@ -2078,20 +2081,25 @@
 
   $("#btn-register-submit").addEventListener("click", async function () {
     const name = ($("#register-name").value || "").trim();
+    const pw = $("#register-password").value || "";
     const status = $("#register-status");
     if (!name) { status.textContent = t("reg.needName"); return; }
     if (!/^[A-Za-z0-9_-]+$/.test(name)) {
       status.textContent = t("reg.nameRule");
       return;
     }
+    // Human registrations choose their own password (required, min 8 —
+    // mirrors the setup rule). Agents use the one-click flow instead.
+    if (pw.length < 8) { status.textContent = t("reg.pwTooShort"); return; }
     status.textContent = t("reg.registering");
     try {
       const res = await api("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name }),
+        body: JSON.stringify({ name: name, password: pw }),
       });
       status.textContent = "";
+      $("#register-password").value = "";
       showRegisterSuccess(res.address, res.password);
     } catch (e) {
       status.textContent = "Registration failed: " + e.message;
