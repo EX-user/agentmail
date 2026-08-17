@@ -328,6 +328,13 @@
           <button id="btn-save-profile" class="primary" data-i18n="prof.save">Save profile</button>
           <span id="profile-status" class="muted"></span>
         </div>
+        <!-- Attachment quota (v0.5.3): row appears once the server reports
+             per-account usage (files_used_bytes on self + quota in public
+             settings); older servers simply hide it. -->
+        <div class="my-stat-row" id="attach-quota-row" style="display:none;">
+          <span class="my-stat-label" data-i18n="prof.attachQuota">Attachments</span>
+          <span class="my-stat-num" id="attach-quota-value"></span>
+        </div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prof.note">Visibility and signature are saved to your own account.</p>
       </div>
     </section>
