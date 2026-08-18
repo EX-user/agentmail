@@ -596,6 +596,12 @@
         item.addEventListener("click", function () { showDetail(m.id, item); });
         list.appendChild(item);
       });
+      // Avoid-empty (feedback): open the newest message right after Load,
+      // mirroring the Inbox preload.
+      {
+        const first = list.querySelector(".mail-item");
+        if (first && msgs.length) showDetail(msgs[0].id, first);
+      }
     } catch (e) {
       list.textContent = t("common.error", { msg: e.message });
     }
@@ -899,7 +905,14 @@
       {
         const first = list.querySelector(".mail-item");
         const newest = msgs[0];
-        if (first && newest) showInboxDetail(newest.id, first, true);
+        if (first && newest) {
+          showInboxDetail(newest.id, first, true).then(function () {
+            // The preload read the newest message server-side — pull the
+            // badge right away instead of waiting for the 5s tick
+            // (admin: opening the inbox should clear the dot immediately).
+            refreshInboxBadge();
+          });
+        }
       }
     } catch (e) {
       list.textContent = t("common.error", { msg: e.message });
@@ -998,6 +1011,7 @@
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      refreshInboxBadge();
       {
         const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
         if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
