@@ -195,6 +195,7 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	from := accountFrom(r.Context())
 	var body struct {
 		To          []string `json:"to"`
+		CC          []string `json:"cc"`
 		Subject     string   `json:"subject"`
 		Body        string   `json:"body"`
 		Public      bool     `json:"public"`
@@ -220,10 +221,10 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Byte receive rate limit (per-recipient): filter out recipients whose
-	// hourly byte budget would be exceeded.
+	// hourly byte budget would be exceeded. CC recipients count the same way.
 	bodyLen := int64(len(body.Body))
 	var validRecipients []string
-	for _, rcpt := range body.To {
+	for _, rcpt := range append(append([]string{}, body.To...), body.CC...) {
 		if s.checkRecvRate(rcpt, bodyLen) {
 			validRecipients = append(validRecipients, rcpt)
 		}
@@ -239,9 +240,9 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	if len(body.Attachments) > 0 {
 		// Attachments must reference the sender's own uploaded files; the
 		// store validates ownership and grants recipients download access.
-		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.Subject, body.Body, body.Attachments)
+		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.CC, body.Subject, body.Body, body.Attachments)
 	} else {
-		res, err = s.store.Send(from, fromName, validRecipients, body.Subject, body.Body)
+		res, err = s.store.Send(from, fromName, body.To, body.CC, body.Subject, body.Body)
 	}
 	if err != nil {
 		badRequest(w, err.Error())

@@ -19,6 +19,7 @@ type Message struct {
 	ID          string           `json:"id"`          // ULID
 	From        string           `json:"from"`        // sender address
 	To          []string         `json:"to"`          // recipient addresses
+	CC          []string         `json:"cc,omitempty"` // carbon-copy addresses (delivered like To; visible to recipients)
 	Subject     string           `json:"subject"`
 	Body        string           `json:"body"`
 	Attachments []AttachmentMeta `json:"attachments,omitempty"` // metadata only; content lives in the file store
@@ -55,6 +56,7 @@ type MessageSummary struct {
 	ID         string   `json:"id"`
 	From       string   `json:"from"`
 	To         []string `json:"to"`
+	CC         []string `json:"cc,omitempty"`
 	Subject    string   `json:"subject"`
 	Preview    string   `json:"preview"`
 	ReceivedAt int64    `json:"received_at"`
@@ -67,21 +69,23 @@ type SendResult struct {
 	MessageID string `json:"message_id"`
 }
 
-// Send composes and delivers a message from "from" to every address in "to".
-// It writes one copy of the message body and adds inbox references for each
-// recipient plus a sent reference for the sender. Recipients that do not
-// exist are silently skipped (the message still goes to the valid ones); if
-// NO recipient is valid, Send returns an error.
+// Send composes and delivers a message from "from" to every address in "to"
+// (plus "cc", delivered identically and recorded on the message). It writes
+// one copy of the message body and adds inbox references for each recipient
+// plus a sent reference for the sender. Recipients that do not exist are
+// silently skipped (the message still goes to the valid ones); if NO
+// recipient is valid, Send returns an error.
 //
 // The whole operation is one bbolt transaction, so a crash mid-send leaves
 // nothing half-delivered.
-func (s *Store) Send(from, fromName string, to []string, subject, body string) (*SendResult, error) {
+func (s *Store) Send(from, fromName string, to []string, cc []string, subject, body string) (*SendResult, error) {
 	msgID := newULID()
 	now := s.now().Unix()
 	msg := Message{
 		ID:         msgID,
 		From:       from,
 		To:         to,
+		CC:         cc,
 		Subject:    subject,
 		Body:       body,
 		ReceivedAt: now,
@@ -103,10 +107,17 @@ func (s *Store) Send(from, fromName string, to []string, subject, body string) (
 			return err
 		}
 
-		// Add an inbox reference for each valid recipient.
+		// Add an inbox reference for each valid recipient (To, then CC —
+		// an address in both gets a single copy via the seen-set).
 		ib := tx.Bucket(bInbox)
 		ub := tx.Bucket(bUnread)
-		for _, addr := range to {
+		seen := map[string]bool{}
+		for _, addr := range append(append([]string{}, to...), cc...) {
+			l := strings.ToLower(addr)
+			if seen[l] {
+				continue // dedup To/CC overlap
+			}
+			seen[l] = true
 			acc, err := getAccountInTx(tx, addr)
 			if err != nil {
 				continue // unknown recipient: skip
@@ -136,7 +147,7 @@ func (s *Store) Send(from, fromName string, to []string, subject, body string) (
 		return nil, fmt.Errorf("send: %w", err)
 	}
 	if delivered == 0 {
-		return nil, fmt.Errorf("no valid recipients among %v", to)
+		return nil, fmt.Errorf("no valid recipients among %v (cc: %v)", to, cc)
 	}
 	return &SendResult{MessageID: msgID}, nil
 }
@@ -760,6 +771,7 @@ func summarize(m Message) MessageSummary {
 		ID:         m.ID,
 		From:       m.From,
 		To:         m.To,
+		CC:         m.CC,
 		Files:      len(m.Attachments),
 		Subject:    m.Subject,
 		Preview:    preview,

@@ -200,7 +200,7 @@ func (s *Store) CleanupExpiredFiles() (int, error) {
 // metadata into the message (what recipients need to download), extends
 // each file's allowed list with the message's valid recipients, and runs
 // the ordinary send. attachIDs may be empty (then it behaves like Send).
-func (s *Store) SendWithAttachments(from, fromName string, to []string, subject, body string, attachIDs []string) (*SendResult, error) {
+func (s *Store) SendWithAttachments(from, fromName string, to []string, cc []string, subject, body string, attachIDs []string) (*SendResult, error) {
 	msgID := newULID()
 	now := s.now().Unix()
 	delivered := 0
@@ -227,14 +227,22 @@ func (s *Store) SendWithAttachments(from, fromName string, to []string, subject,
 
 		// Determine the valid recipients up front (mirrors Send's skip
 		// semantics) so allowed-list extension matches actual delivery.
+		// CC recipients are delivered (and granted attachment access) like
+		// To recipients; To/CC overlap dedups to a single copy.
 		var validRecipients []string
-		for _, addr := range to {
+		seen := map[string]bool{}
+		for _, addr := range append(append([]string{}, to...), cc...) {
+			l := strings.ToLower(addr)
+			if seen[l] {
+				continue
+			}
+			seen[l] = true
 			if _, err := getAccountInTx(tx, addr); err == nil {
 				validRecipients = append(validRecipients, addr)
 			}
 		}
 		if len(validRecipients) == 0 {
-			return fmt.Errorf("no valid recipients among %v", to)
+			return fmt.Errorf("no valid recipients among %v (cc: %v)", to, cc)
 		}
 
 		// Extend each file's allowed list with the recipients (dedup, owner
@@ -279,6 +287,7 @@ func (s *Store) SendWithAttachments(from, fromName string, to []string, subject,
 			ID:          msgID,
 			From:        from,
 			To:          to,
+			CC:          cc,
 			Subject:     subject,
 			Body:        body,
 			Attachments: metas,
