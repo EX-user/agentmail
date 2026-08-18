@@ -248,11 +248,33 @@
         <thead><tr><th>Address</th><th>Tags</th><th data-i18n="prof.signature">Signature</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
+      <!-- Subordinate relationships (regular users, v0.5.7): self-declared
+           directed edges. "My declarations" = accounts I report to (they can
+           read my mail); "visible to me" = accounts that declared under me
+           (read-only browsing from the Mail tab). Collapsed by default. -->
+      <div id="subs-section" class="hidden" style="margin-top:18px; max-width:720px;">
+        <h3 data-i18n="subs.title">Subordinate relationships</h3>
+        <div class="settings-section">
+          <div class="row">
+            <input type="text" id="subs-declare-input" style="flex:1; min-width:220px;"
+                   placeholder="leader address, e.g. alice@example.com" data-i18n-ph="subs.declarePh" />
+            <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
+          </div>
+          <div id="subs-status" class="muted"></div>
+          <div id="subs-mine"></div>
+          <details id="subs-visible-details" class="hidden">
+            <summary data-i18n="subs.visibleTitle">Accounts visible to me (read-only)</summary>
+            <div id="subs-visible"></div>
+          </details>
+        </div>
+      </div>
     </section>
 
-    <!-- Mail -->
+    <!-- Mail: admins browse every account globally; regular accounts browse
+         their own mail plus any subordinate accounts (self-declared edges,
+         read-only, attachments metadata only). -->
     <section id="tab-mail" class="tab-panel hidden">
-      <h2>Mail <small class="muted">— global mail management (admin)</small></h2>
+      <h2>Mail <small class="muted" data-i18n="mail.subtitle">— browse mail (yours and subordinate accounts)</small></h2>
       <div class="row">
         <label>Account:
           <select id="mail-account"><option value="">Loading…</option></select>
