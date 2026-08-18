@@ -898,9 +898,11 @@ nav .tab { flex: 0 0 auto; }
   #inbox-grid.mshow-detail ~ .inbox-pager { display: none; }
 }
 
-/* Inbox unread badge (v0.5.5): red dot + count on the nav tab. */
+/* Inbox unread badge (v0.5.5): pure red dot, absolutely positioned so it
+   never contributes to the tab's text width (feedback: no layout shift). */
+.tab { position: relative; }
 .tab-badge {
-  display: inline-block; min-width: 18px; padding: 1px 5px; margin-left: 6px;
-  border-radius: 999px; background: var(--error); color: #fff;
-  font-size: 11px; font-weight: 700; text-align: center; line-height: 1.4;
+  position: absolute; top: 4px; right: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--error);
 }

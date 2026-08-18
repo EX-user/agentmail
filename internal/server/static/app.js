@@ -102,7 +102,8 @@
       badge.className = "tab-badge";
       tab.appendChild(badge);
     }
-    badge.textContent = n > 99 ? "99+" : String(n);
+    // Pure dot, no count (feedback): width can never shift with the number.
+    badge.textContent = "";
   }
 
   async function refreshInboxBadge() {
