@@ -1258,7 +1258,7 @@
     btn.disabled = true;
     status.textContent = t("set.saving");
     try {
-      await api("/admin/set-files", {
+      await api("/admin/set-limits", { // file limits ride set-limits (fields identical)
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_quota_per_acct: quota * 1048576, files_total_limit: total * 1048576 }),
