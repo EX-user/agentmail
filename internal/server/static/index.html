@@ -422,6 +422,22 @@
         <p class="muted" data-i18n="set.danmakuDesc">Initial danmaku style for visitors who haven't set their own preference.</p>
       </div>
       <div class="settings-section">
+        <h3>Attachment settings</h3>
+        <div class="row">
+          <label>Per-account quota:
+            <input type="number" id="files-quota-input" min="1" style="width:90px" />
+            <small class="muted">MB</small>
+          </label>
+          <label>Total limit:
+            <input type="number" id="files-total-input" min="1" style="width:90px" />
+            <small class="muted">MB</small>
+          </label>
+          <button id="btn-save-files" class="row-action" data-i18n="files.save">Save</button>
+          <span id="files-status" class="muted"></span>
+        </div>
+        <p class="muted">Storage limits for message attachments. Files expire 30 days after upload (fixed for now).</p>
+      </div>
+      <div class="settings-section">
         <h3 data-i18n="set.rateLimits">Rate limits</h3>
         <div class="row">
           <label>Send limit:

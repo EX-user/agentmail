@@ -1236,6 +1236,9 @@
       $("#byte-rate-input").value = Math.round(s.byte_rate / 1048576 * 100) / 100; // bytes → MB
       $("#register-rate-input").value = s.register_rate;
 
+      // Attachment storage limits (MB).
+      if (s.file_quota_per_acct != null) $("#files-quota-input").value = Math.round(s.file_quota_per_acct / 1048576);
+      if (s.files_total_limit != null) $("#files-total-input").value = Math.round(s.files_total_limit / 1048576);
       // Danmaku defaults (v0.4.10). Absent fields keep the built-in default.
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
@@ -1244,6 +1247,29 @@
       $("#reg-status").textContent = t("common.error", { msg: e.message });
     }
   }
+
+  // Save attachment limits (v0.5.7): MB in the UI, bytes on the wire.
+  $("#btn-save-files").addEventListener("click", async function () {
+    const status = $("#files-status");
+    const btn = $("#btn-save-files");
+    const quota = parseInt($("#files-quota-input").value, 10);
+    const total = parseInt($("#files-total-input").value, 10);
+    if (!quota || quota < 1 || !total || total < 1) { status.textContent = "Enter MB values (>= 1)."; return; }
+    btn.disabled = true;
+    status.textContent = t("set.saving");
+    try {
+      await api("/admin/set-limits", { // file limits ride set-limits (fields identical)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_quota_per_acct: quota * 1048576, files_total_limit: total * 1048576 }),
+      });
+      status.textContent = t("set.saved");
+      toast(t("toast.saved"), "success");
+    } catch (e) {
+      status.textContent = t("common.error", { msg: e.message });
+    }
+    btn.disabled = false;
+  });
 
   // Save danmaku site defaults (v0.4.10): visitors who haven't set their own
   // preference start from these.
