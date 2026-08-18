@@ -71,3 +71,25 @@ func TestAttachFilesTotalLimit(t *testing.T) {
 		t.Errorf("240KB total should error, got %v", err)
 	}
 }
+
+func TestToStringSliceJSONArrayString(t *testing.T) {
+	// Some MCP clients serialize array params as a JSON string literal —
+	// the gateway must parse that back into the list it was meant to be.
+	got := toStringSlice(`["a@x.test","b@x.test"]`)
+	if len(got) != 2 || got[0] != "a@x.test" || got[1] != "b@x.test" {
+		t.Errorf("JSON-array string should parse to 2 addresses, got %v", got)
+	}
+	// Plain comma-separated strings keep working.
+	if got := toStringSlice("a@x.test, b@x.test"); len(got) != 2 {
+		t.Errorf("comma string should parse to 2, got %v", got)
+	}
+	// Real arrays keep working.
+	if got := toStringSlice([]any{"a@x.test", "b@x.test"}); len(got) != 2 {
+		t.Errorf("real array should parse to 2, got %v", got)
+	}
+	// A string that merely starts with '[' but is not a JSON array of
+	// strings falls through to comma-splitting unchanged.
+	if got := toStringSlice("[not-a-json-array]"); len(got) != 1 || got[0] != "[not-a-json-array]" {
+		t.Errorf("non-JSON bracket string should pass through, got %v", got)
+	}
+}
