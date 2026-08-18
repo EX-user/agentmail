@@ -995,9 +995,10 @@
   });
 
   // showSubDetail renders the read-only detail pane for a subordinate's
-  // message. v1 summaries carry no body/cc, so the pane shows summary fields
-  // plus the preview; attachments are metadata only (Q2: no download).
-  function showSubDetail(subAddr, m, item) {
+  // message. Fetches the full body via GET /api/subs/{A}/message?id= (v0.5.7.1
+  // server); on failure falls back to the summary (preview). Attachments stay
+  // metadata-only either way (Q2: no download).
+  async function showSubDetail(subAddr, m, item) {
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
@@ -1007,35 +1008,54 @@
       const dot = $(".unread-dot", item);
       if (dot) dot.remove();
     }
+    detail.innerHTML = '<div class="muted">' + t("common.loading") + "</div>";
+    let full = null;
+    try {
+      const d = await api("/api/subs/" + encodeURIComponent(subAddr) +
+        "/message?id=" + encodeURIComponent(m.id));
+      full = d.message || null;
+    } catch (_) { /* fall back to summary-level rendering */ }
+    const msg = full || m; // full has body/cc/attachments; summary has preview/files
     // Received mail (sender ≠ the subordinate): offer "reply as myself".
     // Sent mail by the subordinate gets no reply affordance.
-    const canReply = m.from && m.from !== subAddr;
+    const canReply = msg.from && msg.from !== subAddr;
+    const atts = (msg.attachments || []);
     detail.innerHTML =
       '<div class="detail-row"><span class="badge-sub">' + t("subs.badge") + "</span> " +
       esc(subAddr) + ' · <i class="muted">' + t("subs.readonly") + "</i></div>" +
-      '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
-      '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
-      '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
-      '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-      '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
-      (m.files ? '<div class="detail-row">📎 ' + m.files + t("subs.attachMeta") + "</div>" : "") +
-      "<hr><pre class=\"body\">" + esc(m.preview || "") + "</pre>" +
+      '<div class="detail-row"><b>From:</b> ' + esc(msg.from) + "</div>" +
+      '<div class="detail-row"><b>To:</b> ' + esc((msg.to || []).join(", ")) + "</div>" +
+      (msg.cc && msg.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(msg.cc.join(", ")) + "</div>" : "") +
+      '<div class="detail-row"><b>Subject:</b> ' + esc(msg.subject || "") + "</div>" +
+      '<div class="detail-row"><b>Date:</b> ' + fmtTime(msg.received_at) + "</div>" +
+      '<div class="detail-row"><b>ID:</b> <code>' + esc(msg.id) + "</code></div>" +
+      (atts.length
+        ? '<div class="attach-list">' + atts.map(function (a) {
+            return '<div class="attach-card attach-card-file">' +
+              '<span class="attach-clip">📎</span>' +
+              '<span class="attach-name">' + esc(a.filename) + "</span>" +
+              '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
+              '<span class="muted">' + t("subs.attachNoDl") + "</span></div>";
+          }).join("") + "</div>"
+        : (m.files ? '<div class="detail-row">📎 ' + m.files + t("subs.attachMeta") + "</div>" : "")) +
+      "<hr><pre class=\"body\">" + esc(msg.body != null ? msg.body : (msg.preview || "")) + "</pre>" +
       (canReply
         ? '<div class="row" style="margin-top:12px;"><button class="primary" id="btn-reply-as-self">' +
           t("subs.replyAsSelf") + "</button></div>"
         : "");
     const rbtn = $("#btn-reply-as-self");
-    if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(m); });
+    if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(msg); });
   }
 
   // composeReplyAsSelf: the superior replies in their own name to the
-  // subordinate's correspondent, quoting the original (v1: preview text —
-  // summaries carry no full body).
+  // subordinate's correspondent, quoting the original (full body when the
+  // detail endpoint answered; preview text as fallback).
   function composeReplyAsSelf(m) {
     $("#compose-to").value = m.from || "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
-    const quoted = (m.preview || "").split("\n").map(function (l) { return "> " + l; }).join("\n");
+    const text = (m.body != null ? m.body : m.preview) || "";
+    const quoted = text.split("\n").map(function (l) { return "> " + l; }).join("\n");
     $("#compose-body").value = t("subs.quotePrefix", { date: fmtTime(m.received_at), sender: m.from }) + "\n" + quoted + "\n\n";
     activateTab("compose");
     loadComposeThread();
