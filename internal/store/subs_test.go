@@ -85,10 +85,10 @@ func TestSubsReadMessages(t *testing.T) {
 		t.Fatalf("declare: %v", err)
 	}
 	// A receives mail and sends mail.
-	if _, err := s.Send("b@t", "b", []string{"a@t"}, "to-a", "x"); err != nil {
+	if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, "to-a", "x"); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if _, err := s.Send("a@t", "a", []string{"c@t"}, "from-a", "x"); err != nil {
+	if _, err := s.Send("a@t", "a", []string{"c@t"}, nil, "from-a", "x"); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
