@@ -108,12 +108,18 @@
 
   async function refreshInboxBadge() {
     if (!getSession()) { setInboxBadge(0); return; }
+    // Background tabs skip the tick — the badge refreshes on visibility
+    // return, so 5s polling stays cheap in aggregate (admin: 2-5s wanted).
+    if (document.visibilityState === "hidden") return;
     try {
       const d = await api("/api/inbox?limit=1");
       setInboxBadge(d.unread_count || 0);
     } catch (_) { /* badge is best-effort */ }
   }
-  setInterval(refreshInboxBadge, 60000);
+  setInterval(refreshInboxBadge, 5000);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") refreshInboxBadge();
+  });
 
   function activateTab(name) {
     $$(".tab").forEach(function (b) {
