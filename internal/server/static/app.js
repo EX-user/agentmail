@@ -301,6 +301,9 @@
       await loadAccountsRegular(s.address);
       return;
     }
+    // Admin view has global tools; the subordinate manager is regular-only.
+    const subsSectionAdmin = $("#subs-section");
+    if (subsSectionAdmin) subsSectionAdmin.classList.add("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
     try {
@@ -360,9 +363,20 @@
     if (regBtn) regBtn.classList.add("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
+    // Subordinate relationship manager (v0.5.7) — regular users only.
+    const subsSection = $("#subs-section");
+    if (subsSection) {
+      subsSection.classList.remove("hidden");
+      // Await so the badge pass below sees fresh edges.
+      await loadSubs(true).catch(function () {
+        $("#subs-mine").innerHTML = '<p class="muted">' + t("common.error", { msg: "subordinates unavailable" }) + "</p>";
+      });
+    }
     // Rows match the 5-column header (Address, Tags, Signature, Created,
     // Actions) so the Change-password button lands in the Actions column
     // instead of drifting under Tags.
+    var subAddrs = {};
+    if (subsCache) (subsCache.subordinates || []).forEach(function (e) { subAddrs[e.address] = 1; });
     var rows = [];
     rows.push(
       "<tr>" +
@@ -376,10 +390,13 @@
     try {
       const data = await api("/api/contacts");
       (data.contacts || []).forEach(function (c) {
+        // Subordinate addresses carry a badge (admin feedback: same style
+        // family as the admin/listed badges on the admin view).
+        var badge = subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "";
         rows.push(
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
-          "<td data-label=\"Tags\"></td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
+          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
           "</tr>"
         );
       });
@@ -508,10 +525,30 @@
     // and disable it (no global account picker).
     if (s && !s.is_admin) {
       sel.innerHTML = "";
+      // Own account always first; subordinate accounts (self-declared edges,
+      // v0.5.7) follow in their own optgroup and are browsed read-only.
+      const own = document.createElement("optgroup");
+      own.label = t("subs.ownGroup");
       const o = document.createElement("option");
       o.value = s.address; o.textContent = s.address;
-      sel.appendChild(o);
-      sel.disabled = true;
+      own.appendChild(o);
+      sel.appendChild(own);
+      const subs = await loadSubs().catch(function () { return null; });
+      const subsList = (subs && subs.subordinates) || [];
+      if (subsList.length) {
+        const g = document.createElement("optgroup");
+        g.label = t("subs.subGroup");
+        subsList.forEach(function (e) {
+          const so = document.createElement("option");
+          so.value = e.address; so.textContent = e.address;
+          g.appendChild(so);
+        });
+        sel.appendChild(g);
+        sel.disabled = false;
+      } else {
+        // No subordinates: lock the selector to self only.
+        sel.disabled = true;
+      }
       sel.dataset.loaded = "1";
       return;
     }
@@ -552,9 +589,18 @@
     try {
       const s = getSession();
       const isRegular = s && !s.is_admin;
+      // Subordinate view (v0.5.7): a regular account browsing one of its
+      // declared subordinates — summaries only (no body fetch endpoint in
+      // v1), read-only, attachments as metadata.
+      const isSubView = isRegular && account !== s.address;
 
       var msgs = [];
-      if (account === "__all__" && !isRegular) {
+      if (isSubView) {
+        const f = folder === "all" ? "both" : folder;
+        const d = await api("/api/subs/" + encodeURIComponent(account) +
+          "/messages?folder=" + f + "&limit=" + limit);
+        msgs = d.messages || [];
+      } else if (account === "__all__" && !isRegular) {
         // Aggregated endpoint (v0.5.4): one server-side merged scan replaces
         // the old fan-out of 2 requests per account (50+ accounts = 100+
         // concurrent bbolt scans saturating the server).
@@ -593,14 +639,17 @@
           ' · <b>to:</b> ' + esc((m.to || []).join(", ")) +
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
-        item.addEventListener("click", function () { showDetail(m.id, item); });
+        item.addEventListener("click", function () {
+          if (isSubView) showSubDetail(account, m, item);
+          else showDetail(m.id, item);
+        });
         list.appendChild(item);
       });
       // Avoid-empty (feedback): open the newest message right after Load,
       // mirroring the Inbox preload.
       {
         const first = list.querySelector(".mail-item");
-        if (first && msgs.length) showDetail(msgs[0].id, first);
+        if (first && msgs.length) first.click();
       }
     } catch (e) {
       list.textContent = t("common.error", { msg: e.message });
@@ -839,6 +888,158 @@
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
+  }
+
+  // ---- subordinates (v0.5.7) ----
+  // Self-declared directed edges: A declares itself a subordinate of B, so B
+  // can browse A's mail (read-only, attachments metadata only). This module
+  // backs both the Accounts-tab relationship manager and the Mail-tab
+  // optgroup + read-only detail view.
+  // GET /api/subs → {subordinates: [edges under me], superiors: [edges I declared]}
+
+  let subsCache = null; // {subordinates: [], superiors: []} or null
+
+  async function loadSubs(force) {
+    if (subsCache && !force) return subsCache;
+    const d = await api("/api/subs");
+    subsCache = { subordinates: d.subordinates || [], superiors: d.superiors || [] };
+    renderSubsUI();
+    return subsCache;
+  }
+
+  // renderSubsUI fills the Accounts-tab "Subordinate relationships" block:
+  // my declarations (revocable) plus the collapsed read-only list.
+  function renderSubsUI() {
+    const section = $("#subs-section");
+    if (!section || !subsCache) return;
+    const mine = $("#subs-mine");
+    const visible = $("#subs-visible");
+    const details = $("#subs-visible-details");
+    if (!subsCache.superiors.length) {
+      mine.innerHTML = '<p class="muted">' + t("subs.noneMine") + "</p>";
+    } else {
+      mine.innerHTML = "<h4>" + t("subs.mineTitle") + "</h4>" + subsCache.superiors.map(function (e) {
+        return '<div class="row" style="justify-content:space-between;">' +
+          "<span>" + esc(e.address) + ' <small class="muted">' + t("subs.since") + " " + fmtTime(e.created_at) + "</small></span>" +
+          '<button class="row-action" data-revoke-sub="' + esc(e.address) + '">' + t("subs.revoke") + "</button>" +
+          "</div>";
+      }).join("");
+      $$("[data-revoke-sub]", mine).forEach(function (btn) {
+        btn.addEventListener("click", function () { revokeSub(btn.dataset.revokeSub); });
+      });
+    }
+    if (!subsCache.subordinates.length) {
+      details.classList.add("hidden");
+      visible.innerHTML = '<p class="muted">' + t("subs.noneVisible") + "</p>";
+    } else {
+      details.classList.remove("hidden");
+      visible.innerHTML = subsCache.subordinates.map(function (e) {
+        return '<div class="row" style="justify-content:space-between;">' +
+          "<span>" + esc(e.address) + ' <span class="badge-sub">' + t("subs.badge") + "</span> " +
+          '<small class="muted">' + t("subs.since") + " " + fmtTime(e.created_at) + "</small></span>" +
+          '<button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button>" +
+          "</div>";
+      }).join("");
+      $$("[data-compose]", visible).forEach(function (btn) {
+        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
+      });
+    }
+  }
+
+  async function declareSub(address) {
+    const status = $("#subs-status");
+    status.textContent = t("common.loading");
+    try {
+      await api("/api/subs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ superior: address, scope: "both" }),
+      });
+      status.textContent = t("subs.declared");
+      $("#subs-declare-input").value = "";
+      await loadSubs(true);
+      loadAccounts(); // refresh badges
+      invalidateMailAccountOptions();
+    } catch (e) {
+      status.textContent = "";
+      toast(e.message, "error"); // 429/404 surface the server text verbatim
+    }
+  }
+
+  async function revokeSub(address) {
+    try {
+      await api("/api/subs?superior=" + encodeURIComponent(address), { method: "DELETE" });
+      toast(t("subs.revoked"));
+      await loadSubs(true);
+      loadAccounts();
+      invalidateMailAccountOptions();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  }
+
+  // invalidateMailAccountOptions forces the Mail-tab selector rebuild on the
+  // next visit (edges changed).
+  function invalidateMailAccountOptions() {
+    const sel = $("#mail-account");
+    if (sel) delete sel.dataset.loaded;
+  }
+
+  $("#btn-subs-declare").addEventListener("click", function () {
+    const v = ($("#subs-declare-input").value || "").trim();
+    if (!v) return;
+    declareSub(v);
+  });
+  $("#subs-declare-input").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") $("#btn-subs-declare").click();
+  });
+
+  // showSubDetail renders the read-only detail pane for a subordinate's
+  // message. v1 summaries carry no body/cc, so the pane shows summary fields
+  // plus the preview; attachments are metadata only (Q2: no download).
+  function showSubDetail(subAddr, m, item) {
+    $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
+    if (item) item.classList.add("selected");
+    const detail = $("#mail-detail");
+    revealDetailOnMobile("mail-grid", detail);
+    if (item) {
+      item.classList.remove("unread");
+      const dot = $(".unread-dot", item);
+      if (dot) dot.remove();
+    }
+    // Received mail (sender ≠ the subordinate): offer "reply as myself".
+    // Sent mail by the subordinate gets no reply affordance.
+    const canReply = m.from && m.from !== subAddr;
+    detail.innerHTML =
+      '<div class="detail-row"><span class="badge-sub">' + t("subs.badge") + "</span> " +
+      esc(subAddr) + ' · <i class="muted">' + t("subs.readonly") + "</i></div>" +
+      '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
+      '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
+      '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
+      '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
+      '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
+      (m.files ? '<div class="detail-row">📎 ' + m.files + t("subs.attachMeta") + "</div>" : "") +
+      "<hr><pre class=\"body\">" + esc(m.preview || "") + "</pre>" +
+      (canReply
+        ? '<div class="row" style="margin-top:12px;"><button class="primary" id="btn-reply-as-self">' +
+          t("subs.replyAsSelf") + "</button></div>"
+        : "");
+    const rbtn = $("#btn-reply-as-self");
+    if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(m); });
+  }
+
+  // composeReplyAsSelf: the superior replies in their own name to the
+  // subordinate's correspondent, quoting the original (v1: preview text —
+  // summaries carry no full body).
+  function composeReplyAsSelf(m) {
+    $("#compose-to").value = m.from || "";
+    var subj = (m.subject || "").trim();
+    $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
+    const quoted = (m.preview || "").split("\n").map(function (l) { return "> " + l; }).join("\n");
+    $("#compose-body").value = t("subs.quotePrefix", { date: fmtTime(m.received_at), sender: m.from }) + "\n" + quoted + "\n\n";
+    activateTab("compose");
+    loadComposeThread();
+    $("#compose-body").focus();
   }
 
   // ---- inbox (personal, all users) ----
@@ -2097,10 +2298,11 @@
     $("#register-preview").textContent = (name || "name") + "@" + systemDomain;
   }
 
-  // Tabs only admins see. Mail is the global account-management view (query any
-  // account); regular accounts use the personal Inbox tab instead. Settings and
-  // Audit are admin-only system controls.
-  const ADMIN_ONLY_TABS = ["mail", "settings", "audit"];
+  // Tabs only admins see. Mail is visible to everyone (v0.5.7): admins browse
+  // every account globally; regular accounts browse their own mail plus any
+  // self-declared subordinate accounts (read-only). Settings and Audit are
+  // admin-only system controls.
+  const ADMIN_ONLY_TABS = ["settings", "audit"];
 
   function applyRole(isAdmin) {
     $$(".tab").forEach(function (b) {
@@ -2120,6 +2322,9 @@
       $("#whoami").textContent = s.address + (s.is_admin ? " (admin)" : "");
       applyRole(!!s.is_admin);
       refreshInboxBadge();
+      // Per-user caches must not leak across logins (logout keeps the DOM).
+      subsCache = null;
+      invalidateMailAccountOptions();
     }
   }
 
