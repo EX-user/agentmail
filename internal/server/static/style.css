@@ -703,7 +703,6 @@ nav .tab { flex: 0 0 auto; }
 .settings-section.profile-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
   padding: 20px 22px; max-width: 640px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
 }
 .settings-section.profile-card .row { margin-bottom: 14px; }
 .settings-section.profile-card input[type="text"] {
