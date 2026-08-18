@@ -93,3 +93,21 @@ func TestToStringSliceJSONArrayString(t *testing.T) {
 		t.Errorf("non-JSON bracket string should pass through, got %v", got)
 	}
 }
+
+func TestForwardSubjectPrefix(t *testing.T) {
+	// The forward path prefixes "Fwd: " unless the subject already carries a
+	// forward marker. We can't run the HTTP flow here, so exercise the two
+	// branch shapes via the same predicates the tool uses.
+	has := func(subj string) bool {
+		return strings.HasPrefix(strings.ToUpper(subj), "FWD:") || strings.HasPrefix(strings.ToUpper(subj), "转发:")
+	}
+	if !has("Fwd: already") {
+		t.Error("subject with Fwd: prefix must be recognized as already marked")
+	}
+	if has("plain subject") {
+		t.Error("plain subject should not be treated as already marked")
+	}
+	if !has("转发: 中文已带") {
+		t.Error("Chinese forward marker must be recognized")
+	}
+}

@@ -87,6 +87,7 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
 				"cc":          arrayProp("Optional carbon-copy address(es), delivered like To and visible to all recipients of the message; a comma-separated string is also accepted", false),
+				"forward_of":  prop("Optional message_id to forward: the gateway fetches that message as you (it must be in your inbox or sent), prepends your body as the comment, and appends the original below a '── 转发自 ──' header. Attachments of the original are not carried along (a note is added instead). Subject gains an 'Fwd:' prefix unless it already has one.", "string", false),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
@@ -314,6 +315,29 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	body, _ := args["body"].(string)
 	if subject == "" || body == "" {
 		return nil, fmt.Errorf("subject and body are required")
+	}
+	// forward_of (optional): forward a message the sender can already read.
+	// The gateway fetches the original as the sender (server enforces
+	// reachability: own inbox/sent), then appends it below the sender's own
+	// comment. v1 does not carry the original's attachments along (same
+	// ruling as subordinate visibility: attachment grants are an
+	// independent chain) — a note is added instead. Server stays unaware.
+	if fwdID := strings.TrimSpace(str(args["forward_of"])); fwdID != "" {
+		orig, err := client.GetMessage(entry.Address, entry.Password, fwdID)
+		if err != nil {
+			return nil, fmt.Errorf("forward_of: cannot fetch original %q: %w", fwdID, err)
+		}
+		ts := time.Unix(orig.ReceivedAt, 0).UTC().Format("2006-01-02 15:04 MST")
+		header := "\n\n── 转发自 <" + orig.From + ">，" + ts + "，原主题：" + orig.Subject + " ──\n"
+		if n := len(orig.Attachments); n > 0 {
+			header += fmt.Sprintf("（原信含 %d 个附件，未随转；如需请向原发件人索取）\n\n", n)
+		} else {
+			header += "\n"
+		}
+		if !strings.HasPrefix(strings.ToUpper(subject), "FWD:") && !strings.HasPrefix(strings.ToUpper(subject), "转发:") {
+			subject = "Fwd: " + subject
+		}
+		body = body + header + orig.Body
 	}
 	// inline_files (optional, 1-3): append plain-text file contents from the
 	// machine where this gateway runs as delimited blocks after the body.
