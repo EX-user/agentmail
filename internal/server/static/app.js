@@ -829,6 +829,7 @@
       detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
+        (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
@@ -1005,6 +1006,7 @@
       detail.innerHTML = inboxNavRow() +
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
+        (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
@@ -2315,6 +2317,12 @@
     const to = Array.from(new Set(
       toRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     ));
+    // CC (v0.5.7): same parsing, minus anyone already in To (server dedups
+    // too; this keeps the wire clean).
+    const ccRaw = ($("#compose-cc").value || "").trim();
+    const cc = ccRaw ? Array.from(new Set(
+      ccRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
+    )).filter(function (a) { return to.indexOf(a) === -1; }) : [];
 
     status.textContent = t("compose.sending");
     try {
@@ -2328,6 +2336,7 @@
       // server ignores it until the showcase tee ships (unknown JSON fields
       // are ignored), so this is safe to send already.
       const payload = { to: to, subject: subject, body: bodyText };
+      if (cc.length) payload.cc = cc;
       const pub = $("#compose-public");
       if (pub && pub.checked) payload.public = true;
       if (composeAttachmentIds.length) payload.attachments = composeAttachmentIds.slice();
@@ -2341,6 +2350,7 @@
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
+      $("#compose-cc").value = "";
       composeAttachmentItems = [];
       composeAttachmentIds = [];
       renderComposeAttachments(composeAttachmentItems);
@@ -2481,7 +2491,9 @@
           const m = await api(path);
           // v0.5.3: thread expansion shows attachments too (parity with the
           // inbox/mail detail panes), including image previews.
-          full.innerHTML = "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+          full.innerHTML =
+          (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
+          "<pre class=\"thread-body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
           wireAttachmentDownloads(full, m);
           hydrateAttachmentPreviews(full, m);
           item.dataset.loaded = "1";
