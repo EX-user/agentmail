@@ -217,3 +217,49 @@ func (s *Store) ReadSubordinateMessages(subordinate, folder string, limit int) (
 	}
 	return out, nil
 }
+
+// GetSubordinateMessage returns one full message of subordinate A for the
+// viewing path. Authorization is the caller's (handler's) job — same
+// masquerade contract as ReadSubordinateMessages. Does NOT touch read
+// state: the unread markers belong to A's own session, not the superior's
+// view of the mailbox.
+func (s *Store) GetSubordinateMessage(messageID string) (*Message, error) {
+	var msg Message
+	err := s.db.View(func(tx *bolt.Tx) error {
+		val := tx.Bucket(bMessages).Get([]byte(messageID))
+		if val == nil {
+			return ErrMessageNotFound
+		}
+		return json.Unmarshal(val, &msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &msg, nil
+}
+
+// MessageReferencedBy reports whether the account has the message in its
+// inbox or sent index (i.e. the message is genuinely part of that
+// mailbox). The sub detail handler uses this so a superior cannot fish
+// arbitrary message ids through the viewing path.
+func (s *Store) MessageReferencedBy(address, messageID string) bool {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return false
+	}
+	prefix := indexKey(acc.UUID, "")
+	found := false
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		for _, bucket := range [][]byte{bInbox, bSent} {
+			c := tx.Bucket(bucket).Cursor()
+			for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), string(prefix)); k, _ = c.Next() {
+				if string(k[len(prefix):]) == messageID {
+					found = true
+					return nil
+				}
+			}
+		}
+		return nil
+	})
+	return found
+}

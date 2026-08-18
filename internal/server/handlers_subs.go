@@ -145,9 +145,9 @@ func (s *Server) handleSubsMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := accountFrom(r.Context())
-	// Path: /api/subs/{A}/messages — 4 segments.
+	// Path: /api/subs/{A}/messages (list) or /api/subs/{A}/message (detail).
 	segs := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(segs) != 4 || segs[3] != "messages" {
+	if len(segs) != 4 || (segs[3] != "messages" && segs[3] != "message") {
 		http.NotFound(w, r)
 		return
 	}
@@ -156,6 +156,35 @@ func (s *Server) handleSubsMessages(w http.ResponseWriter, r *http.Request) {
 	// The masquerade: no relationship and no account look identical.
 	if !s.store.IsSubordinate(me, target) {
 		http.NotFound(w, r)
+		return
+	}
+
+	// Detail: GET /api/subs/{A}/message?id=<messageID> — full body, cc
+	// included, attachment access codes stripped (Q2: metadata only).
+	if segs[3] == "message" {
+		id := strings.TrimSpace(r.URL.Query().Get("id"))
+		if id == "" {
+			badRequest(w, "id query parameter is required")
+			return
+		}
+		if s.store.ShouldAuditSubRead(me, target) {
+			_ = s.audit.Record(r.Context(), audit.ActionSubRead, me, "sub-read target="+target)
+		}
+		msg, err := s.store.GetSubordinateMessage(id)
+		if err != nil {
+			http.NotFound(w, r) // same masquerade shape
+			return
+		}
+		// The message must belong to the subordinate's view (their inbox or
+		// sent reference) — otherwise B could fish arbitrary message ids.
+		if !s.store.MessageReferencedBy(target, id) {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"subordinate": target,
+			"message":     stripAttachmentCodes(*msg),
+		})
 		return
 	}
 
@@ -183,4 +212,18 @@ func (s *Server) handleSubsMessages(w http.ResponseWriter, r *http.Request) {
 		"count":       len(msgs),
 		"messages":    msgs,
 	})
+}
+
+// stripAttachmentCodes returns a copy of the message with every
+// attachment's access code removed — metadata only for the superior's view
+// (Q2 ruling: download requires the subordinate's explicit grant).
+func stripAttachmentCodes(m store.Message) store.Message {
+	if len(m.Attachments) == 0 {
+		return m
+	}
+	m.Attachments = append([]store.AttachmentMeta(nil), m.Attachments...)
+	for i := range m.Attachments {
+		m.Attachments[i].AccessCode = ""
+	}
+	return m
 }
