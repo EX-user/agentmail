@@ -106,13 +106,20 @@
     badge.textContent = "";
   }
 
+  // refreshInboxBadge is sequenced: the 5s poll, the inbox-load refresh and
+  // the post-read refresh run concurrently, and an older response arriving
+  // after a newer one would resurrect the dot until the next tick (the
+  // reported "badge clears with a lag"). Only the latest call may write.
+  let badgeSeq = 0;
   async function refreshInboxBadge() {
     if (!getSession()) { setInboxBadge(0); return; }
     // Background tabs skip the tick — the badge refreshes on visibility
     // return, so 5s polling stays cheap in aggregate (admin: 2-5s wanted).
     if (document.visibilityState === "hidden") return;
+    const seq = ++badgeSeq;
     try {
       const d = await api("/api/inbox?limit=1");
+      if (seq !== badgeSeq) return; // a newer refresh superseded this one
       setInboxBadge(d.unread_count || 0);
     } catch (_) { /* badge is best-effort */ }
   }
@@ -899,6 +906,9 @@
       });
       updateInboxPager(totalPages, inboxPage + 1);
       status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
+      // Direct write with sequencing: supersede any in-flight poll so a
+      // stale "unread" response cannot re-light the dot after this point.
+      badgeSeq++;
       setInboxBadge(unreadCount);
       // Avoid the empty detail pane (feedback): preload the newest message.
       // Desktop shows it right away; mobile stays on the List tab (the
