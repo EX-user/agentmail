@@ -52,9 +52,10 @@ type Server struct {
 	cfg      *config.Config
 
 	// Rate limiters (in-memory, 1-hour sliding window).
-	rateMu     sync.Mutex
-	sendRates  map[string]*rateWindow // address -> send count window
-	recvRates  map[string]*rateWindow // address -> byte receive window
+	rateMu       sync.Mutex
+	sendRates    map[string]*rateWindow // address -> send count window
+	recvRates    map[string]*rateWindow // address -> byte receive window
+	declareRates map[string]*rateWindow // address -> subordinate-declare count window
 
 	// regLimit throttles registration attempts per client IP (the threshold
 	// itself lives in the store so admins can tune it live).
@@ -65,9 +66,10 @@ type Server struct {
 func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 	return &Server{
 		store: s, audit: a, cfg: cfg,
-		sendRates: make(map[string]*rateWindow),
-		recvRates: make(map[string]*rateWindow),
-		regLimit:  newRegLimiter(time.Hour),
+		sendRates:    make(map[string]*rateWindow),
+		recvRates:    make(map[string]*rateWindow),
+		declareRates: make(map[string]*rateWindow),
+		regLimit:     newRegLimiter(time.Hour),
 	}
 }
 
@@ -150,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/files/upload", s.requireInitialized(s.requireAccount(s.handleFileUpload)))
 	mux.HandleFunc("/api/files/", s.requireInitialized(s.requireAccount(s.handleFileDownload)))
 	mux.HandleFunc("/api/password", s.requireInitialized(s.requireAccount(s.handleChangePassword)))
+	mux.HandleFunc("/api/subs", s.requireInitialized(s.requireAccount(s.handleSubs)))
+	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
 
 	// Admin API (admin Basic auth) — requires initialization.
 	mux.HandleFunc("/admin/messages", s.requireInitialized(s.requireAdmin(s.handleAdminMessages)))
