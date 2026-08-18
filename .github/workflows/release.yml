@@ -62,7 +62,12 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -trimpath -ldflags="-s -w -X github.com/agentmail/agentmail/internal/server.Version=${GITHUB_REF_NAME} -X github.com/agentmail/agentmail/internal/server.SuggestedMinGatewayVersion=${GITHUB_REF_NAME}" -o agentmail-server${{ matrix.ext }} ./cmd/agentmail-server
+          # suggested_min_gateway_version comes from .gateway-min-version,
+          # NOT the tag: only bump that file when the gateway binary has a
+          # real change (pure server/frontend releases keep the old floor,
+          # so nobody is nagged to swap an unchanged gateway).
+          GATEWAY_MIN=$(tr -d ' \t\r\n' < .gateway-min-version)
+          go build -trimpath -ldflags="-s -w -X github.com/agentmail/agentmail/internal/server.Version=${GITHUB_REF_NAME} -X github.com/agentmail/agentmail/internal/server.SuggestedMinGatewayVersion=${GATEWAY_MIN}" -o agentmail-server${{ matrix.ext }} ./cmd/agentmail-server
           go build -trimpath -ldflags="-s -w -X github.com/agentmail/agentmail/internal/gateway.Version=${GITHUB_REF_NAME}" -o agentmail-gateway${{ matrix.ext }} ./cmd/agentmail-gateway
 
       - name: Package
