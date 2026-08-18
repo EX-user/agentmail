@@ -26,17 +26,17 @@ func TestMyGrowthStats(t *testing.T) {
 	// a sends 3 (all today): s1/s2/s3
 	for _, subj := range []string{"s1", "s2", "s3"} {
 		s.now = func() time.Time { return now.Add(-time.Hour) }
-		if _, err := s.Send("a@t", "a", []string{"b@t"}, subj, "x"); err != nil {
+		if _, err := s.Send("a@t", "a", []string{"b@t"}, nil, subj, "x"); err != nil {
 			t.Fatalf("send %s: %v", subj, err)
 		}
 	}
 	// b sends 2 back (one today, one 3 days ago)
 	s.now = func() time.Time { return now.Add(-2 * time.Hour) }
-	if _, err := s.Send("b@t", "b", []string{"a@t"}, "r-today", "x"); err != nil {
+	if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, "r-today", "x"); err != nil {
 		t.Fatalf("send r-today: %v", err)
 	}
 	s.now = func() time.Time { return weekFloor.AddDate(0, 0, 3).Add(5 * time.Hour) } // Aug 12
-	if _, err := s.Send("b@t", "b", []string{"a@t"}, "r-old", "x"); err != nil {
+	if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, "r-old", "x"); err != nil {
 		t.Fatalf("send r-old: %v", err)
 	}
 

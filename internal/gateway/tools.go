@@ -86,6 +86,7 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			InputSchema: schemaObject(map[string]any{
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
+				"cc":          arrayProp("Optional carbon-copy address(es), delivered like To and visible to all recipients of the message; a comma-separated string is also accepted", false),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
 				"public":      prop("Also publish a copy to the public showcase (opt-in, default false)", "boolean", false),
@@ -306,6 +307,9 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	if len(to) == 0 {
 		return nil, fmt.Errorf("to is required")
 	}
+	// cc (optional): carbon-copy addresses — delivered like To and visible
+	// to all recipients of the message.
+	cc := toStringSlice(args["cc"])
 	subject, _ := args["subject"].(string)
 	body, _ := args["body"].(string)
 	if subject == "" || body == "" {
@@ -354,7 +358,7 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	// public (optional, default false): additionally publish a showcase copy
 	// for the portal sample — the sender's explicit opt-in.
 	public, _ := args["public"].(bool)
-	res, err := client.Send(entry.Address, entry.Password, to, subject, body, public, fileIDs)
+	res, err := client.Send(entry.Address, entry.Password, to, cc, subject, body, public, fileIDs)
 	if err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
@@ -363,6 +367,7 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 		"message_id":  res.MessageID,
 		"from":        entry.Address,
 		"to":          to,
+		"cc":          cc,
 		"public":      public,
 	}, nil
 }
@@ -779,6 +784,23 @@ func toStringSlice(v any) []string {
 		t = strings.TrimSpace(t)
 		if t == "" {
 			return nil
+		}
+		// Some MCP clients serialize array-typed params as a JSON string
+		// literal (e.g. attachments/to arriving as `["a@x","b@x"]` instead
+		// of a real array). Parse that back into the list it was meant to
+		// be — otherwise the whole JSON blob is treated as one path/address
+		// and every recipient/upload lookup fails (bit Felix twice).
+		if strings.HasPrefix(t, "[") {
+			var arr []string
+			if err := json.Unmarshal([]byte(t), &arr); err == nil && arr != nil {
+				out := make([]string, 0, len(arr))
+				for _, p := range arr {
+					if p = strings.TrimSpace(p); p != "" {
+						out = append(out, p)
+					}
+				}
+				return out
+			}
 		}
 		parts := strings.Split(t, ",")
 		out := make([]string, 0, len(parts))

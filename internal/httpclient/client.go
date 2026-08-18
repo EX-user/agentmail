@@ -116,14 +116,19 @@ func (c *Client) VerifyPassword(address, password string) error {
 // Send posts a message as authUser. authUser:authPass is sent as Basic auth;
 // the server treats the authed user as the sender. public=true additionally
 // writes a showcase copy (portal sample) — explicit sender opt-in.
-// attachments references previously uploaded file IDs (server validates
-// they belong to the sender and grants recipients download access).
-func (c *Client) Send(authUser, authPass string, to []string, subject, body string, public bool, attachments []string) (*SendResponse, error) {
+// cc (optional) lists carbon-copy addresses, delivered like To and visible
+// to recipients. attachments references previously uploaded file IDs
+// (server validates they belong to the sender and grants recipients
+// download access).
+func (c *Client) Send(authUser, authPass string, to []string, cc []string, subject, body string, public bool, attachments []string) (*SendResponse, error) {
 	payload := map[string]any{
 		"to":      to,
 		"subject": subject,
 		"body":    body,
 		"public":  public,
+	}
+	if len(cc) > 0 {
+		payload["cc"] = cc
 	}
 	if len(attachments) > 0 {
 		payload["attachments"] = attachments
