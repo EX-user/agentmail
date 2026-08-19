@@ -394,6 +394,13 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
+    // Listed-in-directory set (feedback: the regular view must badge
+    // visible accounts the same way the admin view does).
+    var listedSet = {};
+    try {
+      const dir = await api("/api/info?query=directory");
+      (dir.entries || []).forEach(function (e) { listedSet[e.address] = 1; });
+    } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var seenAddrs = {};
     try {
       const data = await api("/api/contacts");
@@ -401,7 +408,8 @@
         seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
-        var badge = subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "";
+        var badge = (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "") +
+          (subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "");
         // Every address row gets the same shape (feedback: subordinate
         // rows with and without mail history must look identical):
         // badge column, Compose action; Created only where known.
@@ -423,7 +431,9 @@
       rows.push(
         "<tr>" +
         '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
-        '<td data-label="' + t("col.tags") + '"><span class="badge-sub">' + t("subs.badge") + "</span></td>" +
+        '<td data-label="' + t("col.tags") + '">' +
+        (listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "") +
+        '<span class="badge-sub">' + t("subs.badge") + "</span></td>" +
         "<td data-label=\"Signature\"></td><td data-label=\"Created\">" + fmtTime(e.created_at) + "</td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
         "</tr>"
