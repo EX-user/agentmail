@@ -44,6 +44,11 @@
     if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
     const res = await fetch(path, Object.assign({}, opts, { headers: headers }));
     if (res.status === 401 && getSession()) {
+      // opts.keepSession marks non-critical subrequests (fan-out reads):
+      // an endpoint-level 401 surfaces as a row-level error instead of
+      // tearing down the whole session (defense per the v0.5.10.2 review —
+      // one failed subrequest must not log the user out).
+      if (opts.keepSession) throw new Error("401 Unauthorized");
       setSession(null); // creds invalid — force re-login
       showLogin();
       throw new Error("session expired — please log in again");
@@ -398,7 +403,7 @@
     // visible accounts the same way the admin view does).
     var listedSet = {}, listedSig = {};
     try {
-      const dir = await api("/api/info?query=directory");
+      const dir = await api("/api/info?query=directory", { keepSession: true });
       (dir.entries || []).forEach(function (e) {
         listedSet[e.address] = 1;
         if (e.signature) listedSig[e.address] = e.signature;
@@ -406,7 +411,7 @@
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var seenAddrs = {};
     try {
-      const data = await api("/api/contacts");
+      const data = await api("/api/contacts", { keepSession: true });
       (data.contacts || []).forEach(function (c) {
         seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
@@ -841,17 +846,17 @@
         const f = folder === "all" ? "both" : folder;
         const jobs = [];
         // Own mail (regular account: own endpoints).
-        jobs.push(api("/api/inbox?limit=" + limit).then(function (d) {
+        jobs.push(api("/api/inbox?limit=" + limit, { keepSession: true }).then(function (d) {
           return (d.messages || []).map(function (m) { m.__owner = s.address; return m; });
         }).catch(function () { return []; }));
-        jobs.push(api("/api/sent?limit=" + limit).then(function (d) {
+        jobs.push(api("/api/sent?limit=" + limit, { keepSession: true }).then(function (d) {
           return (d.messages || []).map(function (m) { m.__owner = s.address; return m; });
         }).catch(function () { return []; }));
         // Each declared subordinate (summaries).
         const subsList = (subsCache && subsCache.subordinates) || [];
         subsList.forEach(function (e) {
           jobs.push(api("/api/subs/" + encodeURIComponent(e.address) +
-            "/messages?folder=" + f + "&limit=" + limit).then(function (d) {
+            "/messages?folder=" + f + "&limit=" + limit, { keepSession: true }).then(function (d) {
             return (d.messages || []).map(function (m) { m.__owner = e.address; return m; });
           }).catch(function () { return []; }));
         });
@@ -864,7 +869,7 @@
       } else if (isSubView) {
         const f = folder === "all" ? "both" : folder;
         const d = await api("/api/subs/" + encodeURIComponent(account) +
-          "/messages?folder=" + f + "&limit=" + limit);
+          "/messages?folder=" + f + "&limit=" + limit, { keepSession: true });
         msgs = d.messages || [];
       } else if (account === "__all__" && !isRegular) {
         // Aggregated endpoint (v0.5.4): one server-side merged scan replaces
@@ -1180,7 +1185,7 @@
 
   async function loadSubs(force) {
     if (subsCache && !force) return subsCache;
-    const d = await api("/api/subs");
+    const d = await api("/api/subs", { keepSession: true });
     subsCache = { subordinates: d.subordinates || [], superiors: d.superiors || [] };
     renderSubsUI();
     return subsCache;
@@ -1273,7 +1278,7 @@
     let full = null;
     try {
       const d = await api("/api/subs/" + encodeURIComponent(subAddr) +
-        "/message?id=" + encodeURIComponent(m.id));
+        "/message?id=" + encodeURIComponent(m.id), { keepSession: true });
       full = d.message || null;
     } catch (_) { /* fall back to summary-level rendering */ }
     const msg = full || m; // full has body/cc/attachments; summary has preview/files
