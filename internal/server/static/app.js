@@ -394,9 +394,11 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
+    var seenAddrs = {};
     try {
       const data = await api("/api/contacts");
       (data.contacts || []).forEach(function (c) {
+        seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
         var badge = subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "";
@@ -410,9 +412,25 @@
     } catch (e) {
       // contacts failure is non-fatal; just show self.
     }
+    // Subordinates merge flat into the main list, deduped against contacts
+    // (mrf2000 feedback: one merged column, not a separate collapsed area).
+    if (subsCache) (subsCache.subordinates || []).forEach(function (e) {
+      if (seenAddrs[e.address]) return;
+      rows.push(
+        "<tr>" +
+        '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
+        '<td data-label="' + t("col.tags") + '"><span class="badge-sub">' + t("subs.badge") + "</span></td>" +
+        "<td data-label=\"Signature\"></td><td data-label=\"Created\">" + fmtTime(e.created_at) + "</td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
+        "</tr>"
+      );
+    });
     tbody.innerHTML = rows.join("");
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);
+    $$("[data-compose]", tbody).forEach(function (b) {
+      b.addEventListener("click", function () { composeTo(b.dataset.compose); });
+    });
   }
 
   // composeTo switches to the Compose tab and prefills the To field with the
@@ -731,30 +749,22 @@
     // and disable it (no global account picker).
     if (s && !s.is_admin) {
       sel.innerHTML = "";
-      // Own account always first; subordinate accounts (self-declared edges,
-      // v0.5.7) follow in their own optgroup and are browsed read-only.
-      const own = document.createElement("optgroup");
-      own.label = t("subs.ownGroup");
-      const o = document.createElement("option");
-      o.value = s.address; o.textContent = s.address;
-      own.appendChild(o);
-      sel.appendChild(own);
+      // All visible accounts in one flat list (mrf2000 feedback): own
+      // account first, then subordinates — no optgroup split, deduped.
       const subs = await loadSubs().catch(function () { return null; });
       const subsList = (subs && subs.subordinates) || [];
-      if (subsList.length) {
-        const g = document.createElement("optgroup");
-        g.label = t("subs.subGroup");
-        subsList.forEach(function (e) {
-          const so = document.createElement("option");
-          so.value = e.address; so.textContent = e.address;
-          g.appendChild(so);
-        });
-        sel.appendChild(g);
-        sel.disabled = false;
-      } else {
-        // No subordinates: lock the selector to self only.
-        sel.disabled = true;
-      }
+      const add = function (addr) {
+        const o = document.createElement("option");
+        o.value = addr; o.textContent = addr;
+        sel.appendChild(o);
+      };
+      add(s.address);
+      subsList.forEach(function (e) {
+        if (e.address !== s.address) add(e.address);
+      });
+      // More than the own account visible: the selector switches between
+      // them; single-account users get it locked to self.
+      sel.disabled = sel.options.length <= 1;
       sel.dataset.loaded = "1";
       return;
     }
@@ -1124,7 +1134,6 @@
     if (!section || !subsCache) return;
     const mine = $("#subs-mine");
     const visible = $("#subs-visible");
-    const details = $("#subs-visible-details");
     if (!subsCache.superiors.length) {
       mine.innerHTML = '<p class="muted">' + t("subs.noneMine") + "</p>";
     } else {
@@ -1139,11 +1148,10 @@
       });
     }
     if (!subsCache.subordinates.length) {
-      details.classList.add("hidden");
       visible.innerHTML = '<p class="muted">' + t("subs.noneVisible") + "</p>";
     } else {
-      details.classList.remove("hidden");
-      visible.innerHTML = subsCache.subordinates.map(function (e) {
+      // Flat, always expanded (mrf2000 feedback: no collapsed details).
+      visible.innerHTML = "<h4>" + t("subs.visibleTitle") + "</h4>" + subsCache.subordinates.map(function (e) {
         return '<div class="row" style="justify-content:space-between;">' +
           "<span>" + esc(e.address) + ' <span class="badge-sub">' + t("subs.badge") + "</span> " +
           '<small class="muted">' + t("subs.since") + " " + fmtTime(e.created_at) + "</small></span>" +
