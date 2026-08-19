@@ -562,7 +562,7 @@
       "sub.compose": "—— 撰写并发送邮件",
 
       "subs.registerBtn": "+ 注册从属账户",
-      "subs.registerNote": "创建随机账户并声明为你的从属（可阅读其往来信件）。人类用户一般无需使用。",
+      "subs.registerNote": "创建随机账户并声明为你的从属（可阅读其往来信件），一般提供给 agent 使用。",
       "subs.regTitle": "从属账户已创建 ✅",
       "subs.regOnce": "请立即保存账密——密码仅显示一次。该账户已自动声明为你的从属。",
       "subs.regConfirm": "创建一个新的随机账户并声明为你的从属？（你将可以阅读它的邮件。）",
