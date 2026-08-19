@@ -435,6 +435,47 @@
     $("#compose-body").focus();
   }
 
+  // Cc field visibility (v0.5.9, feedback): collapsed behind "＋ Cc" unless
+  // it holds a value — keeps the compose form clean while staying obvious.
+  function syncCcVisibility() {
+    const row = $("#compose-cc-row");
+    const btn = $("#btn-toggle-cc");
+    if (!row || !btn) return;
+    const has = ($("#compose-cc").value || "").trim() !== "";
+    row.classList.toggle("hidden", !has);
+    btn.classList.toggle("hidden", has);
+  }
+  (function wireCcToggle() {
+    const btn = $("#btn-toggle-cc");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      $("#compose-cc-row").classList.remove("hidden");
+      btn.classList.add("hidden");
+      $("#compose-cc").focus();
+    });
+    $("#compose-cc").addEventListener("input", syncCcVisibility);
+    syncCcVisibility();
+  })();
+
+  // composeForward (v0.5.9, feedback): panel-side forward. /api/send has no
+  // forward_of (that is a gateway-side composition), so the panel mirrors
+  // the same wire format the gateway produces: user comment on top, the
+  // "── forwarded from ──" separator, then the original body. Attachments
+  // are not carried (same ruling as subordinate Q2) — noted in the body.
+  function composeForward(m) {
+    $("#compose-to").value = "";
+    var subj = (m.subject || "").trim();
+    $("#compose-subject").value = /^fwd:\s*/i.test(subj) ? subj : (subj ? "Fwd: " + subj : "");
+    const files = (m.attachments && m.attachments.length) || m.files || 0;
+    $("#compose-body").value = "\n\n" +
+      t("fwd.header", { sender: m.from, date: fmtTime(m.received_at), subject: m.subject || "" }) + "\n" +
+      (files ? t("fwd.attachNote", { n: files }) + "\n" : "") +
+      "\n" + (m.body != null ? m.body : (m.preview || ""));
+    activateTab("compose");
+    loadComposeThread();
+    $("#compose-to").focus();
+  }
+
   function openChangePassword() {
     const oldPw = prompt("Change your password\n\nCurrent password:");
     if (oldPw === null) return;
@@ -889,9 +930,13 @@
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
+        '<div class="row" style="margin-top:12px;"><button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
+        attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      const fwdBtn = $("#btn-mail-forward");
+      if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
@@ -1240,7 +1285,8 @@
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button>' +
+        '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
@@ -1254,6 +1300,8 @@
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
+      const fwdBtn = $("#btn-inbox-forward");
+      if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
       // Keep the nav row on errors too — the reader can still step away.
       detail.innerHTML = inboxNavRow() + '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
@@ -2586,6 +2634,7 @@
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       $("#compose-cc").value = "";
+      syncCcVisibility(); // collapse the now-empty Cc field back
       composeAttachmentItems = [];
       composeAttachmentIds = [];
       renderComposeAttachments(composeAttachmentItems);

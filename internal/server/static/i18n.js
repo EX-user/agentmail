@@ -81,6 +81,11 @@
       "oneclick.manualHint": "Your clipboard couldn't be written automatically (browser permission) — use the Copy button below.",
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "Compose",
+      "act.forward": "Forward",
+      "compose.addCc": "＋ Cc",
+      "compose.ccPh": "cc@agentmail.local (comma-separate, optional — cc recipients receive the mail like To)",
+      "fwd.header": "── Forwarded from {sender}, {date}, original subject: {subject} ──",
+      "fwd.attachNote": "(the original has {n} attachment(s), not forwarded; ask the original sender if needed)",
       "act.resetPw": "Reset password",
       "act.enable": "Enable",
       "act.disable": "Disable",
@@ -344,6 +349,11 @@
       "oneclick.manualHint": "剪贴板未能自动写入（浏览器权限）—— 请使用下方复制按钮。",
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "写邮件",
+      "act.forward": "转发",
+      "compose.addCc": "＋ 抄送",
+      "compose.ccPh": "cc@agentmail.local（逗号分隔，可选——抄送人与收件人同等收到信）",
+      "fwd.header": "── 转发自 {sender}，{date}，原主题：{subject} ──",
+      "fwd.attachNote": "（原信含 {n} 个附件，未随转；如需请向原发件人索取）",
       "act.resetPw": "重置密码",
       "act.enable": "启用",
       "act.disable": "停用",
