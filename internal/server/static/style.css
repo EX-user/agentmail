@@ -704,12 +704,11 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
 }
 
-/* Signature field (feedback follow-up): the row's default horizontal
-   label squeezed the textarea and the old input selector no longer
-   matched. Column layout on its own full row, generous sizing. */
-.profile-card .row label.sig-field {
-  flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 6px;
-}
+/* Signature field (feedback follow-up x2): plain block layout — the flex
+   row/label chain let the textarea exceed the card's inner width on
+   narrow screens. Block auto-width cannot overflow its parent. */
+.sig-field { display: block; margin-bottom: 14px; }
+.sig-field-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 .settings-section.profile-card #profile-signature {
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 12px; color: var(--text); font: inherit; font-size: 14px;
