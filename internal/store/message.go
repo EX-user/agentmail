@@ -778,3 +778,30 @@ func summarize(m Message) MessageSummary {
 		ReceivedAt: m.ReceivedAt,
 	}
 }
+
+// CountUnread returns the total number of unread messages across the
+// account's WHOLE inbox (not the current page). The inbox handler exposes
+// this as unread_count for the nav badge — it must be limit-independent:
+// the page-scoped count made the badge vanish whenever the unread mail
+// fell outside the requested page (caught live by mrf2000/Felix).
+func (s *Store) CountUnread(address string) (int, error) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	prefix := indexKey(acc.UUID, "")
+	prefixStr := string(prefix)
+	count := 0
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bUnread)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
