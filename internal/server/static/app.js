@@ -1783,8 +1783,8 @@
     const btn = $("#btn-save-prefs");
     if (btn) btn.addEventListener("click", savePrefs);
     const zh = $("#pref-lang-zh"), en = $("#pref-lang-en");
-    if (zh) zh.addEventListener("click", function () { setLang("zh"); });
-    if (en) en.addEventListener("click", function () { setLang("en"); });
+    if (zh) zh.addEventListener("click", function () { window.I18N.setLang("zh"); });
+    if (en) en.addEventListener("click", function () { window.I18N.setLang("en"); });
   })();
   document.addEventListener("i18n:change", function () {
     const now = $("#pref-lang-now");
