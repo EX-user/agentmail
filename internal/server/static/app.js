@@ -375,15 +375,9 @@
     if (regBtn) regBtn.classList.add("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
-    // Subordinate relationship manager (v0.5.7) — regular users only.
-    const subsSection = $("#subs-section");
-    if (subsSection) {
-      subsSection.classList.remove("hidden");
-      // Await so the badge pass below sees fresh edges.
-      await loadSubs(true).catch(function () {
-        $("#subs-mine").innerHTML = '<p class="muted">' + t("common.error", { msg: "subordinates unavailable" }) + "</p>";
-      });
-    }
+    // Subordinate management UI lives in Preferences since v0.6; Accounts
+    // still needs fresh edges for the sub badges (and read-only rows).
+    await loadSubs(true).catch(function () {});
     // Rows match the 5-column header (Address, Tags, Signature, Created,
     // Actions) so the Change-password button lands in the Actions column
     // instead of drifting under Tags.
@@ -397,6 +391,15 @@
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
+      "</tr>"
+    );
+    // Subordinate register sits right after the own-account row (feedback),
+    // before every other account. Click handling is delegated (below)
+    // because the button re-renders with the table.
+    rows.push(
+      "<tr>" +
+      '<td colspan="5" class="actions-cell" data-label="' + t("col.actions") + '">' +
+      '<button id="btn-subreg" class="row-action" data-i18n="subs.registerBtn">+ Register subordinate account</button></td>' +
       "</tr>"
     );
     // Listed-in-directory set (feedback: the regular view must badge
@@ -1107,6 +1110,9 @@
     $$(".attach-preview", root).forEach(async function (holder) {
       const a = list[+holder.dataset.pv];
       if (!a) return;
+      // Preferences (v0.6): image previews can be disabled; audio
+      // autoplay honors the account preference.
+      if (attachIsImage(a) && userPrefs && userPrefs.image_preview === false) { holder.remove(); return; }
       try {
         const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
           headers: { Authorization: basicAuth() },
@@ -1128,6 +1134,7 @@
           const au = document.createElement("audio");
           au.controls = true;
           au.preload = "metadata";
+          if (userPrefs && userPrefs.audio_autoplay === true) au.autoplay = true;
           au.src = url;
           au.style.cssText = "display:block; width:100%; margin-top:8px;";
           holder.appendChild(au);
@@ -1382,9 +1389,11 @@
     $("#subreg-modal").classList.add("hidden");
   }
   (function wireSubreg() {
-    const btn = $("#btn-subreg");
-    if (!btn) return;
-    btn.addEventListener("click", async function () {
+    const tbody = document.querySelector("#accounts-table tbody");
+    if (!tbody) return;
+    tbody.addEventListener("click", async function (ev) {
+      const btn = ev.target.closest("#btn-subreg");
+      if (!btn) return;
       if (!confirm(t("subs.regConfirm"))) return;
       const status = $("#subs-status");
       btn.disabled = true;
@@ -1715,6 +1724,66 @@
 
   // ---- profile (edit your own visibility + signature) ----
 
+  // ---- user preferences (v0.6) ----
+  // Read order: server account.prefs > localStorage fallback > defaults.
+  // Cached in memory: message rendering consults it without a request.
+  const PREFS_DEFAULTS = { audio_autoplay: false, image_preview: true };
+  let userPrefs = null;
+  const PREFS_LS_KEY = "agentmail_prefs";
+
+  function loadPrefsLocal() {
+    try { return JSON.parse(localStorage.getItem(PREFS_LS_KEY) || "null"); }
+    catch (_) { return null; }
+  }
+
+  function mergePrefs(serverPrefs) {
+    const local = loadPrefsLocal() || {};
+    const src = serverPrefs || {};
+    userPrefs = {
+      audio_autoplay: typeof src.audio_autoplay === "boolean" ? src.audio_autoplay
+        : (typeof local.audio_autoplay === "boolean" ? local.audio_autoplay : PREFS_DEFAULTS.audio_autoplay),
+      image_preview: typeof src.image_preview === "boolean" ? src.image_preview
+        : (typeof local.image_preview === "boolean" ? local.image_preview : PREFS_DEFAULTS.image_preview),
+    };
+    return userPrefs;
+  }
+
+  async function savePrefs() {
+    const prefs = {
+      audio_autoplay: !!$("#pref-audio-autoplay").checked,
+      image_preview: !!$("#pref-image-preview").checked,
+    };
+    const status = $("#prefs-status");
+    try {
+      const res = await api("/api/profile/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefs: prefs }),
+      });
+      status.textContent = t("prefs.saved");
+      // The response echoes the merged prefs — authoritative post-save
+      // state (e.g. null resets applied server-side).
+      if (res && res.prefs) mergePrefs(res.prefs);
+    } catch (e) {
+      // Older server (no prefs field): keep the choice browser-local so
+      // the toggles still work for this user.
+      try { localStorage.setItem(PREFS_LS_KEY, JSON.stringify(prefs)); } catch (_) {}
+      status.textContent = t("prefs.savedLocal");
+    }
+    userPrefs = prefs;
+  }
+  (function wirePrefs() {
+    const btn = $("#btn-save-prefs");
+    if (btn) btn.addEventListener("click", savePrefs);
+    const zh = $("#pref-lang-zh"), en = $("#pref-lang-en");
+    if (zh) zh.addEventListener("click", function () { setLang("zh"); });
+    if (en) en.addEventListener("click", function () { setLang("en"); });
+  })();
+  document.addEventListener("i18n:change", function () {
+    const now = $("#pref-lang-now");
+    if (now) now.textContent = t("prefs.langNow", { lang: t("prefs.lang" + (window.I18N.lang() === "zh" ? "Zh" : "En")) });
+  });
+
   async function loadProfile() {
     const status = $("#profile-status");
     status.textContent = t("common.loading");
@@ -1724,6 +1793,18 @@
       $("#profile-visible").checked = !!p.visible;
       $("#profile-signature").value = p.signature || "";
       status.textContent = "";
+      // Preferences toggles (v0.6): server prefs win, local fallback.
+      mergePrefs(p.prefs);
+      $("#pref-audio-autoplay").checked = userPrefs.audio_autoplay;
+      $("#pref-image-preview").checked = userPrefs.image_preview;
+      const nowL = $("#pref-lang-now");
+      if (nowL) nowL.textContent = t("prefs.langNow", { lang: t(window.I18N.lang() === "zh" ? "prefs.langZh" : "prefs.langEn") });
+      // Subordinate settings section (moved in from Accounts): regular
+      // accounts only.
+      const s = getSession();
+      const subsWrap = $("#subs-section-wrap");
+      if (subsWrap) subsWrap.classList.toggle("hidden", !!(s && s.is_admin));
+      if (s && !s.is_admin) loadSubs(true).catch(function () {});
       // Attachment quota (v0.5.3): used bytes come from THIS endpoint's
       // response (p — /api/profile/self carries files_used_bytes); the cap
       // from public settings. Reading /api/account/info here was wrong
