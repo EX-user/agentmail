@@ -275,12 +275,9 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "read inbox: "+err.Error())
 		return
 	}
-	unread := 0
-	for _, m := range msgs {
-		if m.Unread {
-			unread++
-		}
-	}
+	// unread_count must reflect the WHOLE inbox, not the current page —
+	// the nav badge reads it and must not depend on limit/offset.
+	unread, _ := s.store.CountUnread(who)
 	total, _ := s.store.CountInbox(who)
 	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d total=%d", len(msgs), unread, total))
 	writeJSON(w, http.StatusOK, map[string]any{
