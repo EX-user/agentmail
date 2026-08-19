@@ -479,6 +479,9 @@
     $("#compose-to").value = toAddress || "";
     var subj = (subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
+    // Reply never prefills the body (To/Subject only — reviewer's model);
+    // entering it clears any leftover draft like the Compose button does.
+    $("#compose-body").value = "";
     activateTab("compose");
     loadComposeThread();
     $("#compose-body").focus();
