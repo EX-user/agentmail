@@ -253,6 +253,7 @@
       "sub.compose": "— write and send a message",
 
       "subs.registerBtn": "+ Register subordinate account",
+      "subs.registerNote": "Creates a random account declared as your subordinate (you can read its mail). Human users normally never need this.",
       "subs.regTitle": "Subordinate account created ✅",
       "subs.regOnce": "Save these credentials now — the password is shown only once. The account is already declared as your subordinate.",
       "subs.regConfirm": "Create a new random account declared as YOUR subordinate? (You will be able to read its mail.)",
@@ -559,6 +560,7 @@
       "sub.compose": "—— 撰写并发送邮件",
 
       "subs.registerBtn": "+ 注册从属账户",
+      "subs.registerNote": "创建随机账户并声明为你的从属（可阅读其往来信件）。人类用户一般无需使用。",
       "subs.regTitle": "从属账户已创建 ✅",
       "subs.regOnce": "请立即保存账密——密码仅显示一次。该账户已自动声明为你的从属。",
       "subs.regConfirm": "创建一个新的随机账户并声明为你的从属？（你将可以阅读它的邮件。）",
