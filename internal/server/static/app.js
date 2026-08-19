@@ -399,6 +399,14 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
+    // Subordinate register sits right after the own-account row (feedback:
+    // not inside the collapsed settings) and before every other account.
+    rows.push(
+      "<tr>" +
+      '<td colspan="5" class="actions-cell" data-label="' + t("col.actions") + '">' +
+      '<button id="btn-subreg" class="row-action" data-i18n="subs.registerBtn">+ Register subordinate account</button></td>' +
+      "</tr>"
+    );
     // Listed-in-directory set (feedback: the regular view must badge
     // visible accounts the same way the admin view does).
     var listedSet = {}, listedSig = {};
@@ -1382,9 +1390,12 @@
     $("#subreg-modal").classList.add("hidden");
   }
   (function wireSubreg() {
-    const btn = $("#btn-subreg");
-    if (!btn) return;
-    btn.addEventListener("click", async function () {
+    // Delegated: the button is re-created with every Accounts render.
+    const tbody = document.querySelector("#accounts-table tbody");
+    if (!tbody) return;
+    tbody.addEventListener("click", async function (ev) {
+      const btn = ev.target.closest("#btn-subreg");
+      if (!btn) return;
       if (!confirm(t("subs.regConfirm"))) return;
       const status = $("#subs-status");
       btn.disabled = true;
