@@ -229,6 +229,7 @@
       "mail.folder": "Folder:",
       "mail.limit": "Limit:",
       "mail.load": "Load",
+      "mail.allVisible": "All visible accounts (incl. subordinates)",
       // ---- subordinates (v0.5.7) ----
       "mail.subtitle": "— browse mail (yours and subordinate accounts)",
       "subs.title": "Subordinate relationships",
@@ -498,6 +499,7 @@
       "mail.folder": "文件夹：",
       "mail.limit": "数量：",
       "mail.load": "加载",
+      "mail.allVisible": "全部可见账号（含从属）",
       // ---- 从属账户 (v0.5.7) ----
       "mail.subtitle": "— 浏览邮件（本人与从属账户）",
       "subs.title": "从属关系",

@@ -394,6 +394,16 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
+    // Listed-in-directory set (feedback: the regular view must badge
+    // visible accounts the same way the admin view does).
+    var listedSet = {}, listedSig = {};
+    try {
+      const dir = await api("/api/info?query=directory");
+      (dir.entries || []).forEach(function (e) {
+        listedSet[e.address] = 1;
+        if (e.signature) listedSig[e.address] = e.signature;
+      });
+    } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var seenAddrs = {};
     try {
       const data = await api("/api/contacts");
@@ -401,11 +411,18 @@
         seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
-        var badge = subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "";
+        var badge = (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "") +
+          (subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "");
+        // Every address row gets the same shape (feedback: subordinate
+        // rows with and without mail history must look identical):
+        // badge column, Compose action; Created only where known.
         rows.push(
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
-          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
+          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(listedSig[c] || "") + "</td>" +
+          "<td data-label=\"Created\"></td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
         );
       });
@@ -419,7 +436,9 @@
       rows.push(
         "<tr>" +
         '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
-        '<td data-label="' + t("col.tags") + '"><span class="badge-sub">' + t("subs.badge") + "</span></td>" +
+        '<td data-label="' + t("col.tags") + '">' +
+        (listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "") +
+        '<span class="badge-sub">' + t("subs.badge") + "</span></td>" +
         "<td data-label=\"Signature\"></td><td data-label=\"Created\">" + fmtTime(e.created_at) + "</td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
         "</tr>"
@@ -592,11 +611,9 @@
           // Open-dropdown Enter is handled by attachAutocomplete (pick);
           // closed Enter commits the typed text as a chip.
           if (dd.classList.contains("hidden")) { ev.preventDefault(); commitCcInput(); }
-        } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
-          composeCcChips.pop();
-          renderComposeCc();
-          syncCcVisibility();
         }
+        // Note: Backspace no longer removes the last chip (feedback: bad
+        // feel) — the × button on each chip is the only removal path.
       });
       // Commit any leftover typed text when the user leaves the field
       // (after the dropdown's blur-close timer).
@@ -749,8 +766,9 @@
     // and disable it (no global account picker).
     if (s && !s.is_admin) {
       sel.innerHTML = "";
-      // All visible accounts in one flat list (mrf2000 feedback): own
-      // account first, then subordinates — no optgroup split, deduped.
+      // "All visible accounts" aggregated view + per-account picks
+      // (mrf2000 feedback): the pseudo-option merges own mail with every
+      // subordinate's in one list; individual addresses still selectable.
       const subs = await loadSubs().catch(function () { return null; });
       const subsList = (subs && subs.subordinates) || [];
       const add = function (addr) {
@@ -758,6 +776,11 @@
         o.value = addr; o.textContent = addr;
         sel.appendChild(o);
       };
+      if (subsList.length) {
+        const all = document.createElement("option");
+        all.value = "__vis__"; all.textContent = t("mail.allVisible");
+        sel.appendChild(all);
+      }
       add(s.address);
       subsList.forEach(function (e) {
         if (e.address !== s.address) add(e.address);
@@ -811,7 +834,34 @@
       const isSubView = isRegular && account !== s.address;
 
       var msgs = [];
-      if (isSubView) {
+      // Aggregated "all visible accounts" view (mrf2000 feedback): own
+      // inbox+sent merged with every subordinate's messages. Owner is
+      // stamped on each message so the detail pane routes correctly.
+      if (isRegular && account === "__vis__") {
+        const f = folder === "all" ? "both" : folder;
+        const jobs = [];
+        // Own mail (regular account: own endpoints).
+        jobs.push(api("/api/inbox?limit=" + limit).then(function (d) {
+          return (d.messages || []).map(function (m) { m.__owner = s.address; return m; });
+        }).catch(function () { return []; }));
+        jobs.push(api("/api/sent?limit=" + limit).then(function (d) {
+          return (d.messages || []).map(function (m) { m.__owner = s.address; return m; });
+        }).catch(function () { return []; }));
+        // Each declared subordinate (summaries).
+        const subsList = (subsCache && subsCache.subordinates) || [];
+        subsList.forEach(function (e) {
+          jobs.push(api("/api/subs/" + encodeURIComponent(e.address) +
+            "/messages?folder=" + f + "&limit=" + limit).then(function (d) {
+            return (d.messages || []).map(function (m) { m.__owner = e.address; return m; });
+          }).catch(function () { return []; }));
+        });
+        const results = await Promise.all(jobs);
+        results.forEach(function (arr) { msgs = msgs.concat(arr); });
+        msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
+        var seenA = {}, dedupA = [];
+        msgs.forEach(function (m) { if (!seenA[m.id]) { seenA[m.id] = 1; dedupA.push(m); } });
+        msgs = dedupA;
+      } else if (isSubView) {
         const f = folder === "all" ? "both" : folder;
         const d = await api("/api/subs/" + encodeURIComponent(account) +
           "/messages?folder=" + f + "&limit=" + limit);
@@ -857,6 +907,8 @@
           '<div class="prev">' + esc(m.preview || "") + "</div>";
         item.addEventListener("click", function () {
           if (isSubView) showSubDetail(account, m, item);
+          else if (account === "__vis__" && m.__owner && m.__owner !== s.address)
+            showSubDetail(m.__owner, m, item);
           else showDetail(m.id, item);
         });
         list.appendChild(item);
@@ -1090,7 +1142,14 @@
       if (dot) dot.remove();
     }
     try {
-      const m = await api("/admin/message?id=" + encodeURIComponent(id));
+      // Regular accounts read their own mail via /api/message (the admin
+      // endpoint would 401 and reset the session — live bug in the regular
+      // Mail-tab self-view since v0.5.7).
+      const viewer = getSession();
+      const detailPath = (viewer && !viewer.is_admin)
+        ? "/api/message?id=" + encodeURIComponent(id)
+        : "/admin/message?id=" + encodeURIComponent(id);
+      const m = await api(detailPath);
       detail.innerHTML =
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
@@ -1133,7 +1192,6 @@
     const section = $("#subs-section");
     if (!section || !subsCache) return;
     const mine = $("#subs-mine");
-    const visible = $("#subs-visible");
     if (!subsCache.superiors.length) {
       mine.innerHTML = '<p class="muted">' + t("subs.noneMine") + "</p>";
     } else {
@@ -1145,21 +1203,6 @@
       }).join("");
       $$("[data-revoke-sub]", mine).forEach(function (btn) {
         btn.addEventListener("click", function () { revokeSub(btn.dataset.revokeSub); });
-      });
-    }
-    if (!subsCache.subordinates.length) {
-      visible.innerHTML = '<p class="muted">' + t("subs.noneVisible") + "</p>";
-    } else {
-      // Flat, always expanded (mrf2000 feedback: no collapsed details).
-      visible.innerHTML = "<h4>" + t("subs.visibleTitle") + "</h4>" + subsCache.subordinates.map(function (e) {
-        return '<div class="row" style="justify-content:space-between;">' +
-          "<span>" + esc(e.address) + ' <span class="badge-sub">' + t("subs.badge") + "</span> " +
-          '<small class="muted">' + t("subs.since") + " " + fmtTime(e.created_at) + "</small></span>" +
-          '<button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button>" +
-          "</div>";
-      }).join("");
-      $$("[data-compose]", visible).forEach(function (btn) {
-        btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
       });
     }
   }
