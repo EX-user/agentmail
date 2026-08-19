@@ -149,6 +149,9 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 		"body":        msg.Body,
 		"received_at": msg.ReceivedAt,
 	}
+	if len(msg.CC) > 0 {
+		resp["cc"] = msg.CC
+	}
 	if len(msg.Attachments) > 0 {
 		type attOut struct {
 			store.AttachmentMeta
