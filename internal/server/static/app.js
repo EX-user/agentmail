@@ -396,10 +396,13 @@
     );
     // Listed-in-directory set (feedback: the regular view must badge
     // visible accounts the same way the admin view does).
-    var listedSet = {};
+    var listedSet = {}, listedSig = {};
     try {
       const dir = await api("/api/info?query=directory");
-      (dir.entries || []).forEach(function (e) { listedSet[e.address] = 1; });
+      (dir.entries || []).forEach(function (e) {
+        listedSet[e.address] = 1;
+        if (e.signature) listedSig[e.address] = e.signature;
+      });
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var seenAddrs = {};
     try {
@@ -416,7 +419,9 @@
         rows.push(
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
-          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td>" +
+          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(listedSig[c] || "") + "</td>" +
+          "<td data-label=\"Created\"></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
         );
