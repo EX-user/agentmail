@@ -199,7 +199,7 @@
   <main>
     <!-- Overview -->
     <section id="tab-overview" class="tab-panel">
-      <h2>Overview <small class="muted">— system stats and recent activity</small></h2>
+      <h2>Overview <small class="muted" data-i18n="sub.overview">— system stats and recent activity</small></h2>
       <!-- Stat cards grouped (feedback): System = stock levels (accounts /
            messages / storage), Activity = flows (today / last 7 days). Group
            layout is extensible — future metrics slot into the right row. -->
@@ -241,7 +241,7 @@
 
     <!-- Accounts -->
     <section id="tab-accounts" class="tab-panel hidden">
-      <h2>Accounts <small class="muted">— your contacts and account settings</small></h2>
+      <h2>Accounts <small class="muted" data-i18n="sub.accounts">— your contacts and account settings</small></h2>
       <button id="btn-register" class="primary" data-i18n="acc.registerNew">+ Register new account</button>
       <div id="register-result" class="callout hidden"></div>
       <table id="accounts-table">
@@ -308,7 +308,7 @@
 
     <!-- Inbox (personal inbox, all users) -->
     <section id="tab-inbox" class="tab-panel hidden">
-      <h2>Inbox <small class="muted">— your incoming mail</small></h2>
+      <h2>Inbox <small class="muted" data-i18n="sub.inbox">— your incoming mail</small></h2>
       <div class="row">
         <button id="btn-load-inbox" class="primary" data-i18n="inbox.load">Load inbox</button>
         <button id="btn-mark-all" class="row-action" data-i18n="inbox.markAll">✓ Mark all read</button>
@@ -334,7 +334,7 @@
 
     <!-- Directory -->
     <section id="tab-directory" class="tab-panel hidden">
-      <h2>Directory <small class="muted">— public address book</small></h2>
+      <h2>Directory <small class="muted" data-i18n="sub.directory">— public address book</small></h2>
       <p class="muted">Public address book. Accounts that have opted in (Visible) appear here with their signature. Anyone can query this via <code>/api/info?query=directory</code>.</p>
       <button id="btn-refresh-directory" class="row-action" data-i18n="dir.refresh">Refresh</button>
       <table id="directory-table">
@@ -345,7 +345,7 @@
 
     <!-- My Profile -->
     <section id="tab-profile" class="tab-panel hidden">
-      <h2>My Profile <small class="muted">— your directory visibility and signature</small></h2>
+      <h2>My Profile <small class="muted" data-i18n="sub.profile">— your directory visibility and signature</small></h2>
       <div class="settings-section profile-card">
         <div class="row">
           <label style="flex:0 0 auto">
@@ -375,7 +375,7 @@
 
     <!-- Audit -->
     <section id="tab-audit" class="tab-panel hidden">
-      <h2>Audit log <small class="muted">— system audit log (admin)</small></h2>
+      <h2>Audit log <small class="muted" data-i18n="sub.audit">— system audit log (admin)</small></h2>
       <table id="audit-table">
         <thead><tr><th>Time</th><th>Action</th><th>Account</th><th>Detail</th></tr></thead>
         <tbody></tbody>
@@ -384,7 +384,7 @@
 
     <!-- Settings -->
     <section id="tab-settings" class="tab-panel hidden">
-      <h2>Settings <small class="muted">— server configuration (admin)</small></h2>
+      <h2>Settings <small class="muted" data-i18n="sub.settings">— server configuration (admin)</small></h2>
       <div class="settings-section">
         <h3 data-i18n="set.registration">Registration</h3>
         <div class="row">
@@ -486,7 +486,7 @@
 
     <!-- Compose -->
     <section id="tab-compose" class="tab-panel hidden">
-      <h2>Compose <small class="muted">— write and send a message</small></h2>
+      <h2>Compose <small class="muted" data-i18n="sub.compose">— write and send a message</small></h2>
       <div class="compose-form">
         <label>To
           <div class="to-field">
