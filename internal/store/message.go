@@ -805,3 +805,47 @@ func (s *Store) CountUnread(address string) (int, error) {
 	})
 	return count, err
 }
+
+// MarkAllRead clears every unread marker in the account's inbox in one
+// transaction and returns how many were cleared. The bulk companion of
+// MarkRead — the panel's "mark all as read" button calls it so a deep
+// backlog of old unread can be dismissed without paging through
+// /api/message per mail (the nav badge then drops to zero immediately).
+func (s *Store) MarkAllRead(address string) (int, error) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	prefix := indexKey(acc.UUID, "")
+	prefixStr := string(prefix)
+	// Collect first (cursor over bUnread), delete in the same Update —
+	// bbolt forbids Put/Delete while iterating a cursor.
+	var keys [][]byte
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bUnread)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+			keys = append(keys, append([]byte(nil), k...))
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bUnread)
+		for _, k := range keys {
+			if err := b.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return len(keys), err
+}
