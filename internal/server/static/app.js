@@ -601,7 +601,17 @@
     if (input && dd) {
       attachAutocomplete(input, dd, {
         fragment: function () { return input.value; },
-        exclude: function () { return composeCcChips; },
+        // Feedback: addresses already typed into To must not surface in the
+        // Cc suggestions — cc-ing someone who is already a recipient is
+        // noise (the wire-level dedup stays as the backstop).
+        exclude: function () {
+          var ex = composeCcChips.slice();
+          ($("#compose-to").value || "").split(",").forEach(function (p) {
+            p = p.trim();
+            if (p && ex.indexOf(p) === -1) ex.push(p);
+          });
+          return ex;
+        },
         pick: function (a) {
           if (composeCcChips.indexOf(a) === -1) composeCcChips.push(a);
           input.value = "";
