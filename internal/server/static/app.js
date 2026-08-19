@@ -1779,10 +1779,17 @@
     if (zh) zh.addEventListener("click", function () { setLang("zh"); });
     if (en) en.addEventListener("click", function () { setLang("en"); });
   })();
-  document.addEventListener("i18n:change", function () {
-    const now = $("#pref-lang-now");
-    if (now) now.textContent = t("prefs.langNow", { lang: t("prefs.lang" + (window.I18N.lang() === "zh" ? "Zh" : "En")) });
-  });
+  // Language buttons reflect the one shared setting (localStorage via
+  // I18N.setLang): the current language is highlighted on load and on
+  // every switch — header toggle included (feedback: must read as linked).
+  function syncPrefLangUI() {
+    const cur = window.I18N.lang();
+    const zh = $("#pref-lang-zh"), en = $("#pref-lang-en"), now = $("#pref-lang-now");
+    if (zh) zh.classList.toggle("active", cur === "zh");
+    if (en) en.classList.toggle("active", cur === "en");
+    if (now) now.textContent = t("prefs.langNow", { lang: cur === "zh" ? t("prefs.langZh") : t("prefs.langEn") });
+  }
+  document.addEventListener("i18n:change", syncPrefLangUI);
 
   async function loadProfile() {
     const status = $("#profile-status");
@@ -1797,8 +1804,7 @@
       mergePrefs(p.prefs);
       $("#pref-audio-autoplay").checked = userPrefs.audio_autoplay;
       $("#pref-image-preview").checked = userPrefs.image_preview;
-      const nowL = $("#pref-lang-now");
-      if (nowL) nowL.textContent = t("prefs.langNow", { lang: t(window.I18N.lang() === "zh" ? "prefs.langZh" : "prefs.langEn") });
+      syncPrefLangUI();
       // Subordinate settings section (moved in from Accounts): regular
       // accounts only.
       const s = getSession();
