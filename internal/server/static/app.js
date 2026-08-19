@@ -435,6 +435,109 @@
     $("#compose-body").focus();
   }
 
+  // Cc chips (v0.5.9, follow-up feedback): recipients as removable tag
+  // chips — type, Enter or comma commits; Backspace on empty input removes
+  // the last chip; × removes any chip. Collapsed behind "＋ Cc" while empty.
+  let composeCcChips = [];
+
+  function renderComposeCc() {
+    const box = $("#cc-chips");
+    if (!box) return;
+    box.textContent = "";
+    composeCcChips.forEach(function (addr, i) {
+      const chip = document.createElement("span");
+      chip.className = "cc-chip";
+      chip.textContent = addr;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "attach-x";
+      x.textContent = "×";
+      x.title = t("compose.ccRemove");
+      x.addEventListener("click", function () {
+        composeCcChips.splice(i, 1);
+        renderComposeCc();
+        syncCcVisibility();
+      });
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "compose-cc";
+    input.autocomplete = "off";
+    input.placeholder = t("compose.ccPh");
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === ",") {
+        ev.preventDefault();
+        commitCcInput(input);
+      } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
+        composeCcChips.pop();
+        renderComposeCc();
+        syncCcVisibility();
+      }
+    });
+    input.addEventListener("blur", function () { commitCcInput(input); });
+    box.appendChild(input);
+  }
+
+  // commitCcInput turns the raw text into chips (comma or space separated
+  // pastes both work); loose validation: must contain "@".
+  function commitCcInput(input) {
+    const parts = (input.value || "").split(/[,，\s]+/).map(function (s) { return s.trim(); })
+      .filter(function (s) { return s && s.indexOf("@") !== -1; });
+    if (parts.length) {
+      parts.forEach(function (p) { if (composeCcChips.indexOf(p) === -1) composeCcChips.push(p); });
+      renderComposeCc();
+      syncCcVisibility();
+      const again = $("#compose-cc");
+      if (again) again.focus();
+    }
+  }
+
+  function syncCcVisibility() {
+    const row = $("#compose-cc-row");
+    const btn = $("#btn-toggle-cc");
+    if (!row || !btn) return;
+    const has = composeCcChips.length > 0;
+    row.classList.toggle("hidden", !has);
+    btn.classList.toggle("hidden", has);
+  }
+  (function wireCcToggle() {
+    const btn = $("#btn-toggle-cc");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      $("#compose-cc-row").classList.remove("hidden");
+      btn.classList.add("hidden");
+      renderComposeCc();
+      const input = $("#compose-cc");
+      if (input) input.focus();
+    });
+    renderComposeCc();
+    syncCcVisibility();
+    // Language switch while the field is open: rebuild so the chip input's
+    // placeholder (set imperatively) follows.
+    document.addEventListener("i18n:change", renderComposeCc);
+  })();
+
+  // composeForward (v0.5.9, feedback): panel-side forward. /api/send has no
+  // forward_of (that is a gateway-side composition), so the panel mirrors
+  // the same wire format the gateway produces: user comment on top, the
+  // "── forwarded from ──" separator, then the original body. Attachments
+  // are not carried (same ruling as subordinate Q2) — noted in the body.
+  function composeForward(m) {
+    $("#compose-to").value = "";
+    var subj = (m.subject || "").trim();
+    $("#compose-subject").value = /^fwd:\s*/i.test(subj) ? subj : (subj ? "Fwd: " + subj : "");
+    const files = (m.attachments && m.attachments.length) || m.files || 0;
+    $("#compose-body").value = "\n\n" +
+      t("fwd.header", { sender: m.from, date: fmtTime(m.received_at), subject: m.subject || "" }) + "\n" +
+      (files ? t("fwd.attachNote", { n: files }) + "\n" : "") +
+      "\n" + (m.body != null ? m.body : (m.preview || ""));
+    activateTab("compose");
+    loadComposeThread();
+    $("#compose-to").focus();
+  }
+
   function openChangePassword() {
     const oldPw = prompt("Change your password\n\nCurrent password:");
     if (oldPw === null) return;
@@ -889,9 +992,13 @@
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
+        '<div class="row" style="margin-top:12px;"><button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
+        attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      const fwdBtn = $("#btn-mail-forward");
+      if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
       detail.textContent = t("common.error", { msg: e.message });
     }
@@ -1240,7 +1347,8 @@
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button></div>' +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button>' +
+        '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
@@ -1254,6 +1362,8 @@
       if (replyBtn) replyBtn.addEventListener("click", function () {
         composeReply(replyBtn.dataset.replyTo, replyBtn.dataset.replySubject);
       });
+      const fwdBtn = $("#btn-inbox-forward");
+      if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
       // Keep the nav row on errors too — the reader can still step away.
       detail.innerHTML = inboxNavRow() + '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
@@ -2552,12 +2662,9 @@
     const to = Array.from(new Set(
       toRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     ));
-    // CC (v0.5.7): same parsing, minus anyone already in To (server dedups
-    // too; this keeps the wire clean).
-    const ccRaw = ($("#compose-cc").value || "").trim();
-    const cc = ccRaw ? Array.from(new Set(
-      ccRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
-    )).filter(function (a) { return to.indexOf(a) === -1; }) : [];
+    // CC (v0.5.7, chips since v0.5.9): chip list minus anyone already in To
+    // (server dedups too; this keeps the wire clean).
+    const cc = composeCcChips.filter(function (a) { return to.indexOf(a) === -1; });
 
     status.textContent = t("compose.sending");
     try {
@@ -2586,6 +2693,9 @@
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       $("#compose-cc").value = "";
+      composeCcChips = [];
+      renderComposeCc();
+      syncCcVisibility(); // collapse the now-empty Cc field back
       composeAttachmentItems = [];
       composeAttachmentIds = [];
       renderComposeAttachments(composeAttachmentItems);
