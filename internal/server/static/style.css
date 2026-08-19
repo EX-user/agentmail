@@ -908,7 +908,7 @@ nav .tab { flex: 0 0 auto; }
 .lang-inline:hover { color: var(--text); border-color: var(--accent); }
 
 /* Attachment image preview (v0.5.2): thumbnails below the card row. */
-.attach-card-img { flex-wrap: wrap; }
+.attach-card-img, .attach-card-audio { flex-wrap: wrap; }
 .attach-preview { flex: 1 1 100%; margin-top: 8px; }
 .attach-preview img {
   display: block; max-height: 240px; max-width: 100%;

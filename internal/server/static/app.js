@@ -1064,6 +1064,13 @@
     return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
   }
 
+  // Audio attachments (v0.5.12): inline <audio controls> preview, same
+  // authenticated-blob + MIME-rebuild pattern as images.
+  const ATTACH_AUDIO_RE = /\.(mp3|wav|ogg|m4a|webm)$/i;
+  function attachIsAudio(a) {
+    return !!(a && a.filename && ATTACH_AUDIO_RE.test(a.filename));
+  }
+
   // attachTTLBadge renders the remaining validity under the file TTL
   // (v0.5.3): "约 N 天后过期" / "已过期" once past. Absent expires_at
   // (older server) shows nothing.
@@ -1080,8 +1087,9 @@
     const list = (m && m.attachments) || [];
     if (!list.length) return "";
     return '<div class="attach-list">' + list.map(function (a, i) {
-      const preview = attachIsImage(a) ? '<div class="attach-preview" data-pv="' + i + '"></div>' : "";
-      return '<div class="attach-card attach-card-' + (attachIsImage(a) ? "img" : "file") + '">' +
+      const isImg = attachIsImage(a), isAud = attachIsAudio(a);
+      const preview = (isImg || isAud) ? '<div class="attach-preview" data-pv="' + i + '"></div>' : "";
+      return '<div class="attach-card attach-card-' + (isImg ? "img" : isAud ? "audio" : "file") + '">' +
         '<span class="attach-clip">📎</span>' +
         '<span class="attach-name">' + esc(a.filename) + "</span>" +
         '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
@@ -1108,11 +1116,24 @@
         // for downloads); an <img> refuses that MIME even via objectURL.
         // Rebuild the blob with the extension-mapped image type.
         const IMG_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+        const AUDIO_MIME = { mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4", webm: "audio/webm" };
         const ext = (/[.]([a-z0-9]+)$/i.exec(a.filename || "") || [])[1];
-        const mime = IMG_MIME[(ext || "").toLowerCase()];
-        if (!mime) throw new Error("not an image");
+        const isAudio = attachIsAudio(a);
+        const mime = (isAudio ? AUDIO_MIME : IMG_MIME)[(ext || "").toLowerCase()];
+        if (!mime) throw new Error(isAudio ? "unsupported audio" : "not an image");
         const blob = new Blob([await res.arrayBuffer()], { type: mime });
         const url = URL.createObjectURL(blob);
+        if (isAudio) {
+          // Inline player (v0.5.12): no autoplay, native controls only.
+          const au = document.createElement("audio");
+          au.controls = true;
+          au.preload = "metadata";
+          au.src = url;
+          au.style.cssText = "display:block; width:100%; margin-top:8px;";
+          holder.appendChild(au);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
+          return;
+        }
         const img = document.createElement("img");
         img.src = url;
         img.alt = a.filename;
