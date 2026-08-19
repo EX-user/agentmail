@@ -37,6 +37,12 @@ type Account struct {
 	// Signature is a short user-supplied tagline shown next to the address in
 	// the public directory. Empty by default.
 	Signature string `json:"signature"`
+	// Prefs holds small per-account UI preferences ({"audio_autoplay":
+	// false, "image_preview": true}). Nil on old records — readers treat
+	// nil as all-defaults, no migration needed. Keys are whitelist-
+	// validated at the API edge; the store accepts whatever map it is
+	// given (it never interprets the contents).
+	Prefs map[string]any `json:"prefs,omitempty"`
 }
 
 // CreateAccountResult is returned by CreateAccount.
@@ -274,6 +280,42 @@ func (s *Store) UpdateProfile(address string, visible bool, signature string) er
 		}
 		acc.Visible = visible
 		acc.Signature = signature
+		newVal, err := json.Marshal(acc)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(address), newVal)
+	})
+}
+
+// UpdatePrefs merges the given preference keys into the account's stored
+// Prefs map (existing keys not mentioned are kept; a nil value for a key
+// removes it). The API layer whitelist-validates keys and value types;
+// the store just persists the map.
+func (s *Store) UpdatePrefs(address string, prefs map[string]any) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bAccounts)
+		val := b.Get([]byte(address))
+		if val == nil {
+			return ErrAccountNotFound
+		}
+		var acc Account
+		if err := json.Unmarshal(val, &acc); err != nil {
+			return err
+		}
+		if acc.Prefs == nil {
+			acc.Prefs = map[string]any{}
+		}
+		for k, v := range prefs {
+			if v == nil {
+				delete(acc.Prefs, k)
+				continue
+			}
+			acc.Prefs[k] = v
+		}
+		if len(acc.Prefs) == 0 {
+			acc.Prefs = nil // keep old records byte-identical when empty
+		}
 		newVal, err := json.Marshal(acc)
 		if err != nil {
 			return err
