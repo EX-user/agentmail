@@ -460,6 +460,10 @@
   // Accounts and Directory tables.
   function composeTo(address) {
     $("#compose-to").value = address || "";
+    // Entering compose from a Compose button starts a fresh letter: clear
+    // any leftover draft body (feedback). Plain tab switches keep the
+    // draft; Reply/Forward overwrite the body with their own prefill.
+    $("#compose-body").value = "";
     activateTab("compose");
     loadComposeThread();
   }
@@ -470,6 +474,9 @@
     $("#compose-to").value = toAddress || "";
     var subj = (subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
+    // Reply never prefills the body (To/Subject only — reviewer's model);
+    // entering it clears any leftover draft like the Compose button does.
+    $("#compose-body").value = "";
     activateTab("compose");
     loadComposeThread();
     $("#compose-body").focus();
@@ -1639,7 +1646,7 @@
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button>' +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
@@ -1771,8 +1778,8 @@
     const btn = $("#btn-save-prefs");
     if (btn) btn.addEventListener("click", savePrefs);
     const zh = $("#pref-lang-zh"), en = $("#pref-lang-en");
-    if (zh) zh.addEventListener("click", function () { setLang("zh"); });
-    if (en) en.addEventListener("click", function () { setLang("en"); });
+    if (zh) zh.addEventListener("click", function () { window.I18N.setLang("zh"); });
+    if (en) en.addEventListener("click", function () { window.I18N.setLang("en"); });
   })();
   // Language buttons reflect the one shared setting (localStorage via
   // I18N.setLang): the current language is highlighted on load and on
