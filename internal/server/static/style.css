@@ -853,6 +853,18 @@ nav .tab { flex: 0 0 auto; }
    keeps size/baseline aligned with the other stat cards. */
 .stat .stat-unit { font-size: 15px; font-weight: 500; color: var(--muted); }
 
+/* Subordinate declare row (feedback): joined input + button, same
+   visual family as the Cc input. */
+.subs-declare-row { display: flex; gap: 8px; margin: 10px 0; }
+.subs-declare-row input {
+  flex: 1; min-width: 220px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  font: inherit; color: inherit;
+}
+.subs-declare-row input:focus { border-color: var(--accent); outline: none; }
+#subs-details summary { cursor: pointer; }
+#subs-details p { margin: 8px 0 0; }
+
 /* Cc recipient chips (v0.5.9, vertical layout since follow-up): the
    input keeps its own row; chips wrap in their own area below it. */
 .cc-input-wrap { position: relative; }
