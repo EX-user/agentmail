@@ -739,6 +739,12 @@ nav .tab { flex: 0 0 auto; }
   /* Give the page a little more room on small screens. */
   main { margin: 16px auto; padding: 0 14px; }
   header { padding: 10px 14px; }
+
+  /* Long addresses must not push the lang/logout controls off-screen:
+     the whoami line truncates with an ellipsis instead (feedback). */
+  .header-row { gap: 8px; min-width: 0; }
+  #whoami { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
+  .header-actions { flex-shrink: 0; gap: 8px; }
 }
 
 /* Accessibility: freeze all portal motion when the user prefers reduced
