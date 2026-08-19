@@ -704,6 +704,22 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
 }
 
+/* Signature field (feedback follow-up): the row's default horizontal
+   label squeezed the textarea and the old input selector no longer
+   matched. Column layout on its own full row, generous sizing. */
+.profile-card .row label.sig-field {
+  flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 6px;
+}
+.settings-section.profile-card #profile-signature {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; color: var(--text); font: inherit; font-size: 14px;
+  width: 100%; max-width: 480px; min-height: 72px;
+  resize: vertical; line-height: 1.45;
+}
+.settings-section.profile-card #profile-signature:focus {
+  outline: none; border-color: var(--accent);
+}
+
 /* My profile visual refresh (feedback): same glass-card language as the
    portal — card container, airy rows, accent primary button. */
 .settings-section.profile-card {
