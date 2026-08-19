@@ -248,31 +248,6 @@
         <thead><tr><th>Address</th><th>Tags</th><th data-i18n="prof.signature">Signature</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
-      <!-- Subordinate relationships (regular users, v0.5.7): self-declared
-           directed edges. "My declarations" = accounts I report to (they can
-           read my mail); "visible to me" = accounts that declared under me
-           (read-only browsing from the Mail tab). Collapsed by default. -->
-      <div id="subs-section" class="hidden" style="margin-top:18px; max-width:720px;">
-        <!-- Collapsed by default with plain-language scope note (feedback):
-           most human users never need this — it exposes your mail to the
-           declared leader. -->
-        <details id="subs-details">
-          <summary><span data-i18n="subs.title">Subordinate relationships</span> <small class="muted" data-i18n="subs.optional">— optional, for agent accounts</small></summary>
-          <p class="muted" data-i18n="subs.scopeNote">Declaring a leader lets them read your inbox and sent mail (read-only). Human users normally never need this.</p>
-          <div class="settings-section">
-            <div class="cc-input-wrap subs-declare-row">
-              <input type="text" id="subs-declare-input"
-                     placeholder="alice@example.com" data-i18n-ph="subs.declarePh" />
-              <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
-            </div>
-            <div id="subs-status" class="muted"></div>
-            <div class="row" style="margin-top:10px;">
-              <button id="btn-subreg" class="row-action" data-i18n="subs.registerBtn">+ Register subordinate account</button>
-            </div>
-            <div id="subs-mine"></div>
-          </div>
-        </details>
-      </div>
       </div>
     </section>
 
@@ -346,33 +321,93 @@
       </table>
     </section>
 
-    <!-- My Profile -->
+    <!-- Preferences (v0.6, approved): the old My Profile becomes one
+         section of a four-section personal preferences page. Subordinate
+         settings move in from the Accounts tab (management actions
+         centralize here); the register-subordinate button and the
+         change-password button STAY on Accounts per the ruling. -->
     <section id="tab-profile" class="tab-panel hidden">
-      <h2>My Profile <small class="muted" data-i18n="sub.profile">— your directory visibility and signature</small></h2>
+      <h2>Preferences <small class="muted" data-i18n="sub.profile">— your directory visibility and signature</small></h2>
+
+      <!-- (1) Personal profile: the former My Profile card. -->
+      <h3 data-i18n="prefs.secProfile">Profile</h3>
       <div class="settings-section profile-card">
         <div class="row">
           <label style="flex:0 0 auto">
             <input type="checkbox" id="profile-visible" />
-            Visible in public directory
+            <span data-i18n="prof.visible">Visible in public directory</span>
           </label>
         </div>
-        <div class="row">
-          <label>Signature
-            <textarea id="profile-signature" rows="2" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh" maxlength="200" style="width:100%; resize:vertical; font:inherit; padding:8px 10px;"></textarea>
-          </label>
+        <div class="sig-field">
+          <span class="sig-field-label" data-i18n="prof.signature">Signature</span>
+          <textarea id="profile-signature" rows="2" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh" maxlength="200"></textarea>
         </div>
         <div class="row">
           <button id="btn-save-profile" class="primary" data-i18n="prof.save">Save profile</button>
           <span id="profile-status" class="muted"></span>
         </div>
-        <!-- Attachment quota (v0.5.3): row appears once the server reports
-             per-account usage (files_used_bytes on self + quota in public
-             settings); older servers simply hide it. -->
+        <!-- Attachment quota (v0.5.3): appears once the server reports
+             per-account usage; older servers simply hide it. -->
         <div class="my-stat-row" id="attach-quota-row" style="display:none;">
           <span class="my-stat-label" data-i18n="prof.attachQuota">Attachments</span>
           <span class="my-stat-num" id="attach-quota-value"></span>
         </div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prof.note">Visibility and signature are saved to your own account.</p>
+      </div>
+
+      <!-- (2) Attachment preferences: audio autoplay + image preview.
+           Persisted server-side (account.prefs, Devi contract) with a
+           localStorage fallback for older servers. -->
+      <h3 data-i18n="prefs.secAttach">Attachments</h3>
+      <div class="settings-section">
+        <div class="row">
+          <label style="flex:0 0 auto">
+            <input type="checkbox" id="pref-audio-autoplay" />
+            <span data-i18n="prefs.audioAutoplay">Audio autoplay</span>
+          </label>
+        </div>
+        <div class="row">
+          <label style="flex:0 0 auto">
+            <input type="checkbox" id="pref-image-preview" />
+            <span data-i18n="prefs.imagePreview">Image previews</span>
+          </label>
+        </div>
+        <div class="row">
+          <button id="btn-save-prefs" class="primary" data-i18n="prefs.save">Save preferences</button>
+          <span id="prefs-status" class="muted"></span>
+        </div>
+        <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prefs.note">Applies to this account; autoplay off means audio loads only when you press play (saves bandwidth).</p>
+      </div>
+
+      <!-- (3) Interface: language. The header button stays as a second
+           entry point. -->
+      <h3 data-i18n="prefs.secUI">Interface</h3>
+      <div class="settings-section">
+        <div class="row">
+          <button type="button" class="row-action pref-lang-btn" id="pref-lang-zh">中文</button>
+          <button type="button" class="row-action pref-lang-btn" id="pref-lang-en">English</button>
+          <span id="pref-lang-now" class="muted"></span>
+        </div>
+      </div>
+
+      <!-- (4) Subordinate settings: moved from the Accounts tab. Same
+           collapsed details, copy and controls as before. -->
+      <h3 data-i18n="prefs.secSubs">Subordinate settings</h3>
+      <div class="settings-section" id="subs-section-wrap">
+        <div id="subs-section" style="max-width:720px;">
+          <details id="subs-details">
+            <summary><span data-i18n="subs.title">Subordinate relationships</span> <small class="muted" data-i18n="subs.optional">— optional, for agent accounts</small></summary>
+            <p class="muted" data-i18n="subs.scopeNote">Declaring a leader lets them read your inbox and sent mail (read-only). Human users normally never need this.</p>
+            <div class="settings-section">
+              <div class="cc-input-wrap subs-declare-row">
+                <input type="text" id="subs-declare-input" placeholder="alice@example.com" data-i18n-ph="subs.declarePh" />
+                <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
+              </div>
+              <div id="subs-status" class="muted"></div>
+              <div id="subs-mine"></div>
+            </div>
+          </details>
+        </div>
       </div>
     </section>
 
