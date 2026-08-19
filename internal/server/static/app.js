@@ -390,16 +390,11 @@
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
-      "</tr>"
-    );
-    // Subordinate register sits right after the own-account row (feedback),
-    // before every other account. Click handling is delegated (below)
-    // because the button re-renders with the table.
-    rows.push(
-      "<tr>" +
-      '<td colspan="5" class="actions-cell" data-label="' + t("col.actions") + '">' +
-      '<button id="btn-subreg" class="row-action" data-i18n="subs.registerBtn">+ Register subordinate account</button></td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '">' +
+      '<button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button> ' +
+      '<button id="btn-subreg" class="row-action">' + t("subs.registerBtn") + '</button>' +
+      '<div class="muted" style="font-size:11px; margin-top:4px; max-width:280px;">' + t("subs.registerNote") + '</div>' +
+      '</td>' +
       "</tr>"
     );
     // Listed-in-directory set (feedback: the regular view must badge
@@ -1779,10 +1774,17 @@
     if (zh) zh.addEventListener("click", function () { setLang("zh"); });
     if (en) en.addEventListener("click", function () { setLang("en"); });
   })();
-  document.addEventListener("i18n:change", function () {
-    const now = $("#pref-lang-now");
-    if (now) now.textContent = t("prefs.langNow", { lang: t("prefs.lang" + (window.I18N.lang() === "zh" ? "Zh" : "En")) });
-  });
+  // Language buttons reflect the one shared setting (localStorage via
+  // I18N.setLang): the current language is highlighted on load and on
+  // every switch — header toggle included (feedback: must read as linked).
+  function syncPrefLangUI() {
+    const cur = window.I18N.lang();
+    const zh = $("#pref-lang-zh"), en = $("#pref-lang-en"), now = $("#pref-lang-now");
+    if (zh) zh.classList.toggle("active", cur === "zh");
+    if (en) en.classList.toggle("active", cur === "en");
+    if (now) now.textContent = t("prefs.langNow", { lang: cur === "zh" ? t("prefs.langZh") : t("prefs.langEn") });
+  }
+  document.addEventListener("i18n:change", syncPrefLangUI);
 
   async function loadProfile() {
     const status = $("#profile-status");
@@ -1797,8 +1799,7 @@
       mergePrefs(p.prefs);
       $("#pref-audio-autoplay").checked = userPrefs.audio_autoplay;
       $("#pref-image-preview").checked = userPrefs.image_preview;
-      const nowL = $("#pref-lang-now");
-      if (nowL) nowL.textContent = t("prefs.langNow", { lang: t(window.I18N.lang() === "zh" ? "prefs.langZh" : "prefs.langEn") });
+      syncPrefLangUI();
       // Subordinate settings section (moved in from Accounts): regular
       // accounts only.
       const s = getSession();

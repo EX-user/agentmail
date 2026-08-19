@@ -704,6 +704,24 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
 }
 
+/* Preferences cards (v0.6 layout round 2): one stacked card per section,
+   title inside, compose-style wide controls (feedback: previous split
+   h3+card layout read as cluttered and the signature was too narrow). */
+.pref-card { max-width: 640px; }
+.pref-title {
+  margin: 0 0 12px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); font-weight: 600;
+}
+.pref-toggle {
+  display: flex; align-items: center; gap: 8px; margin: 8px 0;
+  font-size: 13px; color: var(--muted); cursor: pointer;
+}
+.pref-toggle input { width: 17px; height: 17px; accent-color: var(--accent); }
+.pref-lang-btn.active {
+  border-color: var(--accent); color: var(--text); font-weight: 600;
+}
+.settings-section.profile-card #profile-signature { max-width: none; min-height: 96px; }
+
 /* My profile visual refresh (feedback): same glass-card language as the
    portal — card container, airy rows, accent primary button. */
 .settings-section.profile-card {
