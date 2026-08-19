@@ -435,13 +435,70 @@
     $("#compose-body").focus();
   }
 
-  // Cc field visibility (v0.5.9, feedback): collapsed behind "＋ Cc" unless
-  // it holds a value — keeps the compose form clean while staying obvious.
+  // Cc chips (v0.5.9, follow-up feedback): recipients as removable tag
+  // chips — type, Enter or comma commits; Backspace on empty input removes
+  // the last chip; × removes any chip. Collapsed behind "＋ Cc" while empty.
+  let composeCcChips = [];
+
+  function renderComposeCc() {
+    const box = $("#cc-chips");
+    if (!box) return;
+    box.textContent = "";
+    composeCcChips.forEach(function (addr, i) {
+      const chip = document.createElement("span");
+      chip.className = "cc-chip";
+      chip.textContent = addr;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "attach-x";
+      x.textContent = "×";
+      x.title = t("compose.ccRemove");
+      x.addEventListener("click", function () {
+        composeCcChips.splice(i, 1);
+        renderComposeCc();
+        syncCcVisibility();
+      });
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "compose-cc";
+    input.autocomplete = "off";
+    input.placeholder = t("compose.ccPh");
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === ",") {
+        ev.preventDefault();
+        commitCcInput(input);
+      } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
+        composeCcChips.pop();
+        renderComposeCc();
+        syncCcVisibility();
+      }
+    });
+    input.addEventListener("blur", function () { commitCcInput(input); });
+    box.appendChild(input);
+  }
+
+  // commitCcInput turns the raw text into chips (comma or space separated
+  // pastes both work); loose validation: must contain "@".
+  function commitCcInput(input) {
+    const parts = (input.value || "").split(/[,，\s]+/).map(function (s) { return s.trim(); })
+      .filter(function (s) { return s && s.indexOf("@") !== -1; });
+    if (parts.length) {
+      parts.forEach(function (p) { if (composeCcChips.indexOf(p) === -1) composeCcChips.push(p); });
+      renderComposeCc();
+      syncCcVisibility();
+      const again = $("#compose-cc");
+      if (again) again.focus();
+    }
+  }
+
   function syncCcVisibility() {
     const row = $("#compose-cc-row");
     const btn = $("#btn-toggle-cc");
     if (!row || !btn) return;
-    const has = ($("#compose-cc").value || "").trim() !== "";
+    const has = composeCcChips.length > 0;
     row.classList.toggle("hidden", !has);
     btn.classList.toggle("hidden", has);
   }
@@ -451,10 +508,15 @@
     btn.addEventListener("click", function () {
       $("#compose-cc-row").classList.remove("hidden");
       btn.classList.add("hidden");
-      $("#compose-cc").focus();
+      renderComposeCc();
+      const input = $("#compose-cc");
+      if (input) input.focus();
     });
-    $("#compose-cc").addEventListener("input", syncCcVisibility);
+    renderComposeCc();
     syncCcVisibility();
+    // Language switch while the field is open: rebuild so the chip input's
+    // placeholder (set imperatively) follows.
+    document.addEventListener("i18n:change", renderComposeCc);
   })();
 
   // composeForward (v0.5.9, feedback): panel-side forward. /api/send has no
@@ -2600,12 +2662,9 @@
     const to = Array.from(new Set(
       toRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     ));
-    // CC (v0.5.7): same parsing, minus anyone already in To (server dedups
-    // too; this keeps the wire clean).
-    const ccRaw = ($("#compose-cc").value || "").trim();
-    const cc = ccRaw ? Array.from(new Set(
-      ccRaw.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
-    )).filter(function (a) { return to.indexOf(a) === -1; }) : [];
+    // CC (v0.5.7, chips since v0.5.9): chip list minus anyone already in To
+    // (server dedups too; this keeps the wire clean).
+    const cc = composeCcChips.filter(function (a) { return to.indexOf(a) === -1; });
 
     status.textContent = t("compose.sending");
     try {
@@ -2634,6 +2693,8 @@
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
       $("#compose-cc").value = "";
+      composeCcChips = [];
+      renderComposeCc();
       syncCcVisibility(); // collapse the now-empty Cc field back
       composeAttachmentItems = [];
       composeAttachmentIds = [];

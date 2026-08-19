@@ -492,11 +492,11 @@
           </div>
         </label>
         <!-- Cc (v0.5.9, feedback): collapsed behind an explicit "＋ Cc"
-             toggle so the form stays clean; expands with a labeled, hinted
-             field. Stays expanded while it holds a value. -->
+             toggle. Recipients are tag chips — type, press Enter (or comma)
+             to commit, × removes (follow-up feedback). -->
         <button type="button" id="btn-toggle-cc" class="row-action" data-i18n="compose.addCc">＋ Cc</button>
         <label id="compose-cc-row" class="hidden">Cc
-          <input type="text" id="compose-cc" placeholder="cc@agentmail.local (comma-separate, optional — cc recipients receive the mail like To)" data-i18n-ph="compose.ccPh" autocomplete="off" />
+          <div id="cc-chips" class="cc-chips"></div>
         </label>
         <label>Subject
           <input type="text" id="compose-subject" placeholder="subject" data-i18n-ph="compose.subjectPh" />
