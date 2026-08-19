@@ -1344,6 +1344,59 @@
     $("#compose-body").focus();
   }
 
+  // ---- register-subordinate (v0.5.11, superior's request) ----
+  // Panel-only affordance: POST /api/register-subordinate mints a random
+  // account already declared under the caller. Credentials shown once.
+  function closeSubregModal() {
+    $("#subreg-modal").classList.add("hidden");
+  }
+  (function wireSubreg() {
+    const btn = $("#btn-subreg");
+    if (!btn) return;
+    btn.addEventListener("click", async function () {
+      if (!confirm(t("subs.regConfirm"))) return;
+      const status = $("#subs-status");
+      btn.disabled = true;
+      status.textContent = t("common.loading");
+      try {
+        const res = await api("/api/register-subordinate", { method: "POST" });
+        $("#subreg-address").textContent = res.address || "";
+        $("#subreg-password").textContent = res.password || "";
+        $("#subreg-copy-status").textContent = "";
+        $("#subreg-modal").classList.remove("hidden");
+        $("#btn-subreg-close").focus();
+        status.textContent = t("subs.regDone");
+      } catch (e) {
+        status.textContent = t("common.error", { msg: e.message });
+      }
+      btn.disabled = false;
+    });
+    $("#btn-subreg-close").addEventListener("click", function () {
+      closeSubregModal();
+      // Refresh edges + badges + Mail selector after dismissing.
+      loadSubs(true).then(function () {
+        loadAccounts();
+        invalidateMailAccountOptions();
+      }).catch(function () {});
+    });
+    $("#subreg-modal").addEventListener("click", function (e) {
+      if (e.target === this) $("#btn-subreg-close").click();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      const m = $("#subreg-modal");
+      if (m && !m.classList.contains("hidden")) $("#btn-subreg-close").click();
+    });
+    $("#btn-subreg-copy").addEventListener("click", function () {
+      const text = $("#subreg-address").textContent + "\n" + $("#subreg-password").textContent;
+      copyText(text).then(function (ok) {
+        const st = $("#subreg-copy-status");
+        st.textContent = ok ? t("common.copied") : t("common.copyManual");
+        setTimeout(function () { st.textContent = ""; }, 2000);
+      });
+    });
+  })();
+
   // ---- inbox (personal, all users) ----
 
   // loadInbox fills the left pane with the caller's own inbox. Regular accounts

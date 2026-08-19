@@ -266,6 +266,9 @@
               <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
             </div>
             <div id="subs-status" class="muted"></div>
+            <div class="row" style="margin-top:10px;">
+              <button id="btn-subreg" class="row-action" data-i18n="subs.registerBtn">+ Register subordinate account</button>
+            </div>
             <div id="subs-mine"></div>
           </div>
         </details>
@@ -563,6 +566,26 @@
       <div class="row" style="margin-bottom:0; justify-content:flex-end;">
         <button id="btn-oneclick-login" class="primary" data-i18n="reg.loginWith">Log in with this account</button>
         <button id="btn-oneclick-another" class="row-action" data-i18n="reg.another">Register another</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register-subordinate result modal (v0.5.11): one-time credentials,
+       same presentation family as the one-click register modal. -->
+  <div id="subreg-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="subreg-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="subreg-title" data-i18n="subs.regTitle">Subordinate account created ✅</h2>
+        <button id="btn-subreg-close" class="modal-x" title="Close" aria-label="Close" data-i18n-aria="modal.close">×</button>
+      </div>
+      <p class="muted" data-i18n="subs.regOnce">Save these credentials now — the password is shown only once. The account is already declared as your subordinate.</p>
+      <div class="compose-form">
+        <p><b data-i18n="reg.address">Address:</b> <code id="subreg-address"></code></p>
+        <p><b data-i18n="reg.password">Password:</b> <code id="subreg-password"></code></p>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-subreg-copy" class="row-action" data-i18n="subs.copyCreds">Copy credentials</button>
+        <span id="subreg-copy-status" class="muted"></span>
       </div>
     </div>
   </div>
