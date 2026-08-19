@@ -1755,12 +1755,15 @@
     };
     const status = $("#prefs-status");
     try {
-      await api("/api/profile/self", {
+      const res = await api("/api/profile/self", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prefs: prefs }),
       });
       status.textContent = t("prefs.saved");
+      // The response echoes the merged prefs — authoritative post-save
+      // state (e.g. null resets applied server-side).
+      if (res && res.prefs) mergePrefs(res.prefs);
     } catch (e) {
       // Older server (no prefs field): keep the choice browser-local so
       // the toggles still work for this user.
