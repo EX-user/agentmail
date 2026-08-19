@@ -402,10 +402,14 @@
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
         var badge = subAddrs[c] ? ' <span class="badge-sub">' + t("subs.badge") + "</span>" : "";
+        // Every address row gets the same shape (feedback: subordinate
+        // rows with and without mail history must look identical):
+        // badge column, Compose action; Created only where known.
         rows.push(
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
-          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td><td data-label=\"Actions\"></td>" +
+          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td><td data-label=\"Signature\"></td><td data-label=\"Created\"></td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
         );
       });
@@ -592,11 +596,9 @@
           // Open-dropdown Enter is handled by attachAutocomplete (pick);
           // closed Enter commits the typed text as a chip.
           if (dd.classList.contains("hidden")) { ev.preventDefault(); commitCcInput(); }
-        } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
-          composeCcChips.pop();
-          renderComposeCc();
-          syncCcVisibility();
         }
+        // Note: Backspace no longer removes the last chip (feedback: bad
+        // feel) — the × button on each chip is the only removal path.
       });
       // Commit any leftover typed text when the user leaves the field
       // (after the dropdown's blur-close timer).
