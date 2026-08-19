@@ -853,23 +853,18 @@ nav .tab { flex: 0 0 auto; }
    keeps size/baseline aligned with the other stat cards. */
 .stat .stat-unit { font-size: 15px; font-weight: 500; color: var(--muted); }
 
-/* Cc recipient chips (v0.5.9): tag-style input — Enter/comma commits,
-   × removes. Reuses the attachment chip's remove-button styling. */
-.cc-chips {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 6px 8px; min-height: 38px;
+/* Cc recipient chips (v0.5.9, vertical layout since follow-up): the
+   input keeps its own row; chips wrap in their own area below it. */
+.cc-input-wrap { position: relative; }
+#compose-cc { width: 100%; }
+.cc-tags {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
 }
-.cc-chips:focus-within { border-color: var(--accent); }
 .cc-chip {
   display: inline-flex; align-items: center; gap: 2px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
   padding: 2px 4px 2px 10px; font-size: 12.5px;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-}
-.cc-chips input {
-  flex: 1 1 160px; min-width: 120px; border: none; background: transparent;
-  color: inherit; font: inherit; padding: 2px; outline: none;
 }
 
 /* Attachments (v0.5.1): chips in compose, cards in message detail. */
