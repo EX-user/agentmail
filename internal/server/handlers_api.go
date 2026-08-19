@@ -319,6 +319,9 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		"body":        msg.Body,
 		"received_at": msg.ReceivedAt,
 	}
+	if len(msg.CC) > 0 {
+		resp["cc"] = msg.CC
+	}
 	// Attachments carry the download metadata (id/filename/size/access
 	// code + expires_at) the recipient needs. Omit the key entirely when
 	// there are none (matches the stored message shape).

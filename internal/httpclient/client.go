@@ -67,10 +67,12 @@ type MessageSummary struct {
 	ID         string   `json:"id"`
 	From       string   `json:"from"`
 	To         []string `json:"to"`
+	CC         []string `json:"cc"`
 	Subject    string   `json:"subject"`
 	Preview    string   `json:"preview"`
 	ReceivedAt int64    `json:"received_at"`
 	Unread     bool     `json:"unread"`
+	Files      int      `json:"files"`
 }
 
 type InboxResponse struct {
@@ -89,6 +91,7 @@ type MessageResponse struct {
 	MessageID string `json:"message_id"`
 	From      string `json:"from"`
 	To        []string `json:"to"`
+	CC        []string `json:"cc"`
 	Subject   string `json:"subject"`
 	Body      string `json:"body"`
 	ReceivedAt int64 `json:"received_at"`

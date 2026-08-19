@@ -483,11 +483,15 @@ func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, 
 		return nil, fmt.Errorf("get message: %w", err)
 	}
 	resp := map[string]any{
-		"message_id": res.MessageID,
-		"from":       res.From,
-		"to":         res.To,
-		"subject":    res.Subject,
-		"body":       res.Body,
+		"message_id":  res.MessageID,
+		"from":        res.From,
+		"to":          res.To,
+		"subject":     res.Subject,
+		"body":        res.Body,
+		"received_at": res.ReceivedAt,
+	}
+	if len(res.CC) > 0 {
+		resp["cc"] = res.CC
 	}
 	// Attachments carry the download codes the recipient agent needs
 	// (AC-1.4): GET /api/files/{id}/download?code=... with Basic auth.
