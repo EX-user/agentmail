@@ -337,3 +337,25 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// SubsDeclare declares the authenticated account a subordinate of superior
+// (POST /api/subs). Errors mirror the HTTP semantics (404 masquerade etc.).
+func (c *Client) SubsDeclare(authUser, authPass, superior string) error {
+	payload := map[string]any{"superior": superior, "scope": "both"}
+	return c.do("POST", "/api/subs", basicAuth(authUser, authPass), nil, payload, nil)
+}
+
+// SubsRevoke removes the authenticated account's declaration under superior
+// (DELETE /api/subs?superior=...). Idempotent.
+func (c *Client) SubsRevoke(authUser, authPass, superior string) error {
+	q := url.Values{}
+	q.Set("superior", superior)
+	return c.do("DELETE", "/api/subs", basicAuth(authUser, authPass), q, nil, nil)
+}
+
+// SubsList returns the caller's own edges (GET /api/subs) as raw JSON.
+func (c *Client) SubsList(authUser, authPass string) (map[string]any, error) {
+	var out map[string]any
+	err := c.do("GET", "/api/subs", basicAuth(authUser, authPass), nil, nil, &out)
+	return out, err
+}

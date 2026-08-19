@@ -152,6 +152,15 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			}, []string{"access_code"}),
 		},
 		{
+			Name:        "subs",
+			Description: "Manage YOUR subordinate relationships (self-declared visibility grants; typical use: an agent account declaring under its owner so the owner can read its mail). action=declare makes YOU a subordinate of superior (idempotent; rate-limited to 10/hour, attachment grants are NOT inherited); action=revoke removes YOUR declaration under superior (takes effect on the next read); action=list returns your edges both ways ({subordinates:[...], superiors:[...]}). Revoking someone else's declaration about you is not possible — each side manages its own.",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate (identifies whose relationships are managed)", "string", true),
+				"action":      prop("One of: declare, revoke, list", "string", true),
+				"superior":    prop("Superior address (required for declare/revoke, ignored for list), e.g. 'owner@agentmail.local'", "string", false),
+			}, []string{"access_code", "action"}),
+		},
+		{
 			Name:        "update_profile",
 			Description: "Update YOUR OWN directory profile: whether you are listed in the public address book (visible/listed) and your signature (a short tagline shown next to your address). Requires access_code to identify whose profile to change. The signature is trimmed and capped at 200 characters. Changes take effect immediately in account_info query=directory.",
 			InputSchema: schemaObject(map[string]any{
@@ -229,6 +238,8 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result, err = s.toolServerInfo(ctx, args)
 	case "account_info":
 		result, err = s.toolAccountInfo(ctx, args)
+	case "subs":
+		result, err = s.toolSubs(ctx, args)
 	case "update_profile":
 		result, err = s.toolUpdateProfile(ctx, args)
 	default:
@@ -850,4 +861,37 @@ func toStringSlice(v any) []string {
 		return out
 	}
 	return nil
+}
+
+// toolSubs is the MCP surface for the subordinate API: declare/revoke/list
+// the authenticated account's own edges. Pure pass-through to the HTTP
+// endpoints (which own the validation, rate limits and 404 masquerade).
+func (s *Server) toolSubs(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCode(str(args["access_code"])) // declare/revoke are writes: budget applies
+	if err != nil {
+		return nil, err
+	}
+	client := s.getClient(entry.ServerURL)
+	action := strings.ToLower(strings.TrimSpace(str(args["action"])))
+	superior := strings.TrimSpace(str(args["superior"]))
+	switch action {
+	case "declare", "revoke":
+		if superior == "" {
+			return nil, fmt.Errorf("superior is required for action=%s", action)
+		}
+		var err2 error
+		if action == "declare" {
+			err2 = client.SubsDeclare(entry.Address, entry.Password, superior)
+		} else {
+			err2 = client.SubsRevoke(entry.Address, entry.Password, superior)
+		}
+		if err2 != nil {
+			return nil, fmt.Errorf("subs %s: %w", action, err2)
+		}
+		return map[string]any{"status": action + "d", "superior": superior}, nil
+	case "list":
+		return client.SubsList(entry.Address, entry.Password)
+	default:
+		return nil, fmt.Errorf("action must be declare, revoke or list (got %q)", action)
+	}
 }
