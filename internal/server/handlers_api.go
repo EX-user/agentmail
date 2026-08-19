@@ -404,6 +404,7 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 			"visible":         acc.Visible,
 			"signature":       acc.Signature,
 			"files_used_bytes": s.store.AccountFilesUsed(acc.Address),
+			"prefs":           acc.Prefs,
 		})
 		return
 	}
@@ -412,8 +413,9 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Visible   *bool  `json:"visible"` // nil = keep current (omitting must NOT reset)
-		Signature string `json:"signature"`
+		Visible   *bool            `json:"visible"` // nil = keep current (omitting must NOT reset)
+		Signature string           `json:"signature"`
+		Prefs     *map[string]any  `json:"prefs"` // nil = keep current; keys whitelist-validated below
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -452,10 +454,35 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionProfileUpdate, who,
 		fmt.Sprintf("visible=%v sig_len=%d", body.Visible, len(sig)))
+	// Preference keys: a closed whitelist per preference page v1. Unknown
+	// keys are rejected so the map can never become a junk drawer.
+	if body.Prefs != nil {
+		validKeys := map[string]bool{"audio_autoplay": true, "image_preview": true}
+		for k, v := range *body.Prefs {
+			if !validKeys[k] {
+				badRequest(w, "unknown pref key: "+k)
+				return
+			}
+			if _, ok := v.(bool); v != nil && !ok {
+				badRequest(w, "pref "+k+" must be a boolean (or null to remove)")
+				return
+			}
+		}
+		if err := s.store.UpdatePrefs(who, *body.Prefs); err != nil {
+			internalError(w, "update prefs: "+err.Error())
+			return
+		}
+	}
+	acc2, err := s.store.GetAccount(who)
+	if err != nil {
+		internalError(w, "reload profile: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":        true,
 		"visible":   body.Visible,
 		"signature": sig,
+		"prefs":     acc2.Prefs,
 	})
 }
 
