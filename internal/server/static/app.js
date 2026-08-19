@@ -900,6 +900,16 @@
 
       if (!msgs.length) { list.textContent = t("mail.noMessages"); return; }
       list.innerHTML = "";
+      // Aggregated view banner (feedback): a proper title instead of the
+      // internal pseudo-account; each message still shows its owner in the
+      // detail pane.
+      if (account === "__vis__") {
+        const note = document.createElement("div");
+        note.className = "muted";
+        note.style.cssText = "padding:4px 2px 10px;";
+        note.textContent = t("mail.visBanner", { n: msgs.length });
+        list.appendChild(note);
+      }
       msgs.forEach(function (m) {
         const item = document.createElement("div");
         item.className = "mail-item" + (m.unread ? " unread" : "");
@@ -911,9 +921,15 @@
           " · <small>" + fmtTime(m.received_at) + "</small></div>" +
           '<div class="prev">' + esc(m.preview || "") + "</div>";
         item.addEventListener("click", function () {
-          if (isSubView) showSubDetail(account, m, item);
-          else if (account === "__vis__" && m.__owner && m.__owner !== s.address)
-            showSubDetail(m.__owner, m, item);
+          // "__vis__" must be tested FIRST: it also satisfies isSubView
+          // (≠ self), and routing through showSubDetail("__vis__") leaked
+          // the internal pseudo-account into the header and 404'd the
+          // detail fetch (body fell back to the preview — reported as
+          // "clipped"). Owner-stamped routing decides self vs subordinate.
+          if (account === "__vis__") {
+            if (m.__owner && m.__owner !== s.address) showSubDetail(m.__owner, m, item);
+            else showDetail(m.id, item);
+          } else if (isSubView) showSubDetail(account, m, item);
           else showDetail(m.id, item);
         });
         list.appendChild(item);
