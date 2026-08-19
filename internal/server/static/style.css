@@ -740,11 +740,13 @@ nav .tab { flex: 0 0 auto; }
   main { margin: 16px auto; padding: 0 14px; }
   header { padding: 10px 14px; }
 
-  /* Long addresses must not push the lang/logout controls off-screen:
-     the whoami line truncates with an ellipsis instead (feedback). */
-  .header-row { gap: 8px; min-width: 0; }
-  #whoami { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
-  .header-actions { flex-shrink: 0; gap: 8px; }
+  /* Long addresses must not push the lang/logout controls off-screen
+     (feedback, round 2): the header row wraps — title on the first
+     line, whoami + controls on their own right-aligned line — and the
+     whoami line additionally truncates with an ellipsis. */
+  .header-row { flex-wrap: wrap; gap: 8px; min-width: 0; }
+  #whoami { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
+  .header-actions { flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
 }
 
 /* Accessibility: freeze all portal motion when the user prefers reduced
