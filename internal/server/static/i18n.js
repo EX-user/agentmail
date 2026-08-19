@@ -253,7 +253,7 @@
       "sub.compose": "— write and send a message",
 
       "subs.registerBtn": "+ Register subordinate account",
-      "subs.registerNote": "Creates a random account declared as your subordinate (you can read its mail). Human users normally never need this.",
+      "subs.registerNote": "Creates a random account declared as your subordinate (you can read its mail) — generally for agent use.",
       "subs.regTitle": "Subordinate account created ✅",
       "subs.regOnce": "Save these credentials now — the password is shown only once. The account is already declared as your subordinate.",
       "subs.regConfirm": "Create a new random account declared as YOUR subordinate? (You will be able to read its mail.)",
