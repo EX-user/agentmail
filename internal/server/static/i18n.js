@@ -82,6 +82,7 @@
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "Compose",
       "act.forward": "Forward",
+      "act.reply": "Reply",
       "compose.addCc": "＋ Cc",
       "compose.ccPh": "cc",
       "compose.ccRemove": "Remove",
@@ -388,6 +389,7 @@
       // ---- v0.4.12.1 hotfix ----
       "act.compose": "写邮件",
       "act.forward": "转发",
+      "act.reply": "回复",
       "compose.addCc": "＋ 抄送",
       "compose.ccPh": "抄送",
       "compose.ccRemove": "移除",

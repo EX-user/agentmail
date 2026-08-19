@@ -465,6 +465,10 @@
   // Accounts and Directory tables.
   function composeTo(address) {
     $("#compose-to").value = address || "";
+    // Entering compose from a Compose button starts a fresh letter: clear
+    // any leftover draft body (feedback). Plain tab switches keep the
+    // draft; Reply/Forward overwrite the body with their own prefill.
+    $("#compose-body").value = "";
     activateTab("compose");
     loadComposeThread();
   }
@@ -1644,7 +1648,7 @@
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">Reply</button>' +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
       wireAttachmentDownloads(detail, m);
