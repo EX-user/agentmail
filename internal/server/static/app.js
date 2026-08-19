@@ -435,15 +435,22 @@
     $("#compose-body").focus();
   }
 
-  // Cc chips (v0.5.9, follow-up feedback): recipients as removable tag
-  // chips — type, Enter or comma commits; Backspace on empty input removes
-  // the last chip; × removes any chip. Collapsed behind "＋ Cc" while empty.
+  // Cc chips (v0.5.9; vertical layout + autocomplete since follow-ups):
+  // the input keeps its own row; committed recipients render as removable
+  // tag chips in a wrap area below it. Enter/comma commits, Backspace on
+  // the empty input removes the last chip, x removes any chip. Collapsed
+  // behind "+ Cc" while empty.
   let composeCcChips = [];
 
+  // composeRecipientList backs BOTH the To and Cc autocomplete (feedback):
+  // visible directory + own contacts for regular accounts, all accounts for
+  // admins — populated by ensureComposeAccounts.
+  let composeRecipientList = [];
+
   function renderComposeCc() {
-    const box = $("#cc-chips");
-    if (!box) return;
-    box.textContent = "";
+    const tags = $("#cc-tags");
+    if (!tags) return;
+    tags.textContent = "";
     composeCcChips.forEach(function (addr, i) {
       const chip = document.createElement("span");
       chip.className = "cc-chip";
@@ -459,38 +466,23 @@
         syncCcVisibility();
       });
       chip.appendChild(x);
-      box.appendChild(chip);
+      tags.appendChild(chip);
     });
-    const input = document.createElement("input");
-    input.type = "text";
-    input.id = "compose-cc";
-    input.autocomplete = "off";
-    input.placeholder = t("compose.ccPh");
-    input.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter" || ev.key === ",") {
-        ev.preventDefault();
-        commitCcInput(input);
-      } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
-        composeCcChips.pop();
-        renderComposeCc();
-        syncCcVisibility();
-      }
-    });
-    input.addEventListener("blur", function () { commitCcInput(input); });
-    box.appendChild(input);
+    tags.classList.toggle("hidden", !composeCcChips.length);
   }
 
   // commitCcInput turns the raw text into chips (comma or space separated
   // pastes both work); loose validation: must contain "@".
-  function commitCcInput(input) {
+  function commitCcInput() {
+    const input = $("#compose-cc");
+    if (!input) return;
     const parts = (input.value || "").split(/[,，\s]+/).map(function (s) { return s.trim(); })
       .filter(function (s) { return s && s.indexOf("@") !== -1; });
     if (parts.length) {
       parts.forEach(function (p) { if (composeCcChips.indexOf(p) === -1) composeCcChips.push(p); });
+      input.value = "";
       renderComposeCc();
       syncCcVisibility();
-      const again = $("#compose-cc");
-      if (again) again.focus();
     }
   }
 
@@ -502,22 +494,126 @@
     row.classList.toggle("hidden", !has);
     btn.classList.toggle("hidden", has);
   }
-  (function wireCcToggle() {
+
+  // ---- recipient autocomplete (alice's task): typing filters the known
+  // address list and offers matches in a dropdown, shared by To and Cc.
+  // Debounced (150ms), keyboard navigable (Up/Down/Enter/Esc), closes on
+  // blur; picks via click or Enter.
+  function attachAutocomplete(input, panel, opts) {
+    let items = [], active = -1, timer = null;
+    function hide() { panel.classList.add("hidden"); items = []; active = -1; }
+    function paint() {
+      $$(".dd-item", panel).forEach(function (el, i) { el.classList.toggle("active", i === active); });
+    }
+    function render() {
+      panel.textContent = "";
+      if (!items.length) { hide(); return; }
+      items.forEach(function (a, i) {
+        const it = document.createElement("div");
+        it.className = "dd-item" + (i === active ? " active" : "");
+        it.textContent = a;
+        it.addEventListener("mousedown", function (ev) {
+          // mousedown beats blur so the input keeps focus through the pick.
+          ev.preventDefault();
+        });
+        it.addEventListener("click", function () { opts.pick(a); hide(); });
+        it.addEventListener("mouseenter", function () { active = i; paint(); });
+        panel.appendChild(it);
+      });
+      panel.classList.remove("hidden");
+    }
+    function refresh() {
+      const q = (opts.fragment() || "").trim().toLowerCase();
+      if (!q) { hide(); return; }
+      const ex = opts.exclude();
+      items = composeRecipientList.filter(function (a) {
+        return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
+      }).slice(0, 8);
+      active = items.length ? 0 : -1;
+      render();
+    }
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 150); // debounce keystrokes
+    });
+    input.addEventListener("keydown", function (ev) {
+      if (panel.classList.contains("hidden") || !items.length) return;
+      if (ev.key === "ArrowDown") { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
+      else if (ev.key === "ArrowUp") { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
+      else if (ev.key === "Enter") { ev.preventDefault(); opts.pick(items[active < 0 ? 0 : active]); hide(); }
+      else if (ev.key === "Escape") { hide(); }
+    });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
+  }
+
+
+  (function wireCcField() {
     const btn = $("#btn-toggle-cc");
-    if (!btn) return;
-    btn.addEventListener("click", function () {
+    const input = $("#compose-cc");
+    const dd = $("#cc-dropdown");
+    if (btn) btn.addEventListener("click", function () {
       $("#compose-cc-row").classList.remove("hidden");
       btn.classList.add("hidden");
-      renderComposeCc();
-      const input = $("#compose-cc");
       if (input) input.focus();
     });
+    if (input && dd) {
+      attachAutocomplete(input, dd, {
+        fragment: function () { return input.value; },
+        exclude: function () { return composeCcChips; },
+        pick: function (a) {
+          if (composeCcChips.indexOf(a) === -1) composeCcChips.push(a);
+          input.value = "";
+          renderComposeCc();
+          syncCcVisibility();
+          input.focus();
+        },
+      });
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === ",") { ev.preventDefault(); commitCcInput(); }
+        else if (ev.key === "Enter") {
+          // Open-dropdown Enter is handled by attachAutocomplete (pick);
+          // closed Enter commits the typed text as a chip.
+          if (dd.classList.contains("hidden")) { ev.preventDefault(); commitCcInput(); }
+        } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
+          composeCcChips.pop();
+          renderComposeCc();
+          syncCcVisibility();
+        }
+      });
+      // Commit any leftover typed text when the user leaves the field
+      // (after the dropdown's blur-close timer).
+      input.addEventListener("blur", function () { setTimeout(commitCcInput, 200); });
+      input.placeholder = t("compose.ccPh");
+      document.addEventListener("i18n:change", function () {
+        input.placeholder = t("compose.ccPh");
+      });
+    }
     renderComposeCc();
     syncCcVisibility();
-    // Language switch while the field is open: rebuild so the chip input's
-    // placeholder (set imperatively) follows.
-    document.addEventListener("i18n:change", renderComposeCc);
   })();
+
+  (function wireToAutocomplete() {
+    const input = $("#compose-to");
+    const dd = $("#compose-dropdown");
+    if (!input || !dd) return;
+    // The typed fragment = text after the last comma (To stays
+    // comma-separated multi-recipient).
+    attachAutocomplete(input, dd, {
+      fragment: function () {
+        const parts = input.value.split(",");
+        return parts[parts.length - 1];
+      },
+      exclude: function () { return []; },
+      pick: function (addr) {
+        const parts = input.value.split(",");
+        parts[parts.length - 1] = addr;
+        input.value = parts.join(",").replace(/^\s*,\s*/, "");
+        input.focus();
+        loadComposeThread();
+      },
+    });
+  })();
+
 
   // composeForward (v0.5.9, feedback): panel-side forward. /api/send has no
   // forward_of (that is a gateway-side composition), so the panel mirrors
@@ -2588,9 +2684,10 @@
         // Regular accounts: To dropdown = directory (public listed accounts)
         // ∪ their own contacts, deduped. Mirrors what the Accounts tab shows
         // them (contacts + listed). Admins still see every account.
-        const [dirRes, conRes] = await Promise.all([
+        const [dirRes, conRes, subsRes] = await Promise.all([
           api("/api/info?query=directory").catch(function () { return { entries: [] }; }),
           api("/api/contacts").catch(function () { return { contacts: [] }; }),
+          api("/api/subs").catch(function () { return { subordinates: [] }; }),
         ]);
         const seen = {};
         (dirRes.entries || []).forEach(function (a) {
@@ -2598,6 +2695,11 @@
         });
         (conRes.contacts || []).forEach(function (c) {
           if (c && !seen[c]) { seen[c] = 1; items.push(c); }
+        });
+        // Subordinates (v0.5.9): mail the viewer can read is mail they may
+        // well be writing to (alice's ruling on the autocomplete source).
+        (subsRes.subordinates || []).forEach(function (e) {
+          if (e.address && !seen[e.address]) { seen[e.address] = 1; items.push(e.address); }
         });
       } else {
         const data = await api("/admin/accounts");
@@ -2608,6 +2710,9 @@
     }
     input.dataset.recipients = JSON.stringify(items);
     input.dataset.listLoaded = "1";
+    // Shared by the To and Cc autocomplete (feedback: match-as-you-type
+    // against the visible list).
+    composeRecipientList = items;
 
     // Toggle the dropdown from the picker button.
     const btn = $("#btn-compose-dropdown");
