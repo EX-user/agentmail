@@ -273,3 +273,65 @@ func stripAttachmentCodes(m store.Message) store.Message {
 	}
 	return m
 }
+
+// handleRegisterSubordinate creates a fresh random account and declares it
+// a subordinate of the authenticated caller, in one step — the panel's
+// "register subordinate account" button (mrf2000/上级 request via alice's
+// new address). Naming/password reuse the one-click register generators;
+// the one-time password is returned exactly once (same semantics as
+// /api/register). Deliberately NOT exposed through MCP: agents compose
+// register + subs API themselves.
+//   POST /api/register-subordinate (account auth, no body)
+//   -> {"address": "...", "password": "...", "declared": true}
+func (s *Server) handleRegisterSubordinate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	owner := accountFrom(r.Context())
+
+	// Guard 1: cap the number of subordinates one account may provision.
+	if got := len(s.store.SubordinatesOf(owner)); got >= 10 {
+		http.Error(w, "subordinate limit reached (10)", http.StatusTooManyRequests)
+		return
+	}
+	// Guard 2: reuse the per-IP registration throttle.
+	if !s.regLimit.allow(clientIP(r), s.store.GetRegisterIPRateLimit(), time.Now()) {
+		http.Error(w, "too many registrations from this address, try again later", http.StatusTooManyRequests)
+		return
+	}
+
+	// Random bot-<8hex> name, retried on (unlikely) collision.
+	domain := s.domain()
+	var res *store.CreateAccountResult
+	for i := 0; i < 5; i++ {
+		name := "bot-" + store.GeneratePassword(8)
+		r, err := s.store.CreateAccount(name, domain, false)
+		if err == nil {
+			res = r
+			break
+		}
+		if !strings.Contains(err.Error(), "exists") {
+			badRequest(w, "create subordinate: "+err.Error())
+			return
+		}
+	}
+	if res == nil {
+		internalError(w, "could not allocate a subordinate name, retry")
+		return
+	}
+
+	// Declare the new account under the caller (fresh account always exists).
+	if err := s.store.DeclareSubordinate(owner, res.Address); err != nil {
+		// Account exists but the edge failed: unusable half-state — best we
+		// can do is report; the orphaned account TTLs out of use naturally.
+		internalError(w, "subordinate created but declare failed: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSubDeclare, owner, "register-subordinate "+res.Address)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"address":  res.Address,
+		"password": res.Password, // one-time, never stored in the clear again
+		"declared": true,
+	})
+}
