@@ -1411,6 +1411,42 @@
     }
   }
 
+  // ---- mark all read (approved): server endpoint first, loop fallback ----
+  $("#btn-mark-all").addEventListener("click", async function () {
+    if (!confirm(t("inbox.markAllConfirm"))) return;
+    const status = $("#inbox-status");
+    const btn = $("#btn-mark-all");
+    btn.disabled = true;
+    try {
+      try {
+        await api("/api/inbox/mark-all-read", { method: "POST" });
+      } catch (e) {
+        // Endpoint absent (older server): page through the inbox and read
+        // each unread message via /api/message — slower but same effect.
+        if (String(e.message).indexOf("404") === -1) throw e;
+        let offset = 0, marked = 0;
+        for (;;) {
+          const d = await api("/api/inbox?limit=50&offset=" + offset);
+          const unread = (d.messages || []).filter(function (m) { return m.unread; });
+          for (const m of unread) {
+            await api("/api/message?id=" + encodeURIComponent(m.id));
+            marked++;
+            status.textContent = t("inbox.markAllProgress", { n: marked });
+          }
+          offset += 50;
+          if (offset >= (d.total_count || 0)) break;
+        }
+      }
+      status.textContent = t("inbox.markAllDone");
+      toast(t("inbox.markAllDone"));
+      await loadInbox(0);
+      refreshInboxBadge();
+    } catch (e) {
+      status.textContent = t("common.error", { msg: e.message });
+    }
+    btn.disabled = false;
+  });
+
   // updateInboxPager enables/disables prev/next and sets the page input +
   // "of N" label. totalPages is computed from total_count; currentPage is 1-based.
   function updateInboxPager(totalPages, currentPage) {
