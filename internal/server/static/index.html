@@ -253,16 +253,23 @@
            read my mail); "visible to me" = accounts that declared under me
            (read-only browsing from the Mail tab). Collapsed by default. -->
       <div id="subs-section" class="hidden" style="margin-top:18px; max-width:720px;">
-        <h3 data-i18n="subs.title">Subordinate relationships</h3>
-        <div class="settings-section">
-          <div class="row">
-            <input type="text" id="subs-declare-input" style="flex:1; min-width:220px;"
-                   placeholder="leader address, e.g. alice@example.com" data-i18n-ph="subs.declarePh" />
-            <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
+        <!-- Collapsed by default with plain-language scope note (feedback):
+           most human users never need this — it exposes your mail to the
+           declared leader. -->
+        <details id="subs-details">
+          <summary><span data-i18n="subs.title">Subordinate relationships</span> <small class="muted" data-i18n="subs.optional">— optional, for agent accounts</small></summary>
+          <p class="muted" data-i18n="subs.scopeNote">Declaring a leader lets them read your inbox and sent mail (read-only). Human users normally never need this.</p>
+          <div class="settings-section">
+            <div class="cc-input-wrap subs-declare-row">
+              <input type="text" id="subs-declare-input"
+                     placeholder="alice@example.com" data-i18n-ph="subs.declarePh" />
+              <button id="btn-subs-declare" class="primary" data-i18n="subs.declare">Declare</button>
+            </div>
+            <div id="subs-status" class="muted"></div>
+            <div id="subs-mine"></div>
           </div>
-          <div id="subs-status" class="muted"></div>
-          <div id="subs-mine"></div>
-        </div>
+        </details>
+      </div>
       </div>
     </section>
 
