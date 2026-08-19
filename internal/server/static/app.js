@@ -495,85 +495,94 @@
     btn.classList.toggle("hidden", has);
   }
 
-  // ---- recipient autocomplete (feedback): typing filters the known
-  // address list and offers matches in a dropdown — for To (replacing the
-  // typed fragment) and for Cc (adding a chip). Click or Enter picks.
-  function recipientMatches(frag, exclude) {
-    const q = (frag || "").trim().toLowerCase();
-    if (!q) return [];
-    const ex = exclude || [];
-    return composeRecipientList.filter(function (a) {
-      return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
-    }).slice(0, 8);
-  }
-
-  function renderRecipientDropdown(panel, matches, onPick) {
-    if (!panel) return;
-    panel.textContent = "";
-    if (!matches.length) { panel.classList.add("hidden"); return; }
-    matches.forEach(function (a) {
-      const item = document.createElement("div");
-      item.className = "dd-item";
-      item.dataset.addr = a;
-      item.textContent = a;
-      item.addEventListener("mousedown", function (ev) {
-        // mousedown beats blur so the input keeps focus through the pick.
-        ev.preventDefault();
+  // ---- recipient autocomplete (alice's task): typing filters the known
+  // address list and offers matches in a dropdown, shared by To and Cc.
+  // Debounced (150ms), keyboard navigable (Up/Down/Enter/Esc), closes on
+  // blur; picks via click or Enter.
+  function attachAutocomplete(input, panel, opts) {
+    let items = [], active = -1, timer = null;
+    function hide() { panel.classList.add("hidden"); items = []; active = -1; }
+    function paint() {
+      $$(".dd-item", panel).forEach(function (el, i) { el.classList.toggle("active", i === active); });
+    }
+    function render() {
+      panel.textContent = "";
+      if (!items.length) { hide(); return; }
+      items.forEach(function (a, i) {
+        const it = document.createElement("div");
+        it.className = "dd-item" + (i === active ? " active" : "");
+        it.textContent = a;
+        it.addEventListener("mousedown", function (ev) {
+          // mousedown beats blur so the input keeps focus through the pick.
+          ev.preventDefault();
+        });
+        it.addEventListener("click", function () { opts.pick(a); hide(); });
+        it.addEventListener("mouseenter", function () { active = i; paint(); });
+        panel.appendChild(it);
       });
-      item.addEventListener("click", function () {
-        onPick(a);
-        panel.classList.add("hidden");
-      });
-      panel.appendChild(item);
+      panel.classList.remove("hidden");
+    }
+    function refresh() {
+      const q = (opts.fragment() || "").trim().toLowerCase();
+      if (!q) { hide(); return; }
+      const ex = opts.exclude();
+      items = composeRecipientList.filter(function (a) {
+        return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
+      }).slice(0, 8);
+      active = items.length ? 0 : -1;
+      render();
+    }
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 150); // debounce keystrokes
     });
-    panel.classList.remove("hidden");
+    input.addEventListener("keydown", function (ev) {
+      if (panel.classList.contains("hidden") || !items.length) return;
+      if (ev.key === "ArrowDown") { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
+      else if (ev.key === "ArrowUp") { ev.preventDefault(); active = (active - 1 + items.length) % items.length; paint(); }
+      else if (ev.key === "Enter") { ev.preventDefault(); opts.pick(items[active < 0 ? 0 : active]); hide(); }
+      else if (ev.key === "Escape") { hide(); }
+    });
+    input.addEventListener("blur", function () { setTimeout(hide, 150); });
   }
 
-  function dropdownOpen(panel) {
-    return panel && !panel.classList.contains("hidden") && $(".dd-item", panel);
-  }
 
-  (function wireCcToggle() {
+  (function wireCcField() {
     const btn = $("#btn-toggle-cc");
-    if (!btn) return;
-    btn.addEventListener("click", function () {
-      $("#compose-cc-row").classList.remove("hidden");
-      btn.classList.add("hidden");
-      const input = $("#compose-cc");
-      if (input) input.focus();
-    });
     const input = $("#compose-cc");
     const dd = $("#cc-dropdown");
+    if (btn) btn.addEventListener("click", function () {
+      $("#compose-cc-row").classList.remove("hidden");
+      btn.classList.add("hidden");
+      if (input) input.focus();
+    });
     if (input && dd) {
-      input.addEventListener("keydown", function (ev) {
-        if (ev.key === "," || (ev.key === "Enter" && !dropdownOpen(dd))) {
-          ev.preventDefault();
-          commitCcInput();
-          dd.classList.add("hidden");
-        } else if (ev.key === "Enter" && dropdownOpen(dd)) {
-          ev.preventDefault();
-          $(".dd-item", dd).click();
-        } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
-          composeCcChips.pop();
-          renderComposeCc();
-          syncCcVisibility();
-        } else if (ev.key === "Escape") {
-          dd.classList.add("hidden");
-        }
-      });
-      input.addEventListener("input", function () {
-        renderRecipientDropdown(dd, recipientMatches(input.value, composeCcChips), function (a) {
+      attachAutocomplete(input, dd, {
+        fragment: function () { return input.value; },
+        exclude: function () { return composeCcChips; },
+        pick: function (a) {
           if (composeCcChips.indexOf(a) === -1) composeCcChips.push(a);
           input.value = "";
           renderComposeCc();
           syncCcVisibility();
           input.focus();
-        });
+        },
       });
-      input.addEventListener("blur", function () {
-        commitCcInput();
-        setTimeout(function () { dd.classList.add("hidden"); }, 150);
+      input.addEventListener("keydown", function (ev) {
+        if (ev.key === ",") { ev.preventDefault(); commitCcInput(); }
+        else if (ev.key === "Enter") {
+          // Open-dropdown Enter is handled by attachAutocomplete (pick);
+          // closed Enter commits the typed text as a chip.
+          if (dd.classList.contains("hidden")) { ev.preventDefault(); commitCcInput(); }
+        } else if (ev.key === "Backspace" && !input.value && composeCcChips.length) {
+          composeCcChips.pop();
+          renderComposeCc();
+          syncCcVisibility();
+        }
       });
+      // Commit any leftover typed text when the user leaves the field
+      // (after the dropdown's blur-close timer).
+      input.addEventListener("blur", function () { setTimeout(commitCcInput, 200); });
       input.placeholder = t("compose.ccPh");
       document.addEventListener("i18n:change", function () {
         input.placeholder = t("compose.ccPh");
@@ -589,32 +598,22 @@
     if (!input || !dd) return;
     // The typed fragment = text after the last comma (To stays
     // comma-separated multi-recipient).
-    function lastFragment() {
-      const parts = input.value.split(",");
-      return parts[parts.length - 1].trim();
-    }
-    function replaceLastFragment(addr) {
-      const parts = input.value.split(",");
-      parts[parts.length - 1] = addr;
-      input.value = parts.join(",").replace(/^\s*,\s*/, "");
-      input.focus();
-      loadComposeThread();
-    }
-    input.addEventListener("input", function () {
-      renderRecipientDropdown(dd, recipientMatches(lastFragment(), []), replaceLastFragment);
-    });
-    input.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter" && dropdownOpen(dd)) {
-        ev.preventDefault();
-        $(".dd-item", dd).click();
-      } else if (ev.key === "Escape") {
-        dd.classList.add("hidden");
-      }
-    });
-    input.addEventListener("blur", function () {
-      setTimeout(function () { dd.classList.add("hidden"); }, 150);
+    attachAutocomplete(input, dd, {
+      fragment: function () {
+        const parts = input.value.split(",");
+        return parts[parts.length - 1];
+      },
+      exclude: function () { return []; },
+      pick: function (addr) {
+        const parts = input.value.split(",");
+        parts[parts.length - 1] = addr;
+        input.value = parts.join(",").replace(/^\s*,\s*/, "");
+        input.focus();
+        loadComposeThread();
+      },
     });
   })();
+
 
   // composeForward (v0.5.9, feedback): panel-side forward. /api/send has no
   // forward_of (that is a gateway-side composition), so the panel mirrors
@@ -2685,9 +2684,10 @@
         // Regular accounts: To dropdown = directory (public listed accounts)
         // ∪ their own contacts, deduped. Mirrors what the Accounts tab shows
         // them (contacts + listed). Admins still see every account.
-        const [dirRes, conRes] = await Promise.all([
+        const [dirRes, conRes, subsRes] = await Promise.all([
           api("/api/info?query=directory").catch(function () { return { entries: [] }; }),
           api("/api/contacts").catch(function () { return { contacts: [] }; }),
+          api("/api/subs").catch(function () { return { subordinates: [] }; }),
         ]);
         const seen = {};
         (dirRes.entries || []).forEach(function (a) {
@@ -2695,6 +2695,11 @@
         });
         (conRes.contacts || []).forEach(function (c) {
           if (c && !seen[c]) { seen[c] = 1; items.push(c); }
+        });
+        // Subordinates (v0.5.9): mail the viewer can read is mail they may
+        // well be writing to (alice's ruling on the autocomplete source).
+        (subsRes.subordinates || []).forEach(function (e) {
+          if (e.address && !seen[e.address]) { seen[e.address] = 1; items.push(e.address); }
         });
       } else {
         const data = await api("/admin/accounts");
