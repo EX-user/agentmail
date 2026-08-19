@@ -1105,10 +1105,39 @@
     }).join("") + "</div>";
   }
 
+  // Audio players on the page form a sequential queue (feedback): starting
+  // one pauses the rest; autoplay (when enabled) walks the queue in order.
+  let audioPlayers = [];
+  function registerAudioPlayer(au) {
+    audioPlayers.push(au);
+    au.addEventListener("play", function () {
+      audioPlayers.forEach(function (other) {
+        if (other !== au && !other.paused) other.pause();
+      });
+    });
+    au.addEventListener("ended", function () {
+      if (!(userPrefs && userPrefs.audio_autoplay === true)) return;
+      var next = null;
+      for (var i = 0; i < audioPlayers.length; i++) {
+        if (audioPlayers[i] === au) { next = audioPlayers[i + 1] || null; break; }
+      }
+      if (next) next.play().catch(function () {});
+    });
+    if (userPrefs && userPrefs.audio_autoplay === true) {
+      // Only the first player autoplays; the rest chain on 'ended'.
+      if (audioPlayers.filter(function (p) { return p.autoplaying; }).length === 0) {
+        au.autoplaying = true;
+        au.play().catch(function () { au.autoplaying = false; });
+      }
+    }
+  }
+
   // hydrateAttachmentPreviews loads image blobs (authenticated) into the
   // preview holders. Clicking a preview triggers the same download flow.
   function hydrateAttachmentPreviews(root, m) {
     const list = (m && m.attachments) || [];
+    // New render = new set of players; drop stale references.
+    audioPlayers = audioPlayers.filter(function (p) { return document.contains(p); });
     $$(".attach-preview", root).forEach(async function (holder) {
       const a = list[+holder.dataset.pv];
       if (!a) return;
@@ -1132,14 +1161,16 @@
         const blob = new Blob([await res.arrayBuffer()], { type: mime });
         const url = URL.createObjectURL(blob);
         if (isAudio) {
-          // Inline player (v0.5.12): no autoplay, native controls only.
+          // Inline player (v0.5.12). Autoplay is a QUEUE (feedback): multiple
+          // audios in one message play sequentially, never simultaneously;
+          // manual play pauses the others. The first one starts once ready.
           const au = document.createElement("audio");
           au.controls = true;
           au.preload = "metadata";
-          if (userPrefs && userPrefs.audio_autoplay === true) au.autoplay = true;
           au.src = url;
-          au.style.cssText = "display:block; width:100%; margin-top:8px;";
+          au.style.cssText = "display:block; width:100%; height:40px; margin-top:6px;";
           holder.appendChild(au);
+          registerAudioPlayer(au);
           setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
           return;
         }

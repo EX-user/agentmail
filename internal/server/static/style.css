@@ -935,6 +935,8 @@ nav .tab { flex: 0 0 auto; }
 
 /* Attachment image preview (v0.5.2): thumbnails below the card row. */
 .attach-card-img, .attach-card-audio { flex-wrap: wrap; }
+/* Audio player (feedback): tighter default height than the native ~54px. */
+.attach-card-audio audio { height: 40px; margin-top: 6px; }
 .attach-preview { flex: 1 1 100%; margin-top: 8px; }
 .attach-preview img {
   display: block; max-height: 240px; max-width: 100%;
