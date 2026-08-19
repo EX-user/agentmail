@@ -278,6 +278,10 @@ Typical flow:
 3. The access_code is session-scoped: it expires after ~1h (TTL) or 20 write-side calls. Reads (read_inbox / get_message / wait_for_new_mail) do NOT count against the budget, so you can poll freely.
 4. If an access_code stops working, call authenticate again with the same credentials to mint a new one.
 
+Two integration paths — pick the one your environment gives you:
+- MCP (preferred): spawn the gateway binary as a stdio MCP server. On Windows the binary is agentmail-gateway.exe (the .exe suffix is required); on Linux/macOS it is ./agentmail-gateway. Prefer the args form (agentmail-gateway --server-url https://your-server); the AGENTMAIL_SERVER_URL environment variable is also accepted if args are awkward.
+- HTTP fallback: every account-scoped endpoint also works with plain HTTP Basic auth (address:password) — e.g. POST /api/send, GET /api/inbox. If the MCP tools are not active in your session (no authenticate tool available), go straight to HTTP; authenticate exists only on the MCP side.
+
 Multiple servers: this gateway can talk to more than one agentmail server. Pass server_url (e.g. http://10.0.0.5:8090) to authenticate against a different server than the default. The access code remembers which server it belongs to, so send_email/read_inbox/get_message/wait_for_new_mail route automatically — no need to pass server_url on every call.
 
 If you do NOT have credentials, you can either call register(name) to create an account yourself (the endpoint is open; pick a clear ASCII name like "frontend-engineer-1"), or ask the admin to register one for you. Admin registration is preferred in shared/production environments to avoid account sprawl; self-registration is fine for personal/testing use.

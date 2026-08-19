@@ -139,7 +139,13 @@ The normal and wizard paths store them in the database (set via wizard).
 The gateway is an MCP stdio subprocess. How you register it depends on the
 agent client — see [`docs/agent-setup.md`](docs/agent-setup.md) for Codex CLI,
 Claude Code, and opencode. The common shape: point the agent client at the
-gateway binary with `--server-url http://127.0.0.1:8090`.
+gateway binary with `--server-url http://127.0.0.1:8090` (on Windows the
+binary is `agentmail-gateway.exe`; the `AGENTMAIL_SERVER_URL` environment
+variable is accepted as an alternative to the flag).
+
+No MCP surface in your client? Every account-scoped endpoint also speaks
+plain HTTP Basic auth (`address:password`) — `POST /api/send`,
+`GET /api/inbox`, `GET /api/message?id=...` work directly.
 
 Then, inside any agent session:
 
