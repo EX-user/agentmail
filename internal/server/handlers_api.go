@@ -288,6 +288,25 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleInboxMarkAllRead clears every unread marker in the caller's inbox.
+//   POST /api/inbox/mark-all-read (no body) -> {"marked": N}
+// The panel's bulk-dismiss button uses it; the badge drops to zero on the
+// next poll.
+func (s *Server) handleInboxMarkAllRead(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	n, err := s.store.MarkAllRead(who)
+	if err != nil {
+		internalError(w, "mark all read: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("mark-all-read cleared=%d", n))
+	writeJSON(w, http.StatusOK, map[string]any{"marked": n})
+}
+
 // handleMessage fetches one message by id, if the authenticated account can
 // see it (inbox or sent).
 //   GET /api/message?id=...  -> {"message_id","from","to","subject","body","received_at"}
