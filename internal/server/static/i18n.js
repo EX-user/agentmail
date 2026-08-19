@@ -233,6 +233,7 @@
       "inbox.markAllConfirm": "Mark ALL messages in your inbox as read?",
       "inbox.markAllDone": "All marked as read.",
       "inbox.markAllProgress": "Marking read… {n}",
+      "mail.visBanner": "All visible accounts (incl. subordinates) · {n} messages",
       "mail.allVisible": "All visible accounts (incl. subordinates)",
       // ---- subordinates (v0.5.7) ----
       "mail.subtitle": "— browse mail (yours and subordinate accounts)",
@@ -509,6 +510,7 @@
       "inbox.markAllConfirm": "将收件箱所有邮件标为已读？",
       "inbox.markAllDone": "已全部标为已读。",
       "inbox.markAllProgress": "标记中… {n}",
+      "mail.visBanner": "全部可见账号（含从属）· 共 {n} 封",
       "mail.allVisible": "全部可见账号（含从属）",
       // ---- 从属账户 (v0.5.7) ----
       "mail.subtitle": "— 浏览邮件（本人与从属账户）",
