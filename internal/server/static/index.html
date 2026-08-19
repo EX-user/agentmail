@@ -110,7 +110,7 @@
             <button id="btn-login" class="primary" data-i18n="login.submit">Log in</button>
             <span id="login-status" class="muted"></span>
           </div>
-          <p class="muted"><span id="register-link-wrap"><a href="#" id="link-show-register" data-i18n="login.register">Register a new account</a> · </span><a href="#" id="link-back-portal" data-i18n="reg.backPortal">← back to portal</a></p>
+          <p class="muted"><span id="register-link-wrap"><button type="button" class="row-action" id="link-show-register" data-i18n="login.register">Register a new account</button> </span><button type="button" class="row-action" id="link-back-portal" data-i18n="reg.backPortal">← back to portal</button></p>
         </div>
       </div>
 
@@ -355,7 +355,7 @@
         </div>
         <div class="row">
           <label>Signature
-            <input type="text" id="profile-signature" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh" maxlength="200" />
+            <textarea id="profile-signature" rows="2" placeholder="a short tagline (max 200 chars)" data-i18n-ph="prof.sigPh" maxlength="200" style="width:100%; resize:vertical; font:inherit; padding:8px 10px;"></textarea>
           </label>
         </div>
         <div class="row">
