@@ -153,6 +153,52 @@ func (s *Server) handleSubsMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	target := segs[2]
 
+	// Self-read: the flat "all visible accounts" view may address the
+	// caller's OWN mailbox through this uniform path. That must behave
+	// exactly like /api/message — including clearing the unread marker
+	// (subordinate reads deliberately never touch A's read state, which
+	// made the own-inbox badge stuck when the panel routed self-reads
+	// here) — and must not require a self-relationship (which 404'd).
+	if strings.EqualFold(me, target) {
+		if segs[3] == "message" {
+			id := strings.TrimSpace(r.URL.Query().Get("id"))
+			if id == "" {
+				badRequest(w, "id query parameter is required")
+				return
+			}
+			msg, err := s.store.GetMessage(me, id) // normal semantics: visibility + MarkRead
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"subordinate": target,
+				"message":     *msg, // own mailbox: attachment codes visible, nothing stripped
+			})
+			return
+		}
+		folder := r.URL.Query().Get("folder")
+		if folder == "" {
+			folder = "both"
+		}
+		limit := 50
+		if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 200 {
+			limit = l
+		}
+		msgs, err := s.store.ReadSubordinateMessages(me, folder, limit)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"subordinate": target,
+			"folder":      folder,
+			"count":       len(msgs),
+			"messages":    msgs,
+		})
+		return
+	}
+
 	// The masquerade: no relationship and no account look identical.
 	if !s.store.IsSubordinate(me, target) {
 		http.NotFound(w, r)
