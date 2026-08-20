@@ -94,7 +94,7 @@ func TestMessageGrowthEmpty(t *testing.T) {
 	}
 }
 
-// TestMessageGrowthDays verifies the 7-day chart array: ordering, dates,
+// TestMessageGrowthDays verifies the 14-day chart array: ordering, dates,
 // zero-fill, and that the last bucket equals the Today count.
 func TestMessageGrowthDays(t *testing.T) {
 	now := time.Date(2026, 8, 14, 15, 30, 0, 0, time.UTC)
@@ -103,33 +103,37 @@ func TestMessageGrowthDays(t *testing.T) {
 	stamps := []int64{
 		now.Unix() - 60,              // today
 		now.Unix() - 3600 * 5,        // still today
-		weekFloor.Unix() + 3600,      // Aug 8 (oldest chart day)
+		weekFloor.Unix() + 3600,      // Aug 8
 		weekFloor.AddDate(0, 0, 3).Add(2 * time.Hour).Unix(), // Aug 11
 		weekFloor.AddDate(0, 0, 3).Add(9 * time.Hour).Unix(), // Aug 11
-		weekFloor.AddDate(0, 0, -1).Unix(),                   // Aug 7: before the chart
+		weekFloor.AddDate(0, 0, -1).Unix(),                   // Aug 7: outside the 7-day window, inside the 14-day chart
 	}
 	s := newGrowthTestStore(t, stamps)
 	g, err := s.MessageGrowth(now)
 	if err != nil {
 		t.Fatalf("MessageGrowth: %v", err)
 	}
-	if len(g.Days) != 7 {
-		t.Fatalf("len(Days) = %d, want 7", len(g.Days))
+	if len(g.Days) != GrowthChartDays {
+		t.Fatalf("len(Days) = %d, want %d", len(g.Days), GrowthChartDays)
 	}
-	wantDates := []string{"2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14"}
+	wantDates := []string{
+		"2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07",
+		"2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14",
+	}
 	for i, d := range g.Days {
 		if d.Date != wantDates[i] {
 			t.Errorf("Days[%d].Date = %q, want %q", i, d.Date, wantDates[i])
 		}
 	}
-	wantCounts := []int{1, 0, 0, 2, 0, 0, 2} // Aug7 message is outside the chart
+	wantCounts := []int{0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 2}
 	for i, c := range wantCounts {
 		if g.Days[i].Count != c {
 			t.Errorf("Days[%d].Count = %d, want %d", i, g.Days[i].Count, c)
 		}
 	}
-	if g.Days[6].Count != g.Today {
-		t.Errorf("Days[6].Count = %d, want == Today (%d)", g.Days[6].Count, g.Today)
+	last := len(g.Days) - 1
+	if g.Days[last].Count != g.Today {
+		t.Errorf("Days[%d].Count = %d, want == Today (%d)", last, g.Days[last].Count, g.Today)
 	}
 }
 

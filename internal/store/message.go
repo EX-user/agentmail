@@ -603,6 +603,11 @@ type DayCount struct {
 	Count int    `json:"count"`
 }
 
+// GrowthChartDays is how many whole UTC calendar days the growth chart
+// array carries: the panel slices by viewport (7/10/14), the guest portal
+// keeps a fixed 7 — both from this one array.
+const GrowthChartDays = 14
+
 // Growth counts messages in standard age buckets. It powers the guest
 // portal's activity stats; the handler caches the result so the underlying
 // scan runs at most once per cache interval even under heavy traffic.
@@ -611,23 +616,23 @@ type Growth struct {
 	Week  int        `json:"week"`  // last 7 days rolling (inclusive of today)
 	Month int        `json:"month"` // last 30 days rolling (inclusive of today)
 	Total int        `json:"total"` // all time
-	Days  []DayCount `json:"days"`  // last 7 UTC calendar days, oldest first
+	Days  []DayCount `json:"days"`  // last GrowthChartDays UTC calendar days, oldest first
 }
 
 // MessageGrowth counts messages into age buckets relative to now. One pass
 // over bMessages; a corrupt record is skipped rather than failing the scan.
-// Days covers the 7 whole UTC calendar days ending today (so Days[6].Count
-// == Today); Week/Month are rolling windows and may differ slightly from
-// the calendar-day sums.
+// Days covers GrowthChartDays whole UTC calendar days ending today (so
+// Days[len-1].Count == Today); Week/Month are rolling windows and may
+// differ slightly from the calendar-day sums.
 func (s *Store) MessageGrowth(now time.Time) (Growth, error) {
 	var g Growth
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	weekFloor := dayStart.AddDate(0, 0, -6) // first of the 7 chart days, UTC midnight
+	chartFloor := dayStart.AddDate(0, 0, -(GrowthChartDays - 1)) // first chart day, UTC midnight
 	weekStart := now.Unix() - 7*24*3600
 	monthStart := now.Unix() - 30*24*3600
-	days := make([]DayCount, 7)
+	days := make([]DayCount, GrowthChartDays)
 	for i := range days {
-		days[i] = DayCount{Date: weekFloor.AddDate(0, 0, i).Format("2006-01-02")}
+		days[i] = DayCount{Date: chartFloor.AddDate(0, 0, i).Format("2006-01-02")}
 	}
 	err := s.db.View(func(tx *bolt.Tx) error {
 		return tx.Bucket(bMessages).ForEach(func(_, v []byte) error {
@@ -647,10 +652,10 @@ func (s *Store) MessageGrowth(now time.Time) (Growth, error) {
 			case m.ReceivedAt >= monthStart:
 				g.Month++
 			}
-			if m.ReceivedAt >= weekFloor.Unix() {
-				// UTC has no DST, so integer day arithmetic on the timestamp
-				// is exact. Clamp guards corrupt far-future timestamps.
-				idx := int((m.ReceivedAt - weekFloor.Unix()) / 86400)
+		if m.ReceivedAt >= chartFloor.Unix() {
+			// UTC has no DST, so integer day arithmetic on the timestamp
+			// is exact. Clamp guards corrupt far-future timestamps.
+			idx := int((m.ReceivedAt - chartFloor.Unix()) / 86400)
 				if idx >= 0 && idx < len(days) {
 					days[idx].Count++
 				}
