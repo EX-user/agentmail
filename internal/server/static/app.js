@@ -393,18 +393,17 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
-    // Thin-line separated layout (reviewer's pick): own card / divider /
-    // agent-mailbox register block / divider / the other accounts.
-    rows.push('<tr class="sep-row"><td colspan="5"><div class="sep-line"></div></td></tr>');
+    // Standalone card between the own row and the other accounts (final
+    // pick after the hairline round): same order, its own container.
     rows.push(
       '<tr class="agentreg-row">' +
       '<td colspan="5" class="agentreg-cell">' +
+      '<div class="agentreg-card">' +
       '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
-      '<div class="muted" style="font-size:12px; margin-top:6px; max-width:420px;">' + t("subs.registerNote") + "</div>" +
-      "</td>" +
+      '<div class="muted" style="font-size:12px; margin-top:6px;">' + t("subs.registerNote") + "</div>" +
+      "</div></td>" +
       "</tr>"
     );
-    rows.push('<tr class="sep-row"><td colspan="5"><div class="sep-line"></div></td></tr>');
     // Listed-in-directory set (feedback: the regular view must badge
     // visible accounts the same way the admin view does).
     var listedSet = {}, listedSig = {};
