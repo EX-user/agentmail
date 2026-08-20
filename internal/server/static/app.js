@@ -421,12 +421,17 @@
     var subZone = "";
     (subsCache ? subsCache.subordinates || [] : []).forEach(function (e) {
       var sig = e.signature || listedSig[e.address] || "";
+      // Superior feedback (att1-vs-att2 round): a subordinate entry must be
+      // a FULL account card — same Address/Tags/Signature/Actions grammar as
+      // the other account cards — merely grouped inside the rounded
+      // container. Blocks carry data-label so mobile stacks them with the
+      // same micro-labels the row cards use.
       subZone +=
-        '<div class="agentreg-sub">' +
-        '<div class="agentreg-sub-main"><span>' + esc(e.address) + ' <span class="badge-sub">' + t("subs.badge") + "</span></span>" +
-        (sig ? '<div class="muted agentreg-sub-sig">' + esc(sig) + "</div>" : "") +
-        "</div>" +
-        '<button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button>" +
+        '<div class="sub-card">' +
+        '<div class="sub-card-block" data-label="' + t("col.address") + '">' + esc(e.address) + "</div>" +
+        '<div class="sub-card-block sub-card-tags" data-label="' + t("col.tags") + '"><span class="badge-sub">' + t("subs.badge") + "</span>" + (listedSet[e.address] ? ' <span class="badge-listed">listed</span>' : "") + "</div>" +
+        '<div class="sub-card-block" data-label="' + t("col.signature") + '">' + esc(sig) + "</div>" +
+        '<div class="sub-card-block sub-card-actions" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></div>" +
         "</div>";
     });
     rows.push(
