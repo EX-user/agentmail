@@ -688,9 +688,17 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table, #accounts-table tbody, #accounts-table tr, #accounts-table td {
     display: block; width: 100%; box-sizing: border-box;
   }
+  /* Every row becomes a card on phones — EXCEPT the hairline separator
+   and the register block, which must stay bare (reviewer: the line is
+   just a line, no container). */
   #accounts-table tr {
     border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px;
     padding: 12px 14px; background: var(--panel);
+  }
+  #accounts-table tr.sep-row,
+  #accounts-table tr.agentreg-row {
+    border: none; border-radius: 0; margin-bottom: 0;
+    padding: 0; background: transparent;
   }
   #accounts-table td { border: none; padding: 4px 0; overflow-wrap: anywhere; }
   #accounts-table td[data-label]::before {
@@ -702,6 +710,15 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td[data-label]:empty { display: none; }
   #accounts-table td.actions-cell { margin-top: 6px; white-space: normal; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
+}
+
+/* Agent-mailbox register card (final layout): its own container between
+   the own row and the other accounts, same visual family as row cards. */
+.agentreg-cell { padding: 0; }
+.agentreg-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px; margin: 10px 0;
+  max-width: 640px;
 }
 
 /* Preferences cards (v0.6 layout round 2): one stacked card per section,
@@ -944,6 +961,21 @@ nav .tab { flex: 0 0 auto; }
   cursor: pointer;
 }
 .attach-preview img:hover { border-color: var(--accent); }
+
+/* Image fullscreen overlay (feedback): click a preview to view it
+   full-screen; click anywhere or press Esc to close. */
+.img-lightbox {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex; align-items: center; justify-content: center;
+  cursor: zoom-out; padding: 24px;
+}
+.img-lightbox img {
+  max-width: 92vw; max-height: 88vh;
+  border-radius: 8px; box-shadow: 0 8px 48px rgba(0, 0, 0, 0.55);
+  cursor: zoom-out;
+}
+@media (prefers-reduced-motion: reduce) { .img-lightbox { animation: none; } }
 
 /* Attachment TTL badge (v0.5.3). */
 .attach-ttl { flex: 0 0 auto; font-size: 11px; color: var(--muted); }

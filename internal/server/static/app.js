@@ -390,11 +390,18 @@
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="' + t("col.actions") + '">' +
-      '<button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button> ' +
-      '<button id="btn-subreg" class="row-action">' + t("subs.registerBtn") + '</button>' +
-      '<div class="muted" style="font-size:11px; margin-top:4px; max-width:280px;">' + t("subs.registerNote") + '</div>' +
-      '</td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
+      "</tr>"
+    );
+    // Standalone card between the own row and the other accounts (final
+    // pick after the hairline round): same order, its own container.
+    rows.push(
+      '<tr class="agentreg-row">' +
+      '<td colspan="5" class="agentreg-cell">' +
+      '<div class="agentreg-card">' +
+      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
+      '<div class="muted" style="font-size:12px; margin-top:6px;">' + t("subs.registerNote") + "</div>" +
+      "</div></td>" +
       "</tr>"
     );
     // Listed-in-directory set (feedback: the regular view must badge
@@ -1105,9 +1112,43 @@
     }).join("") + "</div>";
   }
 
+  // openImageLightbox (feedback): full-screen view for attachment
+  // previews. Click anywhere or Esc closes; a click on the image itself
+  // triggers the download flow (previous single-click behavior).
+  function openImageLightbox(url, filename) {
+    closeImageLightbox();
+    const lb = document.createElement("div");
+    lb.className = "img-lightbox";
+    const im = document.createElement("img");
+    im.src = url;
+    im.alt = filename || "";
+    im.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      // Second click inside the viewer falls through to download.
+      const card = document.querySelector('.attach-card-img .attach-preview img');
+      const btn = card && card.closest(".attach-card").querySelector("[data-dl]");
+      if (btn) btn.click();
+    });
+    lb.appendChild(im);
+    lb.addEventListener("click", closeImageLightbox);
+    document.addEventListener("keydown", closeImageLightbox);
+    document.body.appendChild(lb);
+  }
+  function closeImageLightbox() {
+    $$(".img-lightbox").forEach(function (el) { el.remove(); });
+    document.removeEventListener("keydown", closeImageLightbox);
+  }
+
   // Audio players on the page form a sequential queue (feedback): starting
   // one pauses the rest; autoplay (when enabled) walks the queue in order.
   let audioPlayers = [];
+  // Detached <audio> keeps playing after its detail pane re-renders —
+  // pause and drop the queue whenever a message view is (re)opened.
+  function resetAudioPlayers() {
+    audioPlayers.forEach(function (p) { try { p.pause(); } catch (_) {} });
+    audioPlayers = [];
+  }
+
   function registerAudioPlayer(au) {
     audioPlayers.push(au);
     au.addEventListener("play", function () {
@@ -1177,10 +1218,12 @@
         const img = document.createElement("img");
         img.src = url;
         img.alt = a.filename;
-        img.title = t("attach.clickToDownload");
-        img.addEventListener("click", function () {
-          const btn = holder.closest(".attach-card").querySelector("[data-dl]");
-          if (btn) btn.click();
+        img.title = t("attach.clickFullscreen");
+        // Click = fullscreen view (feedback); download stays on the card's
+        // Download button (and on a second click inside the lightbox).
+        img.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          openImageLightbox(url, a.filename);
         });
         holder.appendChild(img);
         // The detail pane re-renders on message switch; drop the URL then.
@@ -1222,6 +1265,7 @@
   }
 
   async function showDetail(id, item) {
+    resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
@@ -1352,6 +1396,7 @@
   // server); on failure falls back to the summary (preview). Attachments stay
   // metadata-only either way (Q2: no download).
   async function showSubDetail(subAddr, m, item) {
+    resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
@@ -1649,6 +1694,7 @@
   }
 
   async function showInboxDetail(id, item, auto) {
+    resetAudioPlayers();
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
