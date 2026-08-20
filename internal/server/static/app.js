@@ -319,6 +319,8 @@
     // Admin view has global tools; the subordinate manager is regular-only.
     const subsSectionAdmin = $("#subs-section");
     if (subsSectionAdmin) subsSectionAdmin.classList.add("hidden");
+    const subregPcAdmin = $("#subreg-pc");
+    if (subregPcAdmin) subregPcAdmin.classList.add("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
     try {
@@ -376,6 +378,10 @@
     // The "+ Register new account" button is admin-only.
     const regBtn = $("#btn-register");
     if (regBtn) regBtn.classList.add("hidden");
+    // PC register-subordinate block above the table (mobile keeps the
+    // in-container button; admin sessions never see it).
+    const subregPc = $("#subreg-pc");
+    if (subregPc) subregPc.classList.remove("hidden");
     const tbody = $("#accounts-table tbody");
     tbody.textContent = "";
     // Subordinate management UI lives in Preferences since v0.6; Accounts
@@ -415,25 +421,35 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
-    // Two-zone card (approved preview): top = register button + note,
-    // hairline, bottom = the subordinate accounts (full info incl.
-    // signature) — the main list below no longer repeats them.
-    var subZone = "";
+    // Subordinates render TWICE from one pass (superior feedback round 3):
+    // PC = leading table rows right after the own row (no container; the
+    // register button lives above the table — #subreg-pc in index.html);
+    // phones keep the approved container card (agentreg-row below) and hide
+    // the PC rows via CSS.
+    var subZone = "", pcSubRows = "";
     (subsCache ? subsCache.subordinates || [] : []).forEach(function (e) {
       var sig = e.signature || listedSig[e.address] || "";
-      // Superior feedback (att1-vs-att2 round): a subordinate entry must be
-      // a FULL account card — same Address/Tags/Signature/Actions grammar as
-      // the other account cards — merely grouped inside the rounded
-      // container. Blocks carry data-label so mobile stacks them with the
-      // same micro-labels the row cards use.
+      var badge = '<span class="badge-sub">' + t("subs.badge") + "</span>" +
+        (listedSet[e.address] ? ' <span class="badge-listed">listed</span>' : "");
+      pcSubRows +=
+        '<tr class="subrow-pc">' +
+        '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
+        '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
+        '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(sig) + "</td>" +
+        "<td data-label=\"Created\"></td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
+        "</tr>";
+      // Mobile container card (approved look; white variant rides the
+      // same batch): full account card with data-label micro-blocks.
       subZone +=
         '<div class="sub-card">' +
         '<div class="sub-card-block" data-label="' + t("col.address") + '">' + esc(e.address) + "</div>" +
-        '<div class="sub-card-block sub-card-tags" data-label="' + t("col.tags") + '"><span class="badge-sub">' + t("subs.badge") + "</span>" + (listedSet[e.address] ? ' <span class="badge-listed">listed</span>' : "") + "</div>" +
+        '<div class="sub-card-block sub-card-tags" data-label="' + t("col.tags") + '">' + badge + "</div>" +
         '<div class="sub-card-block" data-label="' + t("col.signature") + '">' + esc(sig) + "</div>" +
         '<div class="sub-card-block sub-card-actions" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></div>" +
         "</div>";
     });
+    rows.push(pcSubRows);
     rows.push(
       '<tr class="agentreg-row">' +
       '<td colspan="5" class="agentreg-cell">' +
@@ -449,7 +465,7 @@
     try {
       const data = await api("/api/contacts", { keepSession: true });
       (data.contacts || []).forEach(function (c) {
-        if (subAddrs[c]) return; // lives in the register card zone
+        if (subAddrs[c]) return; // already shown (PC leading rows / mobile container)
         seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
@@ -1133,8 +1149,11 @@
   }
 
   // openImageLightbox (feedback): full-screen view for attachment
-  // previews. Click anywhere or Esc closes; a click on the image itself
-  // triggers the download flow (previous single-click behavior).
+  // previews. Backdrop click or Esc closes. The image itself is NOT a
+  // download trigger (superior feedback: accidental downloads) — an
+  // explicit download button sits at the bottom and carries THIS image's
+  // url/filename (the old second-click hack always grabbed the first
+  // image's card button, wrong for multi-image messages).
   function openImageLightbox(url, filename) {
     closeImageLightbox();
     const lb = document.createElement("div");
@@ -1143,13 +1162,24 @@
     im.src = url;
     im.alt = filename || "";
     im.addEventListener("click", function (ev) {
+      // Swallow so a click on the picture doesn't close or download.
       ev.stopPropagation();
-      // Second click inside the viewer falls through to download.
-      const card = document.querySelector('.attach-card-img .attach-preview img');
-      const btn = card && card.closest(".attach-card").querySelector("[data-dl]");
-      if (btn) btn.click();
     });
     lb.appendChild(im);
+    const dl = document.createElement("button");
+    dl.className = "img-lightbox-dl";
+    dl.type = "button";
+    dl.textContent = t("attach.download");
+    dl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "attachment";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    lb.appendChild(dl);
     lb.addEventListener("click", closeImageLightbox);
     document.addEventListener("keydown", closeImageLightbox);
     document.body.appendChild(lb);
@@ -1162,15 +1192,41 @@
   // Audio players on the page form a sequential queue (feedback): starting
   // one pauses the rest; autoplay (when enabled) walks the queue in order.
   let audioPlayers = [];
+  // Hydration fetches resolve out of order, so players REGISTER out of
+  // order — the queue once played in fetch-completion order, i.e. random
+  // (superior bug report). Players now carry their attachment index and
+  // insert sorted; autoplay only starts once every expected player is in
+  // (or the fallback timer fires, covering failed fetches).
+  let audioExpected = 0;
+  function planAudioAutostart(expected) {
+    audioExpected = expected;
+    setTimeout(tryAudioAutostart, 1500);
+  }
+  function tryAudioAutostart() {
+    if (!(userPrefs && userPrefs.audio_autoplay === true)) return;
+    if (audioPlayers.some(function (p) { return p.autoplaying || !p.paused; })) return;
+    const first = audioPlayers[0];
+    if (!first) return;
+    first.autoplaying = true;
+    first.play().catch(function () { first.autoplaying = false; });
+  }
   // Detached <audio> keeps playing after its detail pane re-renders —
   // pause and drop the queue whenever a message view is (re)opened.
   function resetAudioPlayers() {
     audioPlayers.forEach(function (p) { try { p.pause(); } catch (_) {} });
     audioPlayers = [];
+    audioExpected = 0;
   }
 
-  function registerAudioPlayer(au) {
-    audioPlayers.push(au);
+  function registerAudioPlayer(au, idx) {
+    au.dataset.pvi = String(idx);
+    if (typeof idx === "number") {
+      let i = 0;
+      while (i < audioPlayers.length && (+audioPlayers[i].dataset.pvi || 0) < idx) i++;
+      audioPlayers.splice(i, 0, au);
+    } else {
+      audioPlayers.push(au);
+    }
     au.addEventListener("play", function () {
       audioPlayers.forEach(function (other) {
         if (other !== au && !other.paused) other.pause();
@@ -1184,13 +1240,9 @@
       }
       if (next) next.play().catch(function () {});
     });
-    if (userPrefs && userPrefs.audio_autoplay === true) {
-      // Only the first player autoplays; the rest chain on 'ended'.
-      if (audioPlayers.filter(function (p) { return p.autoplaying; }).length === 0) {
-        au.autoplaying = true;
-        au.play().catch(function () { au.autoplaying = false; });
-      }
-    }
+    // Start only when the full queue is present — guarantees attachment
+    // order even when blob fetches complete out of sequence.
+    if (audioPlayers.length >= audioExpected) tryAudioAutostart();
   }
 
   // hydrateAttachmentPreviews loads image blobs (authenticated) into the
@@ -1199,6 +1251,9 @@
     const list = (m && m.attachments) || [];
     // New render = new set of players; drop stale references.
     audioPlayers = audioPlayers.filter(function (p) { return document.contains(p); });
+    // Plan ordered autoplay: only start once every audio attachment has a
+    // player (fetches resolve out of order — see registerAudioPlayer).
+    planAudioAutostart(list.filter(function (a) { return attachIsAudio(a); }).length);
     $$(".attach-preview", root).forEach(async function (holder) {
       const a = list[+holder.dataset.pv];
       if (!a) return;
@@ -1231,7 +1286,7 @@
           au.src = url;
           au.style.cssText = "display:block; width:100%; height:40px; margin-top:6px;";
           holder.appendChild(au);
-          registerAudioPlayer(au);
+          registerAudioPlayer(au, +holder.dataset.pv);
           setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
           return;
         }
@@ -1489,9 +1544,11 @@
   (function wireSubreg() {
     const tbody = document.querySelector("#accounts-table tbody");
     if (!tbody) return;
-    tbody.addEventListener("click", async function (ev) {
-      const btn = ev.target.closest("#btn-subreg");
-      if (!btn) return;
+    // Shared register-subordinate routine: the mobile in-container button
+    // (#btn-subreg, via tbody delegation) and the PC above-table button
+    // (#btn-subreg-pc, outside the table so it needs its own listener)
+    // both run this.
+    async function doSubreg(btn) {
       if (!confirm(t("subs.regConfirm"))) return;
       const status = $("#subs-status");
       btn.disabled = true;
@@ -1508,7 +1565,13 @@
         status.textContent = t("common.error", { msg: e.message });
       }
       btn.disabled = false;
+    }
+    tbody.addEventListener("click", function (ev) {
+      const btn = ev.target.closest("#btn-subreg");
+      if (btn) doSubreg(btn);
     });
+    const pcBtn = $("#btn-subreg-pc");
+    if (pcBtn) pcBtn.addEventListener("click", function () { doSubreg(pcBtn); });
     $("#btn-subreg-close").addEventListener("click", function () {
       closeSubregModal();
       // Refresh edges + badges + Mail selector after dismissing.

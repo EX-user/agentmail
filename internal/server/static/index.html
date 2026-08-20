@@ -209,8 +209,9 @@
       <div class="stats" id="stats-activity">Loading…</div>
       <!-- 7-day growth chart (v0.4.8, admin request): the logged-in Overview
            shows at least what the guest portal shows. Filled from the public
-           growth endpoint; hidden when it fails. -->
-      <div id="ovw-growth-card" class="portal-card hidden" style="max-width:640px; margin-top:16px;">
+           growth endpoint; hidden when it fails. Full content width like the
+           System/Activity groups (superior feedback: 640px cap too narrow). -->
+      <div id="ovw-growth-card" class="portal-card hidden" style="margin-top:16px;">
         <div class="chart-head"><span class="t">Mail growth</span><span class="u">messages · last 7 days</span></div>
         <div class="bars" id="ovw-growth-bars"></div>
         <div class="bar-lbls" id="ovw-growth-lbls"></div>
@@ -219,7 +220,7 @@
            ugly): a single grouped card — "All time" and "Recent traffic"
            columns of compact stat rows. Subtitle clarifies these are the
            viewer's own numbers, not system-wide. -->
-      <div class="portal-card hidden" id="personal-card" style="max-width:640px; margin-top:16px;">
+      <div class="portal-card hidden" id="personal-card" style="margin-top:16px;">
         <div class="chart-head" style="margin-bottom:8px;">
           <span class="t" data-i18n="ovw.my">My activity</span>
           <span class="u" data-i18n="ovw.mySub">your personal mail stats</span>
@@ -244,6 +245,15 @@
       <h2>Accounts <small class="muted" data-i18n="sub.accounts">— your contacts and account settings</small></h2>
       <button id="btn-register" class="primary" data-i18n="acc.registerNew">+ Register new account</button>
       <div id="register-result" class="callout hidden"></div>
+      <!-- PC register-subordinate block (superior feedback round 3): the
+           button moves out of the table; sub accounts render as leading
+           table rows and the container disappears on desktop. Phones keep
+           the in-container layout (pc-only hides this block there); admin
+           sessions never see it (JS-managed). -->
+      <div id="subreg-pc" class="hidden pc-only" style="margin-bottom: 10px;">
+        <button id="btn-subreg-pc" class="primary" data-i18n="subs.registerBtn">Register a mailbox for your AI agent</button>
+        <div class="muted" style="font-size: 12px; margin-top: 6px;" data-i18n="subs.registerNote">Creates a new mailbox for your AI assistant (Codex, Claude, etc.). You can read its mail here anytime.</div>
+      </div>
       <table id="accounts-table">
         <thead><tr><th>Address</th><th>Tags</th><th data-i18n="prof.signature">Signature</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody></tbody>
