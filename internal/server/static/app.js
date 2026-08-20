@@ -394,6 +394,17 @@
       ownSig = me.signature || "";
       ownVisible = me.visible;
     } catch (_) { /* degrade to the old thin row */ }
+    // Listed-in-directory set (feedback: the regular view must badge
+    // visible accounts the same way the admin view does). Fetch FIRST —
+    // listedSig is read when building rows below.
+    var listedSet = {}, listedSig = {};
+    try {
+      const dir = await api("/api/info?query=directory", { keepSession: true });
+      (dir.entries || []).forEach(function (e) {
+        listedSet[e.address] = 1;
+        if (e.signature) listedSig[e.address] = e.signature;
+      });
+    } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var rows = [];
     rows.push(
       "<tr>" +
@@ -429,16 +440,6 @@
       "</div></td>" +
       "</tr>"
     );
-    // Listed-in-directory set (feedback: the regular view must badge
-    // visible accounts the same way the admin view does).
-    var listedSet = {}, listedSig = {};
-    try {
-      const dir = await api("/api/info?query=directory", { keepSession: true });
-      (dir.entries || []).forEach(function (e) {
-        listedSet[e.address] = 1;
-        if (e.signature) listedSig[e.address] = e.signature;
-      });
-    } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var seenAddrs = {};
     try {
       const data = await api("/api/contacts", { keepSession: true });
