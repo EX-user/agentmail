@@ -47,11 +47,10 @@
         <div class="portal-ctas">
           <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
           <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
-          <!-- One-click agent register on the landing page (v0.4.3, admin
-               request): same flow as the register-form button — random name,
-               clipboard, modal. Visibility follows registration_enabled and
-               oneclick_register_enabled (see loadPortal). -->
-          <button id="btn-portal-oneclick" class="btn btn-accent" data-i18n="portal.cta.oneclick">⚡ One-click agent register</button>
+          <!-- One-click register buttons REMOVED (superior+alice ruling,
+               方案 A): user-facing entry points gone; the code path, the
+               admin oneclick_register_enabled toggle, and the settings
+               endpoint stay as the debug backdoor. -->
           <!-- Team register (v0.5.14): one owner + member mailboxes in a
                single atomic action — third portal entry, coexists with the
                single-account flows. Visibility follows registration_enabled
@@ -139,12 +138,6 @@
             <button id="btn-register-submit" class="primary" data-i18n="reg.submit">Register</button>
             <button id="btn-register-cancel" class="row-action" data-i18n="reg.back">Back to login</button>
             <span id="register-status" class="muted"></span>
-          </div>
-          <!-- True one-click: random name + register + copy prompt + modal, all
-               in this single action (admin-requested UX). -->
-          <div class="row">
-            <button id="btn-oneclick-register" class="primary" data-i18n="portal.cta.oneclick">⚡ One-click agent register</button>
-            <span id="oneclick-status" class="muted"></span>
           </div>
         </div>
       </div>

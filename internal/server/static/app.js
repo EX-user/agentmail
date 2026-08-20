@@ -2442,7 +2442,6 @@
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
     const teamBtn = $("#btn-portal-team");
     if (teamBtn) teamBtn.style.display = regOpen ? "" : "none";
-    applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
     loadShowcase(setRes);
     spawnPortalParticles();
@@ -3001,15 +3000,6 @@
     say(msg, true);
   }
 
-  $("#btn-oneclick-register").addEventListener("click", function () {
-    runOneClickRegister($("#oneclick-status"));
-  });
-  // Portal hero one-click (v0.4.3): same flow; the hero has no status line,
-  // so failures surface as a toast and success opens the modal directly.
-  $("#btn-portal-oneclick").addEventListener("click", function () {
-    runOneClickRegister(null);
-  });
-
   // Copy the agent prompt to the clipboard (one-click).
   $("#btn-copy-prompt").addEventListener("click", function () {
     const text = $("#agent-prompt").textContent;
@@ -3036,22 +3026,10 @@
       // portal" link must stay visible even when registration is closed.
       const wrap = $("#register-link-wrap");
       (wrap || link).style.display = st.registration_enabled ? "" : "none";
-      applyOneClickVisibility(st);
     } catch (_) {
       const wrap = $("#register-link-wrap");
       (wrap || link).style.display = "none";
     }
-  }
-
-  // applyOneClickVisibility shows/hides every one-click register button from
-  // the public settings (v0.4.3). oneclick_register_enabled defaults to true
-  // — only an explicit false hides the buttons (older servers send nothing).
-  function applyOneClickVisibility(st) {
-    const hidden = !!(st && st.oneclick_register_enabled === false);
-    ["#btn-portal-oneclick", "#btn-oneclick-register"].forEach(function (sel) {
-      const el = $(sel);
-      if (el) el.style.display = hidden ? "none" : "";
-    });
   }
 
   // Live preview of the full address the chosen name will produce.
