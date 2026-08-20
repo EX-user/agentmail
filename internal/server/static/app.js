@@ -390,13 +390,21 @@
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
       "<td data-label=\"Signature\"></td>" +
       "<td data-label=\"Created\"></td>" +
-      '<td class="actions-cell" data-label="' + t("col.actions") + '">' +
-      '<button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button> ' +
-      '<button id="btn-subreg" class="row-action">' + t("subs.registerBtn") + '</button>' +
-      '<div class="muted" style="font-size:11px; margin-top:4px; max-width:280px;">' + t("subs.registerNote") + '</div>' +
-      '</td>' +
+      '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
+    // Thin-line separated layout (reviewer's pick): own card / divider /
+    // agent-mailbox register block / divider / the other accounts.
+    rows.push('<tr class="sep-row"><td colspan="5"><div class="sep-line"></div></td></tr>');
+    rows.push(
+      "<tr>" +
+      '<td colspan="5" class="agentreg-cell">' +
+      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
+      '<div class="muted" style="font-size:12px; margin-top:6px; max-width:420px;">' + t("subs.registerNote") + "</div>" +
+      "</td>" +
+      "</tr>"
+    );
+    rows.push('<tr class="sep-row"><td colspan="5"><div class="sep-line"></div></td></tr>');
     // Listed-in-directory set (feedback: the regular view must badge
     // visible accounts the same way the admin view does).
     var listedSet = {}, listedSig = {};

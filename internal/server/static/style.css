@@ -704,6 +704,12 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
 }
 
+/* Accounts thin separators (reviewer's layout): own card | register
+   block | other accounts, split by hairlines. */
+tr.sep-row td { padding: 4px 0; }
+.sep-line { border-top: 1px solid var(--border); }
+.agentreg-cell { padding: 10px 0; }
+
 /* Preferences cards (v0.6 layout round 2): one stacked card per section,
    title inside, compose-style wide controls (feedback: previous split
    h3+card layout read as cluttered and the signature was too narrow). */
