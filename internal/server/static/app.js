@@ -2162,6 +2162,14 @@
       if (s.danmaku_default_mode) $("#dm-default-mode").value = s.danmaku_default_mode;
       if (s.danmaku_default_speed) $("#dm-default-speed").value = s.danmaku_default_speed;
       if (s.danmaku_default_count) $("#dm-default-count").value = s.danmaku_default_count;
+      // Random (passwordless) registration debug toggle (retired feature).
+      const rrStatus = $("#randomreg-status");
+      const rrBtn = $("#btn-toggle-randomreg");
+      if (rrStatus && rrBtn) {
+        rrStatus.textContent = s.random_register_enabled ? t("set.randomOn") : t("set.randomOff");
+        rrBtn.textContent = s.random_register_enabled ? t("set.randomDisable") : t("set.randomEnable");
+        rrBtn.classList.remove("hidden");
+      }
     } catch (e) {
       $("#reg-status").textContent = t("common.error", { msg: e.message });
     }
@@ -2229,6 +2237,22 @@
       loadSettings();
     } catch (e) {
       toast("Error: " + e.message, "error");
+    }
+  });
+
+  $("#btn-toggle-randomreg").addEventListener("click", async function () {
+    try {
+      const cur = await api("/admin/settings");
+      const next = !cur.random_register_enabled;
+      await api("/admin/set-random-register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      toast(next ? t("set.randomOnToast") : t("set.randomOffToast"));
+      loadSettings();
+    } catch (e) {
+      toast(t("common.error", { msg: e.message }), "error");
     }
   });
 
@@ -2435,8 +2459,9 @@
     }
 
     // Register buttons hide when registration is closed (same rule as the
-    // login page's register link). One-click additionally respects the
-    // admin's oneclick_register_enabled toggle (v0.4.3).
+    // login page's register link). One-click entries are retired; the
+    // passwordless register branch is gated server-side by
+    // random_register_enabled (Settings debug toggle).
     const regOpen = !!(setRes && setRes.registration_enabled);
     const regBtn = $("#btn-portal-register");
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
@@ -2447,18 +2472,6 @@
     spawnPortalParticles();
   }
 
-  // randomAgentName generates a readable random local-part for one-click
-  // registration, e.g. "bot-k7x2m9qv". Per admin: the prefix must not start
-  // with 'a' (a-leading names always sort first in the directory) and the
-  // random part is 8 chars (31^8 ≈ 8.5e11 — collisions essentially never;
-  // the 409 retry remains as a safety net). "bot-" is generic and
-  // descriptive; charset drops ambiguous chars (0/o, 1/l/i).
-  function randomAgentName() {
-    var chars = "abcdefghjkmnpqrstuvwxyz23456789";
-    var suffix = "";
-    for (var i = 0; i < 8; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-    return "bot-" + suffix;
-  }
 
   // ---- portal helpers ----
 
@@ -2912,93 +2925,8 @@
     return Promise.resolve(ok);
   }
 
-  function closeOneClickModal() {
-    $("#oneclick-modal").classList.add("hidden");
-  }
 
-  function openOneClickModal(address, password, copied) {
-    $("#oneclick-address").textContent = address;
-    $("#oneclick-password").textContent = password;
-    const prompt = buildAgentPrompt(address, password);
-    $("#oneclick-prompt").textContent = prompt;
-    $("#oneclick-hint").textContent = copied
-      ? t("oneclick.copiedHint")
-      : t("oneclick.manualHint");
-    $("#oneclick-copy-status").textContent = "";
-    $("#oneclick-modal").classList.remove("hidden");
-    $("#btn-oneclick-close").focus();
-  }
 
-  $("#btn-oneclick-close").addEventListener("click", closeOneClickModal);
-  // Overlay click closes (card clicks must not bubble out to the overlay).
-  $("#oneclick-modal").addEventListener("click", function (e) {
-    if (e.target === this) closeOneClickModal();
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    const m = $("#oneclick-modal");
-    if (m && !m.classList.contains("hidden")) closeOneClickModal();
-  });
-  $("#btn-oneclick-copy").addEventListener("click", function () {
-    copyText($("#oneclick-prompt").textContent).then(function (ok) {
-      const st = $("#oneclick-copy-status");
-      st.textContent = ok ? t("common.copied") : t("common.copyManual");
-      setTimeout(function () { st.textContent = ""; }, 2000);
-    });
-  });
-  $("#btn-oneclick-login").addEventListener("click", function () {
-    const addr = $("#oneclick-address").textContent;
-    const pw = $("#oneclick-password").textContent;
-    closeOneClickModal();
-    $("#login-address").value = addr;
-    $("#login-password").value = pw;
-    showLoginForm();
-    $("#btn-login").click();
-  });
-  $("#btn-oneclick-another").addEventListener("click", function () {
-    closeOneClickModal();
-    showRegisterForm();
-  });
-
-  // runOneClickRegister: shared handler for the register-form button and the
-  // portal hero button. Registers with a random name (collision retry),
-  // copies the agent prompt, and opens the modal. Progress/failure goes to
-  // statusEl when given, else to a toast (portal hero has no status line).
-  async function runOneClickRegister(statusEl) {
-    const say = function (msg, isError) {
-      if (statusEl) statusEl.textContent = msg;
-      else if (msg) toast(msg, isError ? "error" : "");
-    };
-    say(t("reg.registering"));
-    // Register logic merged from Devi's v0.4.1 quickRegister: random name
-    // with 409 collision auto-retry (up to 3 fresh names) and a friendly
-    // 429 message for the per-IP rate limit; presentation is Felix's modal.
-    var last = null;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      const name = randomAgentName();
-      try {
-        const res = await api("/api/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name }),
-        });
-        const prompt = buildAgentPrompt(res.address, res.password);
-        const copied = await copyText(prompt);
-        say("");
-        openOneClickModal(res.address, res.password, copied);
-        return;
-      } catch (e) {
-        last = e;
-        // 409 name collision: retry with a fresh random name. Anything else
-        // (429 rate limit, registration closed, network) is not retried.
-        if (!/already exists/i.test(e.message || "")) break;
-      }
-    }
-    const msg = /too many/i.test((last && last.message) || "")
-      ? t("reg.rateLimited")
-      : t("common.failed") + ((last && last.message) || "unknown error");
-    say(msg, true);
-  }
 
   // Copy the agent prompt to the clipboard (one-click).
   $("#btn-copy-prompt").addEventListener("click", function () {
