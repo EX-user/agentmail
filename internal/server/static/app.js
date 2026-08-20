@@ -2407,6 +2407,8 @@
     const regOpen = !!(setRes && setRes.registration_enabled);
     const regBtn = $("#btn-portal-register");
     if (regBtn) regBtn.style.display = regOpen ? "" : "none";
+    const teamBtn = $("#btn-portal-team");
+    if (teamBtn) teamBtn.style.display = regOpen ? "" : "none";
     applyOneClickVisibility(setRes && regOpen ? setRes : { oneclick_register_enabled: false });
 
     loadShowcase(setRes);
@@ -2728,9 +2730,15 @@
     refreshRegisterLink();
   }
 
+  function hideTeamBlocks() {
+    $("#team-form-block").classList.add("hidden");
+    $("#team-success-block").classList.add("hidden");
+  }
+
   function showLoginForm() {
     $("#login-form-block").classList.remove("hidden");
     $("#register-form-block").classList.add("hidden");
+    hideTeamBlocks();
     const sb = $("#register-success-block");
     if (sb) sb.classList.add("hidden");
   }
@@ -2738,12 +2746,48 @@
   function showRegisterForm() {
     $("#login-form-block").classList.add("hidden");
     $("#register-form-block").classList.remove("hidden");
+    hideTeamBlocks();
     const sb = $("#register-success-block");
     if (sb) sb.classList.add("hidden");
     $("#register-name").value = "";
     $("#register-status").textContent = "";
     updateRegisterPreview();
     $("#register-name").focus();
+  }
+
+  // Team register (v0.5.14): one owner + member mailboxes via
+  // POST /api/register-team. The success view lists every credential and
+  // ONE copy-all button — no per-account agent prompts (future first-login
+  // welcome page may carry those).
+  function showTeamForm() {
+    $("#login-form-block").classList.add("hidden");
+    $("#register-form-block").classList.add("hidden");
+    const sb = $("#register-success-block");
+    if (sb) sb.classList.add("hidden");
+    $("#team-success-block").classList.add("hidden");
+    $("#team-form-block").classList.remove("hidden");
+    $("#team-name").value = "";
+    $("#team-password").value = "";
+    $("#team-size").value = "3";
+    $("#team-status").textContent = "";
+    updateTeamPreview();
+    $("#team-name").focus();
+  }
+
+  function updateTeamPreview() {
+    const name = ($("#team-name").value || "").trim();
+    $("#team-preview").textContent = (name || "name") + "@" + systemDomain;
+  }
+
+  function teamCredsText(res) {
+    var lines = [];
+    if (res && res.owner) {
+      lines.push(t("team.owner") + ": " + res.owner.address + "  " + res.owner.password);
+    }
+    (res && res.members || []).forEach(function (m, i) {
+      lines.push(t("team.member") + " " + (i + 1) + ": " + m.address + "  " + m.password);
+    });
+    return lines.join("\n");
   }
 
   // buildAgentPrompt returns the ready-to-paste agent setup prompt for an
@@ -3054,6 +3098,49 @@
   // one-click button lives on that form).
   $("#btn-portal-login").addEventListener("click", showLogin);
   $("#btn-portal-register").addEventListener("click", function () { showLogin(); showRegisterForm(); });
+  // Team register (v0.5.14): third portal entry — same auth-card surface,
+  // dedicated form; visibility follows registration_enabled in loadPortal.
+  $("#btn-portal-team").addEventListener("click", function () { showLogin(); showTeamForm(); });
+  (function wireTeamReg() {
+    const submit = $("#btn-team-submit");
+    if (!submit) return;
+    $("#team-name").addEventListener("input", updateTeamPreview);
+    $("#btn-team-cancel").addEventListener("click", function () { showPortal(); });
+    $("#btn-team-done").addEventListener("click", function () { showPortal(); });
+    submit.addEventListener("click", async function () {
+      const name = ($("#team-name").value || "").trim();
+      const pw = $("#team-password").value || "";
+      const size = Math.round(+$("#team-size").value);
+      const status = $("#team-status");
+      if (!name) { status.textContent = t("reg.needName"); return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(name)) { status.textContent = t("reg.nameRule"); return; }
+      if (pw.length < 8) { status.textContent = t("reg.pwTooShort"); return; }
+      if (!(size >= 1 && size <= 10)) { status.textContent = t("team.sizeRange"); return; }
+      submit.disabled = true;
+      status.textContent = t("common.loading");
+      try {
+        const res = await api("/api/register-team", {
+          method: "POST",
+          body: { username: name, password: pw, team_size: size },
+        });
+        $("#team-creds").textContent = teamCredsText(res);
+        $("#team-copy-status").textContent = "";
+        $("#team-form-block").classList.add("hidden");
+        $("#team-success-block").classList.remove("hidden");
+      } catch (e) {
+        status.textContent = t("common.error", { msg: e.message });
+      }
+      submit.disabled = false;
+    });
+    $("#btn-team-copy").addEventListener("click", function () {
+      const text = $("#team-creds").textContent;
+      copyText(text).then(function (ok) {
+        const st = $("#team-copy-status");
+        st.textContent = ok ? t("common.copied") : t("common.copyManual");
+        setTimeout(function () { st.textContent = ""; }, 2000);
+      });
+    });
+  })();
   $("#link-back-portal").addEventListener("click", function (e) { e.preventDefault(); showPortal(); });
   $("#register-name").addEventListener("input", updateRegisterPreview);
 
