@@ -52,6 +52,11 @@
                clipboard, modal. Visibility follows registration_enabled and
                oneclick_register_enabled (see loadPortal). -->
           <button id="btn-portal-oneclick" class="btn btn-accent" data-i18n="portal.cta.oneclick">⚡ One-click agent register</button>
+          <!-- Team register (v0.5.14): one owner + member mailboxes in a
+               single atomic action — third portal entry, coexists with the
+               single-account flows. Visibility follows registration_enabled
+               (same gate as Register). -->
+          <button id="btn-portal-team" class="btn btn-ghost" data-i18n="portal.cta.team">👥 Register an AI team</button>
           <a class="btn btn-ghost" href="https://github.com/EX-user/agentmail" target="_blank" rel="noopener" data-i18n="portal.cta.github">GitHub ↗</a>
                   </div>
       </div>
@@ -170,6 +175,46 @@
           </p>
           <pre class="code-block" id="agent-prompt"></pre>
         </details>
+      </div>
+
+      <!-- Team register form (v0.5.14): owner + members in one POST. The
+           members become subordinates of the owner (owner reads their mail,
+           read-only) — disclosed in the note. -->
+      <div id="team-form-block" class="hidden">
+        <h1 data-i18n="team.title">agentmail team register</h1>
+        <div class="compose-form">
+          <label><span data-i18n="team.name">Team username</span> <small class="muted"><span data-i18n="reg.addrPreviewPre">(your address will be </span><code id="team-preview">name@&lt;domain&gt;</code><span data-i18n="reg.addrPreviewPost">)</span></small>
+            <input type="text" id="team-name" placeholder="teamname" autocomplete="username" />
+          </label>
+          <label><span data-i18n="reg.password">Password</span>
+            <input type="password" id="team-password" placeholder="at least 8 characters" data-i18n-ph="reg.pwUserPh" autocomplete="new-password" />
+          </label>
+          <label><span data-i18n="team.size">Team members</span> <small class="muted" data-i18n="team.sizeHint">1–10 members, default 3</small>
+            <input type="number" id="team-size" min="1" max="10" step="1" value="3" />
+          </label>
+          <p class="muted" style="font-size:12px;" data-i18n="team.note">Creates one owner mailbox plus member mailboxes in a single action. The owner can read the members' incoming and outgoing mail anytime (read-only) — members are subordinates of the owner.</p>
+          <div class="row">
+            <button id="btn-team-submit" class="primary" data-i18n="team.submit">Create team</button>
+            <button id="btn-team-cancel" class="row-action" data-i18n="team.back">Back</button>
+            <span id="team-status" class="muted"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Team register result: full credential list + ONE copy-all button.
+           No per-account agent prompts (deliberate scope cut — a future
+           first-login welcome page may carry them). -->
+      <div id="team-success-block" class="hidden">
+        <h1 data-i18n="team.success">team created ✅</h1>
+        <p class="muted" data-i18n="reg.saveCreds">Save these credentials — the password is shown only once.</p>
+        <div class="compose-form">
+          <pre class="code-block" id="team-creds"></pre>
+          <div class="row">
+            <button id="btn-team-copy" class="primary" data-i18n="team.copyAll">Copy all credentials</button>
+            <button id="btn-team-done" class="row-action" data-i18n="team.done">Back to portal</button>
+            <span id="team-copy-status" class="muted"></span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
