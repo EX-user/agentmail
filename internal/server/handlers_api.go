@@ -712,3 +712,59 @@ func isASCIIDomain(s string) bool {
 	}
 	return true
 }
+
+// handleRegisterTeam provisions an owner account plus its subordinate bot
+// accounts in one atomic transaction — the guest portal's "register for an
+// AI team" entry (superior-approved contract).
+//   POST /api/register-team {"username","password","team_size"}
+//   -> {"owner":{"address","password"},"members":[...]}   (one-time)
+// team_size 1-10 (default 3) counts MEMBERS ONLY — the owner account is
+// extra (architect ruling: 3 = 1 owner + 3 members); per-IP throttle
+// 4/hour; audit register_team.
+func (s *Server) handleRegisterTeam(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	if !s.regLimit.allow(clientIP(r), 4, time.Now()) {
+		http.Error(w, "too many registrations from this address, try again later", http.StatusTooManyRequests)
+		return
+	}
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		TeamSize int    `json:"team_size"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	name := strings.TrimSpace(body.Username)
+	if name == "" || !isASCIILocalPart(name) {
+		badRequest(w, "username must be ASCII letters, digits, '-' or '_'")
+		return
+	}
+	if len(body.Password) < store.MinPasswordLength {
+		badRequest(w, fmt.Sprintf("password must be at least %d chars", store.MinPasswordLength))
+		return
+	}
+	size := body.TeamSize
+	if size == 0 {
+		size = 3
+	}
+	if size < 1 || size > 10 {
+		badRequest(w, "team_size must be 1-10")
+		return
+	}
+	owner, members, err := s.store.RegisterTeam(name, s.domain(), body.Password, size)
+	if err != nil {
+		badRequest(w, err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionRegisterTeam, owner.Address,
+		fmt.Sprintf("team_size=%d members=%d", size, len(*members)))
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"owner":   owner,
+		"members": members,
+	})
+}

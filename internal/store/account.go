@@ -419,3 +419,85 @@ func generatePassword(n int) string {
 	}
 	return string(buf)
 }
+
+// TeamMember is one provisioned account in a team registration.
+type TeamMember struct {
+	Address  string `json:"address"`
+	Password string `json:"password"`
+}
+
+// RegisterTeam provisions an owner account plus teamSize subordinate
+// bot accounts and their declare edges in ONE transaction (crash = nothing
+// half-created). team_size counts MEMBERS ONLY — the owner is extra
+// (architect ruling: default 3 = 1 owner + 3 members; 10 = the subordinate
+// cap). The caller validates username/password shape; the store
+// enforces uniqueness and names members bot-<8random>. Passwords are
+// generated (owner uses the caller-supplied one).
+func (s *Store) RegisterTeam(username, domain, password string, teamSize int) (*TeamMember, *[]TeamMember, error) {
+	if teamSize < 1 || teamSize > 10 {
+		return nil, nil, fmt.Errorf("team_size must be 1-10")
+	}
+	ownerAddr := username + "@" + domain
+	ownerHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, nil, fmt.Errorf("hash password: %w", err)
+	}
+	now := s.now().Unix()
+	owner := TeamMember{Address: ownerAddr, Password: password}
+	var members []TeamMember
+
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		ab := tx.Bucket(bAccounts)
+		sb := tx.Bucket(bSubs)
+		if ab.Get([]byte(ownerAddr)) != nil {
+			return ErrAccountExists
+		}
+		acc := Account{UUID: hexID(), Address: ownerAddr, PasswordHash: ownerHash, CreatedAt: now}
+		val, err := json.Marshal(acc)
+		if err != nil {
+			return err
+		}
+		if err := ab.Put([]byte(ownerAddr), val); err != nil {
+			return err
+		}
+		// Members: bot-<8random>, each declared under the owner.
+		for i := 0; i < teamSize; i++ {
+			var name string
+			ok := false
+			for attempt := 0; attempt < 5; attempt++ {
+				name = "bot-" + generatePassword(8)
+				if ab.Get([]byte(name+"@"+domain)) == nil {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				return fmt.Errorf("could not allocate member name")
+			}
+			pw := generatePassword(24)
+			hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+			if err != nil {
+				return err
+			}
+			mAddr := name + "@" + domain
+			mAcc := Account{UUID: hexID(), Address: mAddr, PasswordHash: hash, CreatedAt: now}
+			mVal, err := json.Marshal(mAcc)
+			if err != nil {
+				return err
+			}
+			if err := ab.Put([]byte(mAddr), mVal); err != nil {
+				return err
+			}
+			rec, _ := json.Marshal(SubRecord{Scope: "both", CreatedAt: now})
+			if err := sb.Put(subKey(ownerAddr, mAddr), rec); err != nil {
+				return err
+			}
+			members = append(members, TeamMember{Address: mAddr, Password: pw})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &owner, &members, nil
+}

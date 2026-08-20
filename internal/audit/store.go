@@ -38,6 +38,7 @@ const (
 	ActionSetDanmaku         Action = "set_danmaku"
 	ActionFileUpload         Action = "file_upload"
 	ActionFileDownload       Action = "file_download"
+	ActionRegisterTeam       Action = "register_team"
 	ActionSubDeclare         Action = "sub_declare"
 	ActionSubRevoke          Action = "sub_revoke"
 	ActionSubRead            Action = "sub_read"
