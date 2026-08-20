@@ -1105,6 +1105,33 @@
     }).join("") + "</div>";
   }
 
+  // openImageLightbox (feedback): full-screen view for attachment
+  // previews. Click anywhere or Esc closes; a click on the image itself
+  // triggers the download flow (previous single-click behavior).
+  function openImageLightbox(url, filename) {
+    closeImageLightbox();
+    const lb = document.createElement("div");
+    lb.className = "img-lightbox";
+    const im = document.createElement("img");
+    im.src = url;
+    im.alt = filename || "";
+    im.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      // Second click inside the viewer falls through to download.
+      const card = document.querySelector('.attach-card-img .attach-preview img');
+      const btn = card && card.closest(".attach-card").querySelector("[data-dl]");
+      if (btn) btn.click();
+    });
+    lb.appendChild(im);
+    lb.addEventListener("click", closeImageLightbox);
+    document.addEventListener("keydown", closeImageLightbox);
+    document.body.appendChild(lb);
+  }
+  function closeImageLightbox() {
+    $$(".img-lightbox").forEach(function (el) { el.remove(); });
+    document.removeEventListener("keydown", closeImageLightbox);
+  }
+
   // Audio players on the page form a sequential queue (feedback): starting
   // one pauses the rest; autoplay (when enabled) walks the queue in order.
   let audioPlayers = [];
@@ -1177,10 +1204,12 @@
         const img = document.createElement("img");
         img.src = url;
         img.alt = a.filename;
-        img.title = t("attach.clickToDownload");
-        img.addEventListener("click", function () {
-          const btn = holder.closest(".attach-card").querySelector("[data-dl]");
-          if (btn) btn.click();
+        img.title = t("attach.clickFullscreen");
+        // Click = fullscreen view (feedback); download stays on the card's
+        // Download button (and on a second click inside the lightbox).
+        img.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          openImageLightbox(url, a.filename);
         });
         holder.appendChild(img);
         // The detail pane re-renders on message switch; drop the URL then.
