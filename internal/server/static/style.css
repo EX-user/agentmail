@@ -715,6 +715,14 @@ nav .tab { flex: 0 0 auto; }
 /* Agent-mailbox register card (final layout): its own container between
    the own row and the other accounts, same visual family as row cards. */
 .agentreg-cell { padding: 0; }
+.agentreg-sub {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 10px 12px; margin: 8px 0;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg);
+}
+.agentreg-sub-main { min-width: 0; overflow-wrap: anywhere; }
+.agentreg-sub-sig { font-size: 12px; }
 .agentreg-card {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px 14px; margin: 10px 0;
