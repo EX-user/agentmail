@@ -1823,6 +1823,11 @@
     if (now) now.textContent = t("prefs.langNow", { lang: cur === "zh" ? t("prefs.langZh") : t("prefs.langEn") });
   }
   document.addEventListener("i18n:change", syncPrefLangUI);
+  // Prefs must exist BEFORE any message renders (autoplay queue consults
+  // them): seed from localStorage synchronously; the server value refines
+  // it right after login (bug: fresh sessions never autoplayed because
+  // userPrefs stayed null until the Preferences tab was visited).
+  mergePrefs(null);
 
   async function loadProfile() {
     const status = $("#profile-status");
@@ -2873,6 +2878,12 @@
       // Per-user caches must not leak across logins (logout keeps the DOM).
       subsCache = null;
       invalidateMailAccountOptions();
+      // Refresh preferences from the account record (silent; localStorage
+      // seed already applied). keepSession: a failure here must not log
+      // anyone out.
+      api("/api/profile/self", { keepSession: true }).then(function (p) {
+        mergePrefs(p && p.prefs);
+      }).catch(function () {});
     }
   }
 
