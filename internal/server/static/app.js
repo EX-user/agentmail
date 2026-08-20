@@ -397,7 +397,7 @@
     // agent-mailbox register block / divider / the other accounts.
     rows.push('<tr class="sep-row"><td colspan="5"><div class="sep-line"></div></td></tr>');
     rows.push(
-      "<tr>" +
+      '<tr class="agentreg-row">' +
       '<td colspan="5" class="agentreg-cell">' +
       '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
       '<div class="muted" style="font-size:12px; margin-top:6px; max-width:420px;">' + t("subs.registerNote") + "</div>" +

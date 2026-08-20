@@ -688,9 +688,17 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table, #accounts-table tbody, #accounts-table tr, #accounts-table td {
     display: block; width: 100%; box-sizing: border-box;
   }
+  /* Every row becomes a card on phones — EXCEPT the hairline separator
+   and the register block, which must stay bare (reviewer: the line is
+   just a line, no container). */
   #accounts-table tr {
     border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px;
     padding: 12px 14px; background: var(--panel);
+  }
+  #accounts-table tr.sep-row,
+  #accounts-table tr.agentreg-row {
+    border: none; border-radius: 0; margin-bottom: 0;
+    padding: 0; background: transparent;
   }
   #accounts-table td { border: none; padding: 4px 0; overflow-wrap: anywhere; }
   #accounts-table td[data-label]::before {
