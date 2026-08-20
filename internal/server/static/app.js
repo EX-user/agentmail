@@ -1951,6 +1951,12 @@
     if (zh) zh.classList.toggle("active", cur === "zh");
     if (en) en.classList.toggle("active", cur === "en");
     if (now) now.textContent = t("prefs.langNow", { lang: cur === "zh" ? t("prefs.langZh") : t("prefs.langEn") });
+    // Segmented pill toggles (header + portal): mark the active segment.
+    $$(".lang-toggle").forEach(function (btn) {
+      $$(".seg", btn).forEach(function (seg) {
+        seg.classList.toggle("on", seg.dataset.seg === cur);
+      });
+    });
   }
   document.addEventListener("i18n:change", syncPrefLangUI);
   // Prefs must exist BEFORE any message renders (autoplay queue consults
@@ -2273,6 +2279,8 @@
       if (panelBtn) panelBtn.addEventListener("click", toggleLang);
       const portalBtn = $("#btn-portal-lang");
       if (portalBtn) portalBtn.addEventListener("click", toggleLang);
+      // Initial segment state for both pill toggles (portal shows pre-login).
+      syncPrefLangUI();
       document.addEventListener("i18n:change", function () {
         // Re-render whatever view is active so JS-built text follows.
         if (!$("#portal-page").classList.contains("hidden")) loadPortal();

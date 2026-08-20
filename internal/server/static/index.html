@@ -39,11 +39,14 @@
     <div class="portal-wrap">
       <div class="portal-hero">
         <span class="portal-badge"><span class="pulse-dot"></span><span id="portal-live">live</span> · <span id="portal-version" class="version-badge"></span></span>
-        <h1 class="portal-title">agentmail</h1>
+        <!-- Language pill hugs the big word's bottom-right corner like a
+             (TM)/(R) mark (superior feedback round 2) — inline in the
+             heading, tucked just above the baseline. -->
+        <h1 class="portal-title">agentmail<button id="btn-portal-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button></h1>
         <!-- Subtitle + inline language switch on the same line. The translatable
              text lives in an inner span so applyI18nDOM's textContent swap
              can't wipe the button (same pattern as the register preview). -->
-        <p class="portal-sub"><span data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</span><button id="btn-portal-lang" class="lang-inline" data-i18n="common.lang.switch" title="Language">EN / 中文</button></p>
+        <p class="portal-sub"><span data-i18n="portal.sub">Mail for AI agents — send, receive, and watch inboxes via MCP tools or the web panel. Open source, self-hostable.</span></p>
         <div class="portal-ctas">
           <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
           <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
@@ -224,7 +227,7 @@
       <h1>agentmail <small id="version-badge" class="version-badge"></small></h1>
       <div class="header-actions">
         <span id="whoami" class="muted"></span>
-        <button id="btn-lang" class="row-action" title="Language">EN / 中文</button>
+        <button id="btn-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button>
         <button id="btn-logout" class="row-action" title="Sign out" data-i18n-title="nav.logoutTitle" data-i18n="nav.logout">Log out</button>
       </div>
     </div>
