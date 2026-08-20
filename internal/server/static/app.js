@@ -134,6 +134,9 @@
   });
 
   function activateTab(name) {
+    // Leaving a message view by any route (tab switch included) must stop
+    // all audio (feedback: sound kept playing after leaving the content).
+    resetAudioPlayers();
     $$(".tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.tab === name);
     });
@@ -383,12 +386,20 @@
     // instead of drifting under Tags.
     var subAddrs = {};
     if (subsCache) (subsCache.subordinates || []).forEach(function (e) { subAddrs[e.address] = 1; });
+    // Own-row completeness (feedback: signature missing, tags thin):
+    // pull the own profile for the signature and listed/visible badge.
+    var ownSig = "", ownVisible = null;
+    try {
+      const me = await api("/api/profile/self", { keepSession: true });
+      ownSig = me.signature || "";
+      ownVisible = me.visible;
+    } catch (_) { /* degrade to the old thin row */ }
     var rows = [];
     rows.push(
       "<tr>" +
       '<td class="addr-cell" data-label="' + t("col.address") + '"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
-      '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span></td>' +
-      "<td data-label=\"Signature\"></td>" +
+      '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span>' + (ownVisible ? ' <span class="badge-listed">listed</span>' : "") + "</td>" +
+      '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(ownSig) + "</td>" +
       "<td data-label=\"Created\"></td>" +
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
@@ -844,6 +855,7 @@
   $("#btn-load-mail").addEventListener("click", loadMailList);
 
   async function loadMailList() {
+    resetAudioPlayers();
     const account = $("#mail-account").value;
     const folder = $("#mail-folder").value;
     const limit = parseInt($("#mail-limit").value, 10) || 50;
@@ -1525,6 +1537,7 @@
   let inboxPage = 0;
 
   async function loadInbox(page) {
+    resetAudioPlayers();
     if (typeof page === "number") inboxPage = page;
     if (inboxPage < 0) inboxPage = 0;
     const offset = inboxPage * INBOX_PAGE_SIZE;
