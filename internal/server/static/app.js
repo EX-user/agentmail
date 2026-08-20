@@ -1964,10 +1964,20 @@
     };
     const status = $("#prefs-status");
     try {
+      // The server REPLACES (not merges) profile fields on POST — a
+      // prefs-only body wipes the signature (bug report: signatures
+      // disappeared). Round-trip the current fields until the server
+      // learns per-field merge semantics.
+      const cur = await api("/api/profile/self", { keepSession: true }).catch(function () { return null; });
+      const body = { prefs: prefs };
+      if (cur) {
+        if (typeof cur.signature === "string") body.signature = cur.signature;
+        if (typeof cur.visible === "boolean") body.visible = cur.visible;
+      }
       const res = await api("/api/profile/self", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prefs: prefs }),
+        body: JSON.stringify(body),
       });
       status.textContent = t("prefs.saved");
       // The response echoes the merged prefs — authoritative post-save
