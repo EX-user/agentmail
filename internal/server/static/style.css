@@ -9,6 +9,9 @@
   --border: #2c313a;
   --success: #3fb950;
   --error: #f85149;
+  /* Subordinate card surface: dark theme keeps the page-bg inset look. */
+  --sub-card-bg: var(--bg);
+  --sub-card-border: var(--border);
 }
 
 @media (prefers-color-scheme: light) {
@@ -22,6 +25,10 @@
     --border: #d8dee6;
     --success: #1a7f37;
     --error: #cf222e;
+    /* Superior pick (variant B): pure white cards inside the white
+       container, slightly deeper border so they still read as cards. */
+    --sub-card-bg: #ffffff;
+    --sub-card-border: #c4ccd6;
   }
 }
 
@@ -723,13 +730,13 @@ nav .tab { flex: 0 0 auto; }
   max-width: 640px;
 }
 /* Subordinate account card: same border/radius/padding grammar as the
-   account row cards; --bg (not --panel) so each card reads as a card
-   against the container's panel background. Desktop lays the blocks out
-   in a row echoing the table columns. */
+   account row cards; surface via --sub-card-bg/-border so each theme
+   picks the right contrast against the container (light: white on white
+   with a deeper border — superior pick, variant B). */
 .sub-card {
   display: flex; align-items: center; gap: 12px;
-  border: 1px solid var(--border); border-radius: 12px;
-  background: var(--bg); padding: 10px 14px; margin: 8px 0;
+  border: 1px solid var(--sub-card-border); border-radius: 12px;
+  background: var(--sub-card-bg); padding: 10px 14px; margin: 8px 0;
 }
 .sub-card-block { min-width: 0; overflow-wrap: anywhere; flex: 2 1 0; }
 .sub-card .sub-card-tags { flex: 1 1 0; }
