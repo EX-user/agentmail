@@ -752,28 +752,28 @@ nav .tab { flex: 0 0 auto; }
   border-radius: 0; background: transparent; margin: 0;
 }
 .sub-card:last-child { border-bottom: none; }
-.sub-card-block { min-width: 0; overflow-wrap: anywhere; }
-.sub-card .sub-card-actions { justify-self: end; }
+/* (mobile compact helpers .sub-addr/.sub-meta/.sub-sig/.sub-foot/.pill-btn
+   live in the <=800px block below; the container itself is desktop-hidden) */
 /* Subordinate cards stack exactly like the row cards on phones: block
    layout, same micro-label ::before, same cell rhythm. MUST stay after
    the flex base rule above — equal specificity, source order wins. */
 @media (max-width: 800px) {
-  /* Phones: back to the approved stacked card (full chrome must be
-     restated — the desktop base is now a bare row). */
+  /* Phones: compact card (superior-approved round). Address on its own
+     line; badges + signature share one meta line; a small pill compose
+     button bottom-right; container padding tightened a notch. */
+  .agentreg-card { padding: 10px 12px; }
   .sub-card {
-    display: block; padding: 12px 14px; margin: 8px 0;
-    border: 1px solid var(--sub-card-border); border-radius: 12px;
+    display: block; padding: 7px 9px; margin: 5px 0;
+    border: 1px solid var(--sub-card-border); border-radius: 10px;
     background: var(--sub-card-bg);
   }
-  .sub-card-block { padding: 4px 0; }
-  .sub-card-block[data-label]::before {
-    content: attr(data-label); display: block;
-    font-size: 10px; text-transform: uppercase; letter-spacing: .8px;
-    color: var(--muted); margin-bottom: 1px;
-  }
-  .sub-card-block[data-label]:empty { display: none; }
-  .sub-card-actions { margin-top: 6px; white-space: normal; justify-self: start; }
-  .sub-card-actions button { margin: 0 6px 6px 0; }
+  .sub-addr { font-size: 13px; overflow-wrap: anywhere; }
+  .sub-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px;
+    flex-wrap: wrap; }
+  .sub-sig { font-size: 12px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+  .sub-foot { display: flex; justify-content: flex-end; margin-top: 4px; }
+  button.row-action.pill-btn { font-size: 12px; padding: 3px 14px;
+    border-radius: 999px; min-height: 0; }
 }
 
 /* Preferences cards (v0.6 layout round 2): one stacked card per section,

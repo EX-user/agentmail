@@ -485,14 +485,14 @@
         "<td data-label=\"Created\"></td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
         "</tr>";
-      // Mobile container card (approved look; white variant rides the
-      // same batch): full account card with data-label micro-blocks.
+      // Mobile container card (compact round, superior-approved): address
+      // on its own line, badges + signature share one meta line, a small
+      // pill compose button sits bottom-right - no micro-labels.
       subZone +=
         '<div class="sub-card">' +
-        '<div class="sub-card-block" data-label="' + t("col.address") + '">' + esc(e.address) + "</div>" +
-        '<div class="sub-card-block sub-card-tags" data-label="' + t("col.tags") + '">' + badge + "</div>" +
-        '<div class="sub-card-block" data-label="' + t("col.signature") + '">' + esc(sig) + "</div>" +
-        '<div class="sub-card-block sub-card-actions" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></div>" +
+        '<div class="sub-addr">' + esc(e.address) + "</div>" +
+        '<div class="sub-meta">' + badge + (sig ? '<span class="sub-sig">' + esc(sig) + "</span>" : "") + "</div>" +
+        '<div class="sub-foot"><button class="row-action pill-btn" data-compose="' + esc(e.address) + '">' + "✉ " + t("act.compose") + "</button></div>" +
         "</div>";
     });
     rows.push(pcSubRows);
@@ -501,8 +501,8 @@
       '<td colspan="5" class="agentreg-cell">' +
       '<div class="agentreg-card">' +
       '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
-      '<div class="muted" style="font-size:12px; margin-top:6px;">' + t("subs.registerNote") + "</div>" +
-      '<div class="sep-line" style="margin:12px 0;"></div>' +
+      '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
+      '<div class="sep-line" style="margin:8px 0;"></div>' +
       (subZone || '<div class="muted" style="font-size:12px;">' + t("subs.noneVisible") + "</div>") +
       "</div></td>" +
       "</tr>"
