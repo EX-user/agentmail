@@ -422,18 +422,28 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Visible   *bool            `json:"visible"` // nil = keep current (omitting must NOT reset)
-		Signature string           `json:"signature"`
-		Prefs     *map[string]any  `json:"prefs"` // nil = keep current; keys whitelist-validated below
+		Visible   *bool            `json:"visible"`   // nil = keep current (omitting must NOT reset)
+		Signature *string          `json:"signature"` // nil = keep current; "" (explicit) clears
+		Prefs     *map[string]any  `json:"prefs"`     // nil = keep current; keys whitelist-validated below
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
 	}
-	sig := strings.TrimSpace(body.Signature)
-	if len(sig) > MaxSignatureLen {
-		badRequest(w, fmt.Sprintf("signature too long (max %d chars)", MaxSignatureLen))
-		return
+	// Resolve signature: an omitted field keeps the stored value. The old
+	// plain-string decode turned "absent" into "" and every prefs-only POST
+	// (preference saves, API clients) silently wiped signatures — the
+	// exact bug that emptied several accounts' signatures in production.
+	// An explicitly sent empty string still means "clear my signature".
+	sig := ""
+	sigSet := false
+	if body.Signature != nil {
+		sig = strings.TrimSpace(*body.Signature)
+		sigSet = true
+		if len(sig) > MaxSignatureLen {
+			badRequest(w, fmt.Sprintf("signature too long (max %d chars)", MaxSignatureLen))
+			return
+		}
 	}
 	// Resolve visible: an omitted field keeps the stored value (the old
 	// non-pointer bool decoded "absent" to false and silently un-listed
@@ -442,6 +452,9 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
+	}
+	if !sigSet {
+		sig = cur.Signature
 	}
 	visible := cur.Visible
 	if body.Visible != nil {
@@ -462,7 +475,7 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionProfileUpdate, who,
-		fmt.Sprintf("visible=%v sig_len=%d", body.Visible, len(sig)))
+		fmt.Sprintf("visible=%v sig_set=%v sig_len=%d", body.Visible, sigSet, len(sig)))
 	// Preference keys: a closed whitelist per preference page v1. Unknown
 	// keys are rejected so the map can never become a junk drawer.
 	if body.Prefs != nil {
