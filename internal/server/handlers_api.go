@@ -399,12 +399,15 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		used, fileCount, expiring := s.store.AccountFileStats(acc.Address)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"address":         acc.Address,
-			"visible":         acc.Visible,
-			"signature":       acc.Signature,
-			"files_used_bytes": s.store.AccountFilesUsed(acc.Address),
-			"prefs":           acc.Prefs,
+			"address":               acc.Address,
+			"visible":               acc.Visible,
+			"signature":             acc.Signature,
+			"files_used_bytes":      used,
+			"attachments_count":     fileCount,
+			"attachments_expiring":  expiring,
+			"prefs":                 acc.Prefs,
 		})
 		return
 	}
@@ -514,13 +517,16 @@ func (s *Server) handleAccountInfo(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
+		used, fileCount, expiring := s.store.AccountFileStats(acc.Address)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"query":           "self",
-			"address":         acc.Address,
-			"is_admin":        acc.IsAdmin,
-			"visible":         acc.Visible,
-			"signature":       acc.Signature,
-			"files_used_bytes": s.store.AccountFilesUsed(acc.Address),
+			"query":                "self",
+			"address":              acc.Address,
+			"is_admin":             acc.IsAdmin,
+			"visible":              acc.Visible,
+			"signature":            acc.Signature,
+			"files_used_bytes":     used,
+			"attachments_count":    fileCount,
+			"attachments_expiring": expiring,
 		})
 
 	case "directory":

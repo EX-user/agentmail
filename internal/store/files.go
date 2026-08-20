@@ -349,18 +349,32 @@ func sortStrings(list []string) {
 
 // AccountFilesUsed returns the total bytes of the account's live files.
 func (s *Store) AccountFilesUsed(owner string) int64 {
-	var used int64
+	used, _, _ := s.AccountFileStats(owner)
+	return used
+}
+
+// AccountFileStats scans the account's live files once and returns the
+// used bytes, the file count, and how many expire within the next 7 days
+// (Overview attach column; expiry = CreatedAt + FileTTL — the same clock
+// the sweep uses).
+func (s *Store) AccountFileStats(owner string) (used int64, count int, expiringSoon int) {
+	now := s.now().Unix()
+	soonWindow := (FileTTL - 7*24*time.Hour).Seconds()
 	_ = s.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bFiles).Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var fr FileRecord
 			if json.Unmarshal(v, &fr) == nil && strings.EqualFold(fr.Owner, owner) {
 				used += fr.Size
+				count++
+				if age := now - fr.CreatedAt; age >= int64(soonWindow) && age < int64(FileTTL.Seconds()) {
+					expiringSoon++
+				}
 			}
 		}
 		return nil
 	})
-	return used
+	return used, count, expiringSoon
 }
 
 // randomFileCode mints a 32-hex-char download code.
