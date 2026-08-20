@@ -404,14 +404,28 @@
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
     );
-    // Standalone card between the own row and the other accounts (final
-    // pick after the hairline round): same order, its own container.
+    // Two-zone card (approved preview): top = register button + note,
+    // hairline, bottom = the subordinate accounts (full info incl.
+    // signature) — the main list below no longer repeats them.
+    var subZone = "";
+    (subsCache ? subsCache.subordinates || [] : []).forEach(function (e) {
+      var sig = e.signature || listedSig[e.address] || "";
+      subZone +=
+        '<div class="agentreg-sub">' +
+        '<div class="agentreg-sub-main"><span>' + esc(e.address) + ' <span class="badge-sub">' + t("subs.badge") + "</span></span>" +
+        (sig ? '<div class="muted agentreg-sub-sig">' + esc(sig) + "</div>" : "") +
+        "</div>" +
+        '<button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button>" +
+        "</div>";
+    });
     rows.push(
       '<tr class="agentreg-row">' +
       '<td colspan="5" class="agentreg-cell">' +
       '<div class="agentreg-card">' +
       '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
       '<div class="muted" style="font-size:12px; margin-top:6px;">' + t("subs.registerNote") + "</div>" +
+      '<div class="sep-line" style="margin:12px 0;"></div>' +
+      (subZone || '<div class="muted" style="font-size:12px;">' + t("subs.noneVisible") + "</div>") +
       "</div></td>" +
       "</tr>"
     );
@@ -429,6 +443,7 @@
     try {
       const data = await api("/api/contacts", { keepSession: true });
       (data.contacts || []).forEach(function (c) {
+        if (subAddrs[c]) return; // lives in the register card zone
         seenAddrs[c] = 1;
         // Subordinate addresses carry a badge (admin feedback: same style
         // family as the admin/listed badges on the admin view).
@@ -450,21 +465,8 @@
     } catch (e) {
       // contacts failure is non-fatal; just show self.
     }
-    // Subordinates merge flat into the main list, deduped against contacts
-    // (mrf2000 feedback: one merged column, not a separate collapsed area).
-    if (subsCache) (subsCache.subordinates || []).forEach(function (e) {
-      if (seenAddrs[e.address]) return;
-      rows.push(
-        "<tr>" +
-        '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
-        '<td data-label="' + t("col.tags") + '">' +
-        (listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "") +
-        '<span class="badge-sub">' + t("subs.badge") + "</span></td>" +
-        "<td data-label=\"Signature\"></td><td data-label=\"Created\">" + fmtTime(e.created_at) + "</td>" +
-        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
-        "</tr>"
-      );
-    });
+    // Subordinate accounts render ONLY inside the register card's zone
+    // (approved two-zone layout) — nothing about them joins the main list.
     tbody.innerHTML = rows.join("");
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);

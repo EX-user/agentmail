@@ -720,6 +720,12 @@ nav .tab { flex: 0 0 auto; }
   border-radius: 12px; padding: 12px 14px; margin: 10px 0;
   max-width: 640px;
 }
+.agentreg-sub {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 6px 0;
+}
+.agentreg-sub-main { min-width: 0; overflow-wrap: anywhere; }
+.agentreg-sub-sig { font-size: 12px; }
 
 /* Preferences cards (v0.6 layout round 2): one stacked card per section,
    title inside, compose-style wide controls (feedback: previous split
