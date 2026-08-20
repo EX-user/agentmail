@@ -452,7 +452,8 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 
 /* My activity grouped card (Overview): two columns of compact stat rows
    instead of a long row of boxes (admin feedback). */
-.my-activity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; }
+.my-activity-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 32px; }
+@media (max-width: 800px) { .my-activity-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .my-activity-grid { grid-template-columns: 1fr; } }
 .my-group-title {
   font-size: 11px; text-transform: uppercase; letter-spacing: 1px;

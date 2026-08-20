@@ -164,9 +164,20 @@
   // show at least what the guest portal shows). Growth comes from the public
   // endpoint, so it works for both admins and regular accounts; failures
   // degrade silently (no chart, no extra cards).
+  // growthDayTarget picks the chart's day count from the viewport
+  // (superior feedback): 7 on phones, 10 on mid widths, 14 on wide
+  // screens. The endpoint currently returns 7; when it grows to 14 the
+  // wide-screen charts fill in automatically (slice keeps what exists).
+  function growthDayTarget() {
+    const w = window.innerWidth || 1024;
+    return w <= 800 ? 7 : (w <= 1100 ? 10 : 14);
+  }
+
+  let lastGrowthData = null;
   function renderOverviewGrowth(growth) {
     const chart = $("#ovw-growth-card");
     if (!growth) { if (chart) chart.classList.add("hidden"); return; }
+    lastGrowthData = growth;
     // Flow metrics (today / last 7 days) go to the Activity group.
     const stats = $("#stats-activity");
     if (stats) {
@@ -175,13 +186,26 @@
         '<div class="stat"><span class="num">' + esc(growth.week) + '</span><span>' + t("lbl.week") + '</span></div>';
     }
     if (chart) {
-      drawGrowthDays((growth.days && growth.days.length)
-        ? growth.days
-        : [{ date: "today", count: growth.today }, { date: "week", count: growth.week }],
-        $("#ovw-growth-bars"), $("#ovw-growth-lbls"));
+      const n = growthDayTarget();
+      let days = (growth.days && growth.days.length)
+        ? growth.days.slice(-n)
+        : [{ date: "today", count: growth.today }, { date: "week", count: growth.week }];
+      const sub = $("#ovw-growth-sub");
+      if (sub) sub.textContent = t("ovw.growthSub", { n: days.length });
+      drawGrowthDays(days, $("#ovw-growth-bars"), $("#ovw-growth-lbls"));
       chart.classList.remove("hidden");
     }
   }
+  // Re-slice the chart when the viewport crosses a width band (debounced).
+  window.addEventListener("resize", function () {
+    clearTimeout(renderOverviewGrowth._rt);
+    renderOverviewGrowth._rt = setTimeout(function () {
+      const tab = $("#tab-overview");
+      if (lastGrowthData && tab && !tab.classList.contains("hidden")) {
+        renderOverviewGrowth(lastGrowthData);
+      }
+    }, 300);
+  });
 
   // renderOverviewPersonal fills the grouped "My activity" card: an
   // "All time" column (contacts / received / unread / sent) and a "Recent
@@ -192,11 +216,13 @@
     const card = $("#personal-card");
     if (!card) return;
     try {
-      const [con, inb, sent, myg] = await Promise.all([
+      const [con, inb, sent, myg, prof, setg] = await Promise.all([
         api("/api/contacts").catch(function () { return null; }),
         api("/api/inbox?limit=1").catch(function () { return null; }),
         api("/api/sent?limit=1").catch(function () { return null; }),
         api("/api/mygrowth").catch(function () { return null; }),
+        api("/api/profile/self", { keepSession: true }).catch(function () { return null; }),
+        api("/api/info?query=settings", { keepSession: true }).catch(function () { return null; }),
       ]);
       const allTime = [];
       if (con) allTime.push({ num: con.count, label: t("lbl.contacts") });
@@ -215,14 +241,34 @@
             '</span><span class="my-stat-num">' + esc(c.num) + "</span></div>";
         }).join("");
       };
+      // Attach column (superior feedback): quota first (server cap), then
+      // the progressive rows — count and 7-day expiry light up as the
+      // server fields arrive; the retention window is the fixed compile
+      // TTL (30 days), labelled as such.
+      const attach = [];
+      const used = prof && typeof prof.files_used_bytes === "number" ? prof.files_used_bytes : null;
+      const cap = setg && typeof setg.file_quota_per_acct === "number" ? setg.file_quota_per_acct : null;
+      if (used != null && cap != null && cap > 0) {
+        attach.push({ num: fmtBytes(used) + " / " + fmtBytes(cap) + (used >= cap ? " (" + t("attach.quotaFull") + ")" : ""), label: t("ovw.attachQuota") });
+      }
+      if (prof && typeof prof.attachments_count === "number") {
+        attach.push({ num: prof.attachments_count, label: t("ovw.attachCount") });
+      }
+      if (prof && typeof prof.attachments_expiring === "number") {
+        attach.push({ num: prof.attachments_expiring, label: t("ovw.attachExpiring") });
+      }
+      attach.push({ num: t("ovw.attachTtlVal"), label: t("ovw.attachTtl") });
       $("#personal-alltime").innerHTML = renderRows(allTime);
       $("#personal-recent").innerHTML = renderRows(recent);
+      $("#personal-attach").innerHTML = renderRows(attach);
       // Empty halves collapse instead of showing an empty column.
       const allEl = $("#personal-alltime").parentElement;
       const recEl = $("#personal-recent").parentElement;
+      const attEl = $("#personal-attach").parentElement;
       allEl.style.display = allTime.length ? "" : "none";
       recEl.style.display = recent.length ? "" : "none";
-      card.classList.toggle("hidden", !allTime.length && !recent.length);
+      attEl.style.display = attach.length ? "" : "none";
+      card.classList.toggle("hidden", !allTime.length && !recent.length && !attach.length);
     } catch (_) {
       card.classList.add("hidden");
     }
@@ -1979,21 +2025,8 @@
       const subsWrap = $("#subs-section-wrap");
       if (subsWrap) subsWrap.classList.toggle("hidden", !!(s && s.is_admin));
       if (s && !s.is_admin) loadSubs(true).catch(function () {});
-      // Attachment quota (v0.5.3): used bytes come from THIS endpoint's
-      // response (p — /api/profile/self carries files_used_bytes); the cap
-      // from public settings. Reading /api/account/info here was wrong
-      // (that MCP-side endpoint has no usage field).
-      try {
-        const set = await api("/api/info?query=settings").catch(function () { return null; });
-        const used = p.files_used_bytes;
-        const cap = set && set.file_quota_per_acct;
-        const row = $("#attach-quota-row");
-        if (row && typeof used === "number" && typeof cap === "number" && cap > 0) {
-          $("#attach-quota-value").textContent = fmtBytes(used) + " / " + fmtBytes(cap) +
-            (used >= cap ? " (" + t("attach.quotaFull") + ")" : "");
-          row.style.display = "";
-        }
-      } catch (_) { /* quota row is optional */ }
+      // Attachment quota row retired (superior feedback): capacity moved to
+      // the Overview "My activity" attach column, cap from server settings.
     } catch (e) {
       status.textContent = t("common.error", { msg: e.message });
     }
@@ -2456,12 +2489,14 @@
 
   // renderGrowthChart draws the portal's 7-day bar chart. Preferred input is
   // growth.days = [{date, count}, ...]; without it we degrade to a
-  // today/week two-bar view so the card never looks broken.
+  // today/week two-bar view so the card never looks broken. The portal
+  // keeps a fixed 7 days (superior: panel-only adaptivity) — slice even if
+  // the endpoint later grows to 14.
   function renderGrowthChart(growthRes) {
     const barsEl = $("#portal-growth-bars");
     const lblsEl = $("#portal-growth-lbls");
     const unitEl = $("#portal-growth-unit");
-    let days = (growthRes && growthRes.days) || [];
+    let days = ((growthRes && growthRes.days) || []).slice(-7);
     if (!days.length && growthRes) {
       days = [
         { date: t("lbl.today"), count: growthRes.today },

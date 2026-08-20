@@ -252,12 +252,13 @@
       <div class="stats" id="stats-system">Loading…</div>
       <h3 data-i18n="ovw.activity">Activity</h3>
       <div class="stats" id="stats-activity">Loading…</div>
-      <!-- 7-day growth chart (v0.4.8, admin request): the logged-in Overview
+      <!-- Growth chart (v0.4.8, admin request): the logged-in Overview
            shows at least what the guest portal shows. Filled from the public
            growth endpoint; hidden when it fails. Full content width like the
-           System/Activity groups (superior feedback: 640px cap too narrow). -->
+           System/Activity groups (superior feedback: 640px cap too narrow).
+           Day count adapts to the viewport (7/10/14) — see renderOverviewGrowth. -->
       <div id="ovw-growth-card" class="portal-card hidden" style="margin-top:16px;">
-        <div class="chart-head"><span class="t">Mail growth</span><span class="u">messages · last 7 days</span></div>
+        <div class="chart-head"><span class="t">Mail growth</span><span class="u" id="ovw-growth-sub">messages · last 7 days</span></div>
         <div class="bars" id="ovw-growth-bars"></div>
         <div class="bar-lbls" id="ovw-growth-lbls"></div>
       </div>
@@ -278,6 +279,13 @@
           <div>
             <h4 class="my-group-title" data-i18n="ovw.recent">Recent traffic</h4>
             <div id="personal-recent"></div>
+          </div>
+          <!-- Attach column (superior feedback): quota (server-provided cap),
+               live attachment count, and near-expiry count. Count/expiry rows
+               appear progressively as the server fields land. -->
+          <div>
+            <h4 class="my-group-title" data-i18n="ovw.attach">Attachments</h4>
+            <div id="personal-attach"></div>
           </div>
         </div>
       </div>
@@ -399,10 +407,9 @@
             <button id="btn-save-profile" class="primary" data-i18n="prof.save">Save profile</button>
             <span id="profile-status" class="muted"></span>
           </div>
-          <div class="my-stat-row" id="attach-quota-row" style="display:none;">
-            <span class="my-stat-label" data-i18n="prof.attachQuota">Attachments</span>
-            <span class="my-stat-num" id="attach-quota-value"></span>
-          </div>
+          <!-- Attachment quota row retired (superior feedback): capacity now
+               lives in the Overview "My activity" attach column; the cap
+               there comes from the server-provided settings value. -->
         </div>
       </div>
 
