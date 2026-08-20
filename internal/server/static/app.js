@@ -1143,6 +1143,13 @@
   // Audio players on the page form a sequential queue (feedback): starting
   // one pauses the rest; autoplay (when enabled) walks the queue in order.
   let audioPlayers = [];
+  // Detached <audio> keeps playing after its detail pane re-renders —
+  // pause and drop the queue whenever a message view is (re)opened.
+  function resetAudioPlayers() {
+    audioPlayers.forEach(function (p) { try { p.pause(); } catch (_) {} });
+    audioPlayers = [];
+  }
+
   function registerAudioPlayer(au) {
     audioPlayers.push(au);
     au.addEventListener("play", function () {
@@ -1259,6 +1266,7 @@
   }
 
   async function showDetail(id, item) {
+    resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
@@ -1389,6 +1397,7 @@
   // server); on failure falls back to the summary (preview). Attachments stay
   // metadata-only either way (Q2: no download).
   async function showSubDetail(subAddr, m, item) {
+    resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
@@ -1686,6 +1695,7 @@
   }
 
   async function showInboxDetail(id, item, auto) {
+    resetAudioPlayers();
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
