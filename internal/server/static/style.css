@@ -717,35 +717,53 @@ nav .tab { flex: 0 0 auto; }
   #accounts-table td[data-label]:empty { display: none; }
   #accounts-table td.actions-cell { margin-top: 6px; white-space: normal; }
   #accounts-table td.actions-cell button { margin: 0 6px 6px 0; }
+  /* PC-only leading sub rows disappear on phones (the container card
+     takes over there); the container row disappears on desktop. */
+  .subrow-pc { display: none !important; }
 }
 
-/* Agent-mailbox register card (final layout): its own container between
-   the own row and the other accounts, same visual family as row cards.
-   The container is ONLY a rounded grouping box — every subordinate inside
-   renders as a full account card (superior feedback att1-vs-att2). */
+/* Agent-mailbox register zone (superior feedback round 3): on DESKTOP the
+   register button lives above the table (#subreg-pc) and subordinates are
+   leading table rows (.subrow-pc) — no container. Phones keep the
+   container card; .pc-only hides desktop-only blocks there. */
+.pc-only { }
+@media (max-width: 800px) { .pc-only { display: none !important; } }
+.agentreg-row { display: none; }
 .agentreg-cell { padding: 0; }
 .agentreg-card {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px 14px; margin: 10px 0;
-  max-width: 640px;
+  /* Full content width like the Overview stats groups (superior feedback:
+     640px cap read as too narrow; System/Activity groups are the reference). */
 }
-/* Subordinate account card: same border/radius/padding grammar as the
-   account row cards; surface via --sub-card-bg/-border so each theme
-   picks the right contrast against the container (light: white on white
-   with a deeper border — superior pick, variant B). */
+/* Subordinate account entry — display follows the surrounding grammar
+   (superior feedback): on PC the accounts table shows ROWS (td 8/12,
+   bottom hairline), so the desktop base renders each subordinate as a
+   bare grid row inside the register container (the ONLY difference vs
+   other accounts = living in that container). Phones flip to stacked
+   cards in the mobile block below — source order keeps it winning. */
 .sub-card {
-  display: flex; align-items: center; gap: 12px;
-  border: 1px solid var(--sub-card-border); border-radius: 12px;
-  background: var(--sub-card-bg); padding: 10px 14px; margin: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 2.4fr) auto;
+  align-items: center; gap: 12px;
+  padding: 8px 12px;
+  border: none; border-bottom: 1px solid var(--border);
+  border-radius: 0; background: transparent; margin: 0;
 }
-.sub-card-block { min-width: 0; overflow-wrap: anywhere; flex: 2 1 0; }
-.sub-card .sub-card-tags { flex: 1 1 0; }
-.sub-card .sub-card-actions { flex: 0 0 auto; }
+.sub-card:last-child { border-bottom: none; }
+.sub-card-block { min-width: 0; overflow-wrap: anywhere; }
+.sub-card .sub-card-actions { justify-self: end; }
 /* Subordinate cards stack exactly like the row cards on phones: block
    layout, same micro-label ::before, same cell rhythm. MUST stay after
    the flex base rule above — equal specificity, source order wins. */
 @media (max-width: 800px) {
-  .sub-card { display: block; padding: 12px 14px; }
+  /* Phones: back to the approved stacked card (full chrome must be
+     restated — the desktop base is now a bare row). */
+  .sub-card {
+    display: block; padding: 12px 14px; margin: 8px 0;
+    border: 1px solid var(--sub-card-border); border-radius: 12px;
+    background: var(--sub-card-bg);
+  }
   .sub-card-block { padding: 4px 0; }
   .sub-card-block[data-label]::before {
     content: attr(data-label); display: block;
@@ -753,7 +771,7 @@ nav .tab { flex: 0 0 auto; }
     color: var(--muted); margin-bottom: 1px;
   }
   .sub-card-block[data-label]:empty { display: none; }
-  .sub-card-actions { margin-top: 6px; white-space: normal; }
+  .sub-card-actions { margin-top: 6px; white-space: normal; justify-self: start; }
   .sub-card-actions button { margin: 0 6px 6px 0; }
 }
 
@@ -1009,8 +1027,18 @@ nav .tab { flex: 0 0 auto; }
 .img-lightbox img {
   max-width: 92vw; max-height: 88vh;
   border-radius: 8px; box-shadow: 0 8px 48px rgba(0, 0, 0, 0.55);
-  cursor: zoom-out;
+  cursor: default;
 }
+/* Explicit download button (superior feedback: the image itself must not
+   download on click). Bottom-center, glass style, above the picture. */
+.img-lightbox-dl {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  padding: 8px 18px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.12); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px); font-size: 13px;
+}
+.img-lightbox-dl:hover { background: rgba(255, 255, 255, 0.22); }
 @media (prefers-reduced-motion: reduce) { .img-lightbox { animation: none; } }
 
 /* Attachment TTL badge (v0.5.3). */
