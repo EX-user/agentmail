@@ -713,27 +713,42 @@ nav .tab { flex: 0 0 auto; }
 }
 
 /* Agent-mailbox register card (final layout): its own container between
-   the own row and the other accounts, same visual family as row cards. */
+   the own row and the other accounts, same visual family as row cards.
+   The container is ONLY a rounded grouping box — every subordinate inside
+   renders as a full account card (superior feedback att1-vs-att2). */
 .agentreg-cell { padding: 0; }
-.agentreg-sub {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 10px; padding: 10px 12px; margin: 8px 0;
-  border: 1px solid var(--border); border-radius: 12px;
-  background: var(--bg);
-}
-.agentreg-sub-main { min-width: 0; overflow-wrap: anywhere; }
-.agentreg-sub-sig { font-size: 12px; }
 .agentreg-card {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px 14px; margin: 10px 0;
   max-width: 640px;
 }
-.agentreg-sub {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 10px; padding: 6px 0;
+/* Subordinate account card: same border/radius/padding grammar as the
+   account row cards; --bg (not --panel) so each card reads as a card
+   against the container's panel background. Desktop lays the blocks out
+   in a row echoing the table columns. */
+.sub-card {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg); padding: 10px 14px; margin: 8px 0;
 }
-.agentreg-sub-main { min-width: 0; overflow-wrap: anywhere; }
-.agentreg-sub-sig { font-size: 12px; }
+.sub-card-block { min-width: 0; overflow-wrap: anywhere; flex: 2 1 0; }
+.sub-card .sub-card-tags { flex: 1 1 0; }
+.sub-card .sub-card-actions { flex: 0 0 auto; }
+/* Subordinate cards stack exactly like the row cards on phones: block
+   layout, same micro-label ::before, same cell rhythm. MUST stay after
+   the flex base rule above — equal specificity, source order wins. */
+@media (max-width: 800px) {
+  .sub-card { display: block; padding: 12px 14px; }
+  .sub-card-block { padding: 4px 0; }
+  .sub-card-block[data-label]::before {
+    content: attr(data-label); display: block;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin-bottom: 1px;
+  }
+  .sub-card-block[data-label]:empty { display: none; }
+  .sub-card-actions { margin-top: 6px; white-space: normal; }
+  .sub-card-actions button { margin: 0 6px 6px 0; }
+}
 
 /* Preferences cards (v0.6 layout round 2): one stacked card per section,
    title inside, compose-style wide controls (feedback: previous split
