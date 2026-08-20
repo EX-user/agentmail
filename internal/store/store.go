@@ -50,6 +50,11 @@ var (
 	mFilesTotalLimit      = []byte("files_total_limit")
 	mFileQuotaPerAcct     = []byte("file_quota_per_acct")
 	mOneclickRegisterEnabled = []byte("oneclick_register_enabled")
+	// mRandomRegisterEnabled gates the PASSWORDLESS /api/register path
+	// (the retired one-click random register). Absent = disabled: the
+	// mechanism retired with a superior directive, so the default must
+	// stay off even on instances that carry old oneclick UI-hint values.
+	mRandomRegisterEnabled = []byte("random_register_enabled")
 	mShowcaseEnabled      = []byte("showcase_enabled")
 	mDanmakuMode          = []byte("danmaku_default_mode")
 	mDanmakuSpeed         = []byte("danmaku_default_speed")
@@ -253,6 +258,41 @@ func (s *Store) SetRegistrationEnabled(enabled bool) error {
 			return nil
 		}
 		return mb.Put(mRegistrationEnabled, []byte(v))
+	})
+}
+
+// IsRandomRegisterEnabled reports whether the PASSWORDLESS register path
+// (one-click random register, retired from the public UI) may still be
+// used. Defaults to FALSE — off unless an admin explicitly re-enables it
+// for debugging. Note this is a server-side GATE, unlike the legacy
+// oneclick_register_enabled key which was a pure UI hint.
+func (s *Store) IsRandomRegisterEnabled() bool {
+	var v string
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if raw := mb.Get(mRandomRegisterEnabled); raw != nil {
+			v = string(raw)
+		}
+		return nil
+	})
+	return v == "1" // absent = disabled (retired mechanism)
+}
+
+// SetRandomRegisterEnabled toggles the passwordless debug register path.
+func (s *Store) SetRandomRegisterEnabled(enabled bool) error {
+	v := "1"
+	if !enabled {
+		v = "0"
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		return mb.Put(mRandomRegisterEnabled, []byte(v))
 	})
 }
 

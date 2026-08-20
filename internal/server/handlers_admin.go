@@ -421,6 +421,7 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 		"registration_enabled":      s.store.IsRegistrationEnabled(),
 		"directory_listed_enabled":  s.store.IsDirectoryListedEnabled(),
 		"oneclick_register_enabled": s.store.IsOneclickRegisterEnabled(),
+		"random_register_enabled":   s.store.IsRandomRegisterEnabled(),
 		"showcase_enabled":          s.store.IsShowcaseEnabled(),
 		"danmaku_mode":              s.store.GetDanmakuDefaultMode(),
 		"danmaku_speed":             s.store.GetDanmakuDefaultSpeed(),
@@ -479,6 +480,31 @@ func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.R
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionSetOneclickRegister, "oneclick_register", "by=admin "+state)
 	writeJSON(w, http.StatusOK, map[string]any{"oneclick_register_enabled": body.Enabled})
+}
+
+// handleAdminSetRandomRegister toggles the retired passwordless register
+// path (debug only — the public one-click entry is gone from the UI).
+//   POST /admin/set-random-register {"enabled": bool}
+func (s *Server) handleAdminSetRandomRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	var body struct{ Enabled bool `json:"enabled"` }
+	if err := decodeJSON(r, &body); err != nil {
+		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if err := s.store.SetRandomRegisterEnabled(body.Enabled); err != nil {
+		internalError(w, "set random register: "+err.Error())
+		return
+	}
+	state := "enable"
+	if !body.Enabled {
+		state = "disable"
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSetRandomRegister, "random_register", "by=admin "+state)
+	writeJSON(w, http.StatusOK, map[string]any{"random_register_enabled": body.Enabled})
 }
 
 // handleAdminClearShowcase empties the showcase bucket (e.g. after bad data

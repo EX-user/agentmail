@@ -125,8 +125,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	// Optional caller-chosen password: when present it must meet the same
 	// minimum as everywhere else, and the response omits it (the caller
 	// already knows it — the field's absence is the frontend's branch
-	// signal). Absent/empty keeps the generated one-time password flow
-	// (one-click register depends on it).
+	// signal). Absent/empty is the retired one-click random register flow:
+	// the generated-password path now sits behind the admin debug toggle
+	// (random_register_enabled, default OFF — superior directive). Normal
+	// password register is unaffected.
 	chosePassword := strings.TrimSpace(body.Password) != ""
 	var res *store.CreateAccountResult
 	var err error
@@ -137,6 +139,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		res, err = s.store.CreateAccountWithPassword(name, s.domain(), false, body.Password)
 	} else {
+		if !s.store.IsRandomRegisterEnabled() {
+			http.Error(w, "random (passwordless) registration is retired; provide a password", http.StatusForbidden)
+			return
+		}
 		res, err = s.store.CreateAccount(name, s.domain(), false)
 	}
 	if err != nil {

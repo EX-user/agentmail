@@ -101,6 +101,7 @@ func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 		"registration_enabled":       s.store.IsRegistrationEnabled(),
 		"directory_listed_enabled":   s.store.IsDirectoryListedEnabled(),
 		"oneclick_register_enabled":  s.store.IsOneclickRegisterEnabled(),
+		"random_register_enabled":    s.store.IsRandomRegisterEnabled(),
 		"showcase_enabled":           s.store.IsShowcaseEnabled(),
 		"danmaku_default_mode":       s.store.GetDanmakuDefaultMode(),
 		"danmaku_default_speed":      s.store.GetDanmakuDefaultSpeed(),
