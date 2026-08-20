@@ -552,11 +552,14 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   background: linear-gradient(100deg, #fff 20%, #5ea2ff 55%, #8a7bff 80%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-/* Corner-mark placement (superior): the pill sits INLINE right after the
-   big word, raised slightly above the baseline — like a (TM)/(R) mark at
-   the word's bottom-right, compact so it reads as a mark, not a control. */
+/* Corner-mark placement (superior): the h1 is a flex row — the word and
+   the pill are flex items aligned to the BOTTOM edge (the standard
+   badge-beside-title container; no inline-baseline tricks, and flex
+   never wraps the pill to its own line). margin-bottom lifts the pill
+   into the word's bottom-right corner like a (TM)/(R) mark. */
+.portal-title { display: flex; align-items: flex-end; }
 .portal-title .lang-toggle {
-  display: inline-flex; vertical-align: 14px; margin-left: 12px;
+  flex: 0 0 auto; margin: 0 0 16px 12px;
 }
 .portal-title .lang-toggle .seg { font-size: 11px; padding: 3px 8px; }
 .portal-sub { color: var(--muted); font-size: 17px; max-width: 560px; margin: 0 auto 30px; }
