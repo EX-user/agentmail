@@ -47,10 +47,10 @@
         <div class="portal-ctas">
           <button id="btn-portal-login" class="btn btn-primary" data-i18n="portal.cta.login">Log in</button>
           <button id="btn-portal-register" class="btn btn-ghost" data-i18n="portal.cta.register">Register</button>
-          <!-- One-click register buttons REMOVED (superior+alice ruling,
-               方案 A): user-facing entry points gone; the code path, the
-               admin oneclick_register_enabled toggle, and the settings
-               endpoint stay as the debug backdoor. -->
+          <!-- One-click register REMOVED (superior+alice ruling, plan A):
+               entries, modal, and front-end code path all retired. The
+               server-side passwordless branch stays as a debug backdoor,
+               gated by random_register_enabled (Settings debug toggle). -->
           <!-- Team register (v0.5.14): one owner + member mailboxes in a
                single atomic action — third portal entry, coexists with the
                single-account flows. Visibility follows registration_enabled
@@ -465,6 +465,17 @@
           <button id="btn-toggle-registration" class="row-action hidden"></button>
         </div>
       </div>
+      <!-- Random (passwordless) registration — debug-only backdoor
+           (retired for users): the panel has no entry point; this toggle
+           gates the server-side /api/register passwordless branch.
+           Default OFF; not for end users. -->
+      <div class="settings-section">
+        <h3 data-i18n="set.randomReg">Random registration (debug)</h3>
+        <div class="row">
+          <span id="randomreg-status" class="muted">Loading…</span>
+          <button id="btn-toggle-randomreg" class="row-action hidden"></button>
+        </div>
+      </div>
       <div class="settings-section">
         <h3 data-i18n="set.dirListing">Directory listing</h3>
         <div class="row">
@@ -613,32 +624,6 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- One-click agent register modal: opened programmatically after a
-       one-click registration. Shows the clipboard status and the full agent
-       prompt. Closes via the × button, the overlay, or Esc. -->
-  <div id="oneclick-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="oneclick-title">
-    <div class="modal-card">
-      <div class="modal-head">
-        <h2 id="oneclick-title" data-i18n="reg.success">Account created ✅</h2>
-        <button id="btn-oneclick-close" class="modal-x" title="Close" aria-label="Close" data-i18n-aria="modal.close">×</button>
-      </div>
-      <p id="oneclick-hint" class="muted"></p>
-      <div class="compose-form">
-        <p><b data-i18n="reg.address">Address:</b> <code id="oneclick-address"></code></p>
-        <p><b data-i18n="reg.password">Password:</b> <code id="oneclick-password"></code></p>
-      </div>
-      <div class="row" style="margin-bottom:8px;">
-        <b data-i18n="agent.promptTitle">Prompt for your agent</b>
-        <button type="button" id="btn-oneclick-copy" class="row-action" data-i18n="agent.copyAgain">Copy again</button>
-        <span id="oneclick-copy-status" class="muted"></span>
-      </div>
-      <pre class="code-block modal-code" id="oneclick-prompt"></pre>
-      <div class="row" style="margin-bottom:0; justify-content:flex-end;">
-        <button id="btn-oneclick-login" class="primary" data-i18n="reg.loginWith">Log in with this account</button>
-        <button id="btn-oneclick-another" class="row-action" data-i18n="reg.another">Register another</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Register-subordinate result modal (v0.5.11): one-time credentials,
        same presentation family as the one-click register modal. -->
