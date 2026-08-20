@@ -36,6 +36,7 @@ type SubEdge struct {
 	Address   string `json:"address"`    // the other side (subordinate or superior, per query)
 	Scope     string `json:"scope"`
 	CreatedAt int64  `json:"created_at"`
+	Signature string `json:"signature"`  // the other side's directory signature ("" when unset/hidden — bots are usually unlisted)
 }
 
 // subKey builds the bSubs key for "subordinate declares under superior".
@@ -109,11 +110,19 @@ func (s *Store) SubordinatesOf(superior string) []SubEdge {
 	prefix := []byte(strings.ToLower(superior) + "\x00")
 	_ = s.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bSubs).Cursor()
+		ab := tx.Bucket(bAccounts)
 		for k, v := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), string(prefix)); k, v = c.Next() {
 			_, sub := splitSubKey(k)
 			var rec SubRecord
 			_ = json.Unmarshal(v, &rec)
-			out = append(out, SubEdge{Address: sub, Scope: rec.Scope, CreatedAt: rec.CreatedAt})
+			sig := ""
+			if raw := ab.Get([]byte(sub)); raw != nil {
+				var acc Account
+				if json.Unmarshal(raw, &acc) == nil {
+					sig = acc.Signature
+				}
+			}
+			out = append(out, SubEdge{Address: sub, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig})
 		}
 		return nil
 	})
@@ -127,6 +136,7 @@ func (s *Store) SuperiorsOf(subordinate string) []SubEdge {
 	suffix := []byte("\x00" + strings.ToLower(subordinate))
 	_ = s.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bSubs).Cursor()
+		ab := tx.Bucket(bAccounts)
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			if !strings.HasSuffix(string(k), string(suffix)) {
 				continue
@@ -134,7 +144,14 @@ func (s *Store) SuperiorsOf(subordinate string) []SubEdge {
 			sup, _ := splitSubKey(k)
 			var rec SubRecord
 			_ = json.Unmarshal(v, &rec)
-			out = append(out, SubEdge{Address: sup, Scope: rec.Scope, CreatedAt: rec.CreatedAt})
+			sig := ""
+			if raw := ab.Get([]byte(sup)); raw != nil {
+				var acc Account
+				if json.Unmarshal(raw, &acc) == nil {
+					sig = acc.Signature
+				}
+			}
+			out = append(out, SubEdge{Address: sup, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig})
 		}
 		return nil
 	})
