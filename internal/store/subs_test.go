@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func newSubsStore(t *testing.T) *Store {
 	t.Helper()
@@ -133,5 +136,34 @@ func TestSubsShouldAuditSampled(t *testing.T) {
 	}
 	if !s.ShouldAuditSubRead("c@t", "a@t") {
 		t.Fatal("a different pair audits independently")
+	}
+}
+
+func TestUnreadCountDecrementsAfterRead(t *testing.T) {
+	s := newSubsStore(t)
+	seedSubsAccounts(t, s)
+	for i := 0; i < 3; i++ {
+		if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, fmt.Sprintf("m%d", i), "x"); err != nil {
+			t.Fatalf("send %d: %v", i, err)
+		}
+	}
+	n, err := s.CountUnread("a@t")
+	if err != nil || n != 3 {
+		t.Fatalf("after sends: count=%d err=%v (want 3)", n, err)
+	}
+	msgs, _ := s.ReadInbox("a@t", 10)
+	if len(msgs) != 3 {
+		t.Fatalf("inbox=%d", len(msgs))
+	}
+	if _, err := s.GetMessage("a@t", msgs[0].ID); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	n, _ = s.CountUnread("a@t")
+	if n != 2 {
+		t.Fatalf("after read: count=%d (want 2)", n)
+	}
+	msgs2, _ := s.ReadInbox("a@t", 10)
+	if msgs2[0].Unread {
+		t.Fatalf("summary says unread but count=%d", n)
 	}
 }
