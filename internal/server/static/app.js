@@ -2863,10 +2863,18 @@
     }
 
     function rowHtml(f) {
-      const d = daysLeft(f.expires_at);
-      const meta = fmtBytes(f.size || 0) + (d != null ? " · " +
-        '<span' + (d <= 7 ? ' class="soon"' : "") + ">" + d + '天</span>' : "");
-      return '<div class="am-row" data-fid="' + esc(f.id) + '">' +
+      // Expired-but-not-yet-swept files stay listed (server contract): grey them
+      // out instead of showing a meaningless "0 days".
+      const expired = f.expires_at && f.expires_at * 1000 <= Date.now();
+      let meta = fmtBytes(f.size || 0);
+      if (expired) {
+        meta += ' · <span class="soon">' + t("am.expired") + "</span>";
+      } else {
+        const d = daysLeft(f.expires_at);
+        if (d != null) meta += " · " +
+          '<span' + (d <= 7 ? ' class="soon"' : "") + ">" + t("am.daysLeft", { n: d }) + "</span>";
+      }
+      return '<div class="am-row' + (expired ? " expired" : "") + '" data-fid="' + esc(f.id) + '">' +
         '<span class="fn" title="' + esc(f.filename || "") + '">' + esc(f.filename || f.id) + "</span>" +
         '<span class="meta">' + meta + "</span>" +
         '<span class="btns">' +

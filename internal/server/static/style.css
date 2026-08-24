@@ -1074,6 +1074,7 @@ nav .tab { flex: 0 0 auto; }
 .am-row { display: flex; align-items: center; gap: 8px; padding: 5px 0;
   border-bottom: 1px solid var(--border); font-size: 13px; }
 .am-row:last-child { border-bottom: none; }
+.am-row.expired .fn, .am-row.expired .meta { opacity: .55; }
 .am-row .fn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 .am-row .meta { flex: 0 0 auto; font-size: 11px; color: var(--muted);
