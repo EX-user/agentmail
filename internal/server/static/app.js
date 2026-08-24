@@ -1817,12 +1817,18 @@
   }
 
   function inboxNavRow() {
-    // Compact sticky pill (superior-approved): pinned at the top-left of the
-    // reading pane so prev/next stay tappable wherever the letter is scrolled.
+    // Compact pill (superior-approved) in its own band above the letter —
+    // the letter body scrolls in a separate region below it, so the buttons
+    // are always reachable and never overlap the content.
     return '<div class="inbox-nav">' +
       '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
       '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
       "</div>";
+  }
+
+  // Two-zone detail frame: nav band + independently scrolling letter region.
+  function inboxDetailFrame(inner) {
+    return inboxNavRow() + '<div class="detail-scroll">' + inner + "</div>";
   }
 
   async function showInboxDetail(id, item, auto) {
@@ -1830,11 +1836,10 @@
     $$(".mail-item", $("#inbox-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
-    detail.innerHTML = inboxNavRow();
+    detail.innerHTML = inboxDetailFrame('<div class="inbox-loading">' + t("common.loading") + "</div>");
     const navPrev = $('[data-nav="-1"]', detail), navNext = $('[data-nav="1"]', detail);
     if (navPrev) navPrev.addEventListener("click", function () { inboxStepNav(item, -1); });
     if (navNext) navNext.addEventListener("click", function () { inboxStepNav(item, 1); });
-    detail.insertAdjacentHTML("beforeend", '<div class="inbox-loading">' + t("common.loading") + "</div>");
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -1848,8 +1853,9 @@
       // roles (admin satisfies account auth).
       const m = await api("/api/message?id=" + encodeURIComponent(id));
       // Final render includes the nav row (earlier only the loading frame
-      // had it — data arrival wiped it; feedback root cause).
-      detail.innerHTML = inboxNavRow() +
+      // had it — data arrival wiped it; feedback root cause); the letter
+      // itself lives in the scroll region below the nav band.
+      detail.innerHTML = inboxDetailFrame(
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
@@ -1857,7 +1863,7 @@
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m);
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
       refreshInboxBadge();
@@ -1874,7 +1880,7 @@
       if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
       // Keep the nav row on errors too — the reader can still step away.
-      detail.innerHTML = inboxNavRow() + '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
+      detail.innerHTML = inboxDetailFrame('<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
       const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
       if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
       if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
