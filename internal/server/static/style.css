@@ -1150,8 +1150,30 @@ nav .tab { flex: 0 0 auto; }
 .attach-ttl-over { color: var(--error); }
 
 /* Inbox prev/next (v0.5.4.1): visible on every width — desktop readers
-   want it too (feedback). The pager-hide stays phone-only (tabs layout). */
-.inbox-nav { display: flex; }
+   want it too (feedback). The pager-hide stays phone-only (tabs layout).
+   (v0.5.19, superior-approved) The two buttons form one compact pill in
+   its own band above the letter; the letter body scrolls in a separate
+   region below (#inbox-detail is a flex column), so the buttons never
+   overlap content and never scroll away. */
+#inbox-detail { display: flex; flex-direction: column; }
+.detail-scroll {
+  overflow-y: auto; min-height: 0; flex: 1;
+}
+@media (max-width: 800px) {
+  /* Keep tabs + pill on screen: the letter scrolls inside this region. */
+  .detail-scroll { max-height: calc(100vh - 250px); min-height: 180px; }
+}
+.inbox-nav {
+  display: inline-flex; flex: 0 0 auto; align-self: flex-start;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 999px; overflow: hidden; margin: 0 0 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+}
+.inbox-nav .row-action {
+  border: none; border-radius: 0;
+  padding: 4px 12px; font-size: 12px; min-height: 0;
+}
+.inbox-nav .row-action + .row-action { border-left: 1px solid var(--border); }
 @media (max-width: 800px) {
   /* The pager belongs to the List tab; hide it while reading a message. */
   #inbox-grid.mshow-detail ~ .inbox-pager { display: none; }
