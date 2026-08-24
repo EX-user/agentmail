@@ -2824,6 +2824,102 @@
   // POST /api/register-team. The success view lists every credential and
   // ONE copy-all button — no per-account agent prompts (future first-login
   // welcome page may carry those).
+  // ---- team register v2: name-like member names ----
+  // Multi-cultural pools (superior-approved: en/ja-romaji/zh-pinyin/fr/de/ru;
+  // 161 given x 113 surname = 18,193 combos; measured team-collision 0.009%
+  // with suffix fallback, hard-fail 0). Join style is picked ONCE per form
+  // open (superior: PascalCase / flat / underscore / hyphen; consistent
+  // within a team; invisible - never in copy, no toggle).
+  const TEAM_GIVEN = ("alex sam casey riley jordan taylor morgan avery quinn ruby oscar milo hazel iris " +
+    "jasper felix hugh arthur alice henry emma jack lily owen rose theo vera elias nora leo " +
+    "adam nina simon lucy omar zara ivy hugo louis claire elise marin noah jules luna victor " +
+    "camille chloe adrien manon lea lucas eva gabin juliette greta lena jonas emil paul frieda " +
+    "anna max clara otto elsa karl hanna lotte anton marlene franz " +
+    "yuki mei ren sora hana kaito riku aoi haru sana rio miku yui akira ryo nao shun kaori miyu " +
+    "takumi emi jun kenji saki ayumi rika minori kei hina yua kenta subaru asuka chihiro " +
+    "wei ming hua lan yun xia feng jing tao mei ling dan bo cheng fang guang hai jian jun " +
+    "kang lei liang ning qi rong shan sheng ting wan xin ying yong ze " +
+    "ivan nadia sergei dmitri olga boris katya misha anya nikita vera pavel sonia yuri lera " +
+    "artem dasha kolya oksana lev zoya galina petr sveta valery").split(" ");
+  const TEAM_SURNAME = ("smith miller cooper hunter walker foster brooks hayes murray reed grant dean " +
+    "west lane price stone ford marsh blake clay dove forbes vaughn " +
+    "tanaka sato suzuki yamada watanabe nakamura kobayashi kato yoshida yamamoto sasaki " +
+    "matsumoto inoue kimura hayashi shimizu yamaguchi mori ogawa ishikawa ono takeda " +
+    "chen wang li zhang liu yang huang zhao wu zhou xu sun ma zhu hu guo lin he gao luo " +
+    "zheng liang xie song tang deng feng cao peng zeng xiao " +
+    "dupont moreau laurent durand lefebvre roux fontaine mercier girard boyer chevalier petit " +
+    "fischer weber meyer wagner becker schulz hoffmann koch bauer richter klein wolf neumann " +
+    "ivanov petrov sidorov smirnov kuznetsov volkov sokolov popov orlov makarov nikolaev morozov").split(" ");
+  const TEAM_JOIN_STYLES = ["pascal", "flat", "under", "hyphen"];
+  let teamJoinStyle = "hyphen";
+
+  function cap(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
+  function joinName(given, surname, style) {
+    if (style === "pascal") return cap(given) + cap(surname);
+    if (style === "flat") return given + surname;
+    if (style === "under") return given + "_" + surname;
+    return given + "-" + surname;
+  }
+  // randomTeamName: name-like random local-part in the current join style,
+  // deduped against `used` via retries then a numeric suffix.
+  function randomTeamName(used) {
+    used = used || {};
+    for (var attempt = 0; attempt < 30; attempt++) {
+      var n = joinName(
+        TEAM_GIVEN[Math.floor(Math.random() * TEAM_GIVEN.length)],
+        TEAM_SURNAME[Math.floor(Math.random() * TEAM_SURNAME.length)],
+        teamJoinStyle);
+      if (!used[n]) { used[n] = 1; return n; }
+    }
+    var base = joinName(TEAM_GIVEN[0], TEAM_SURNAME[0], teamJoinStyle), k = 2;
+    while (used[base + "-" + k] && k < 99) k++;
+    var nn = base + "-" + k;
+    used[nn] = 1;
+    return nn;
+  }
+
+  function renderTeamMemberRows(n) {
+    var box = $("#team-member-rows");
+    if (!box) return;
+    var used = {};
+    $$("#team-member-rows .team-mrow input").forEach(function (inp) {
+      if (inp.value) used[inp.value] = 1;
+    });
+    while (box.children.length > n) {
+      box.removeChild(box.lastChild); // row
+      if (box.lastChild) box.removeChild(box.lastChild); // hint
+    }
+    while (box.children.length < n * 2) {
+      var idx = Math.floor(box.children.length / 2) + 1;
+      var row = document.createElement("div");
+      row.className = "team-mrow";
+      var input = document.createElement("input");
+      input.type = "text";
+      input.value = randomTeamName(used);
+      row.appendChild(input);
+      var dice = document.createElement("button");
+      dice.type = "button";
+      dice.className = "dice";
+      dice.textContent = "\u2680";
+      dice.title = t("team.reroll");
+      row.appendChild(dice);
+      box.appendChild(row);
+      var hint = document.createElement("div");
+      hint.className = "addr-hint";
+      hint.textContent = input.value + "@" + systemDomain;
+      box.appendChild(hint);
+    }
+    var num = $("#team-size-n");
+    if (num) num.textContent = String(n);
+  }
+  function refreshTeamHints() {
+    $$("#team-member-rows .team-mrow").forEach(function (row) {
+      var input = row.querySelector("input");
+      var hint = row.nextElementSibling;
+      if (input && hint) hint.textContent = (input.value || "name") + "@" + systemDomain;
+    });
+  }
+
   function showTeamForm() {
     $("#login-form-block").classList.add("hidden");
     $("#register-form-block").classList.add("hidden");
@@ -2833,8 +2929,11 @@
     $("#team-form-block").classList.remove("hidden");
     $("#team-name").value = "";
     $("#team-password").value = "";
-    $("#team-size").value = "3";
     $("#team-status").textContent = "";
+    // Lock this form session's join style (invisible randomness).
+    teamJoinStyle = TEAM_JOIN_STYLES[Math.floor(Math.random() * TEAM_JOIN_STYLES.length)];
+    $("#team-member-rows").textContent = "";
+    renderTeamMemberRows(3);
     updateTeamPreview();
     $("#team-name").focus();
   }
@@ -2853,6 +2952,30 @@
       lines.push(t("team.member") + " " + (i + 1) + ": " + m.address + "  " + m.password);
     });
     return lines.join("\n");
+  }
+
+  // renderTeamSuccess builds the credential cards (v2 design): owner card
+  // highlighted, one card per member with per-card copy buttons.
+  function renderTeamSuccess(res) {
+    var box = $("#team-cred-cards");
+    if (!box) return;
+    var html = "";
+    function card(cls, who, addr, pw, extraBtn) {
+      return '<div class="cred-card ' + cls + '">' +
+        '<div><div class="who">' + who + "</div>" +
+        "<code>" + esc(addr) + '</code> <span class="pw">' + esc(pw) + "</span></div>" +
+        '<div class="btns"><button class="cp" data-cp-addr="' + esc(addr) + '" data-cp-pw="' + esc(pw) + '">' + t("team.copyCreds") + "</button>" +
+        (extraBtn || "") + "</div></div>";
+    }
+    if (res && res.owner) {
+      html += card("owner", t("team.owner") + " - " + t("team.ownerCan"),
+        res.owner.address, res.owner.password);
+    }
+    (res && res.members || []).forEach(function (m, i) {
+      html += card("", t("team.member") + " " + (i + 1), m.address, m.password,
+        '<button class="cp" data-cp-prompt="' + esc(m.address) + '" data-cp-prompt-pw="' + esc(m.password) + '">' + t("team.copyPrompt") + "</button>");
+    });
+    box.innerHTML = html;
   }
 
   // buildAgentPrompt returns the ready-to-paste agent setup prompt for an
@@ -3066,23 +3189,62 @@
     $("#team-name").addEventListener("input", updateTeamPreview);
     $("#btn-team-cancel").addEventListener("click", function () { showPortal(); });
     $("#btn-team-done").addEventListener("click", function () { showPortal(); });
+    // Stepper (the number input is gone; +/- clamp 1..10).
+    $("#btn-team-less").addEventListener("click", function () {
+      var n = $$("#team-member-rows .team-mrow").length;
+      if (n > 1) renderTeamMemberRows(n - 1);
+    });
+    $("#btn-team-more").addEventListener("click", function () {
+      var n = $$("#team-member-rows .team-mrow").length;
+      if (n < 10) renderTeamMemberRows(n + 1);
+    });
+    // Reroll: the single dice next to a row, or reroll-all.
+    $("#team-member-rows").addEventListener("click", function (ev) {
+      var dice = ev.target.closest(".dice");
+      if (!dice) return;
+      var row = dice.closest(".team-mrow");
+      var input = row && row.querySelector("input");
+      if (!input) return;
+      var used = {};
+      $$("#team-member-rows .team-mrow input").forEach(function (inp) {
+        if (inp !== input && inp.value) used[inp.value] = 1;
+      });
+      input.value = randomTeamName(used);
+      refreshTeamHints();
+    });
+    $("#btn-team-reroll-all").addEventListener("click", function () {
+      var inputs = $$("#team-member-rows .team-mrow input");
+      var used = {};
+      inputs.forEach(function (inp) { inp.value = randomTeamName(used); });
+      refreshTeamHints();
+    });
+    $("#team-member-rows").addEventListener("input", function (ev) {
+      if (ev.target.tagName === "INPUT") refreshTeamHints();
+    });
     submit.addEventListener("click", async function () {
       const name = ($("#team-name").value || "").trim();
       const pw = $("#team-password").value || "";
-      const size = Math.round(+$("#team-size").value);
       const status = $("#team-status");
+      const inputs = $$("#team-member-rows .team-mrow input");
+      const members = inputs.map(function (inp) { return (inp.value || "").trim(); });
       if (!name) { status.textContent = t("reg.needName"); return; }
       if (!/^[A-Za-z0-9_-]+$/.test(name)) { status.textContent = t("reg.nameRule"); return; }
       if (pw.length < 8) { status.textContent = t("reg.pwTooShort"); return; }
-      if (!(size >= 1 && size <= 10)) { status.textContent = t("team.sizeRange"); return; }
+      if (!members.length || members.length > 10) { status.textContent = t("team.sizeRange"); return; }
+      for (var i = 0; i < members.length; i++) {
+        if (!members[i]) { status.textContent = t("team.needMemberName"); return; }
+        if (!/^[A-Za-z0-9_-]+$/.test(members[i])) { status.textContent = t("reg.nameRule"); return; }
+      }
       submit.disabled = true;
       status.textContent = t("common.loading");
       try {
+        // `members` is the v2 contract (server creates exactly these);
+        // team_size rides along so older servers still accept the request.
         const res = await api("/api/register-team", {
           method: "POST",
-          body: { username: name, password: pw, team_size: size },
+          body: { username: name, password: pw, team_size: members.length, members: members },
         });
-        $("#team-creds").textContent = teamCredsText(res);
+        renderTeamSuccess(res);
         $("#team-copy-status").textContent = "";
         $("#team-form-block").classList.add("hidden");
         $("#team-success-block").classList.remove("hidden");
@@ -3091,10 +3253,35 @@
       }
       submit.disabled = false;
     });
-    $("#btn-team-copy").addEventListener("click", function () {
-      const text = $("#team-creds").textContent;
+    // Success page: per-card copy (creds / agent prompt) + copy-all.
+    $("#team-cred-cards").addEventListener("click", function (ev) {
+      var btn = ev.target.closest("button.cp");
+      if (!btn) return;
+      var text;
+      if (btn.dataset.cpPrompt) {
+        text = buildAgentPrompt(btn.dataset.cpPrompt, btn.dataset.cpPromptPw);
+      } else {
+        text = btn.dataset.cpAddr + "\n" + btn.dataset.cpPw;
+      }
       copyText(text).then(function (ok) {
-        const st = $("#team-copy-status");
+        var st = $("#team-copy-status");
+        st.textContent = ok ? t("common.copied") : t("common.copyManual");
+        setTimeout(function () { st.textContent = ""; }, 2000);
+      });
+    });
+    $("#btn-team-copy").addEventListener("click", function () {
+      var box = $("#team-cred-cards");
+      var res = null;
+      // Rebuild the copy-all text from the rendered cards (source of truth).
+      var lines = [];
+      $$("#team-cred-cards .cred-card").forEach(function (card) {
+        var who = card.querySelector(".who").textContent;
+        var addr = card.querySelector("code").textContent;
+        var pw = card.querySelector(".pw").textContent;
+        lines.push(who + ": " + addr + "  " + pw);
+      });
+      copyText(lines.join("\n")).then(function (ok) {
+        var st = $("#team-copy-status");
         st.textContent = ok ? t("common.copied") : t("common.copyManual");
         setTimeout(function () { st.textContent = ""; }, 2000);
       });

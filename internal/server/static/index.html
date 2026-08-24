@@ -173,9 +173,10 @@
         </details>
       </div>
 
-      <!-- Team register form (v0.5.14): owner + members in one POST. The
-           members become subordinates of the owner (owner reads their mail,
-           read-only) — disclosed in the note. -->
+      <!-- Team register form (v2, superior-approved design): owner +
+           members in one POST. Member rows carry name-like random names
+           (multi-cultural pool, page-locked join style), each row has its
+           own dice plus a reroll-all; addresses preview under each row. -->
       <div id="team-form-block" class="hidden">
         <h1 data-i18n="team.title">agentmail team register</h1>
         <div class="compose-form">
@@ -185,10 +186,19 @@
           <label><span data-i18n="reg.password">Password</span>
             <input type="password" id="team-password" placeholder="at least 8 characters" data-i18n-ph="reg.pwUserPh" autocomplete="new-password" />
           </label>
-          <label><span data-i18n="team.size">Team members</span> <small class="muted" data-i18n="team.sizeHint">1–10 members, default 3</small>
-            <input type="number" id="team-size" min="1" max="10" step="1" value="3" />
+          <label><span data-i18n="team.size">Team members</span>
+            <span class="team-stepper">
+              <button type="button" id="btn-team-less" aria-label="fewer">−</button>
+              <span class="n" id="team-size-n">3</span>
+              <button type="button" id="btn-team-more" aria-label="more">＋</button>
+              <small class="muted" data-i18n="team.sizeHint">1–10 members, default 3</small>
+            </span>
           </label>
-          <p class="muted" style="font-size:12px;" data-i18n="team.note">Creates one owner mailbox plus member mailboxes in a single action. The owner can read the members' incoming and outgoing mail anytime (read-only) — members are subordinates of the owner.</p>
+          <div class="team-members">
+            <div class="members-head"><b data-i18n="team.members">Member names</b><button type="button" id="btn-team-reroll-all" class="members-reroll" data-i18n="team.rerollAll">🎲 reroll all</button></div>
+            <div id="team-member-rows"></div>
+          </div>
+          <p class="muted" style="font-size:12px;" data-i18n="team.note">Creates one owner mailbox plus the member mailboxes above in a single action. The owner can read the members' incoming and outgoing mail anytime (read-only) — members are subordinates of the owner. Taken member names degrade to a numeric suffix (e.g. -2); the success page shows the actual addresses. Credentials are shown only once.</p>
           <div class="row">
             <button id="btn-team-submit" class="primary" data-i18n="team.submit">Create team</button>
             <button id="btn-team-cancel" class="row-action" data-i18n="team.back">Back</button>
@@ -197,16 +207,15 @@
         </div>
       </div>
 
-      <!-- Team register result: full credential list + ONE copy-all button.
-           No per-account agent prompts (deliberate scope cut — a future
-           first-login welcome page may carry them). -->
+      <!-- Team register result (v2): owner card (highlighted) + one card
+           per member with 复制账密 / 复制引导提示词, plus one copy-all. -->
       <div id="team-success-block" class="hidden">
         <h1 data-i18n="team.success">team created ✅</h1>
         <p class="muted" data-i18n="reg.saveCreds">Save these credentials — the password is shown only once.</p>
         <div class="compose-form">
-          <pre class="code-block" id="team-creds"></pre>
-          <div class="row">
-            <button id="btn-team-copy" class="primary" data-i18n="team.copyAll">Copy all credentials</button>
+          <div id="team-cred-cards"></div>
+          <button id="btn-team-copy" class="primary team-copyall" data-i18n="team.copyAll">Copy all credentials</button>
+          <div class="row" style="margin-top:12px;">
             <button id="btn-team-done" class="row-action" data-i18n="team.done">Back to portal</button>
             <span id="team-copy-status" class="muted"></span>
           </div>
