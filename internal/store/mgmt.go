@@ -35,6 +35,7 @@ type MgmtSubSummary struct {
 	AvgLenIn    int              `json:"avg_len_in"`   // mean body runes, 7d window; 0 = no mail
 	AvgLenOut   int              `json:"avg_len_out"`  // mean body runes, 7d window; 0 = no mail
 	TopContacts []MgmtTopContact `json:"top_contacts"` // ≤3, 7d window, in+out combined
+	LastReadAt  int64            `json:"last_read_at"` // latest unread->read transition, unix s, 0 = never (ALL TIME; liveness weak evidence)
 }
 
 // MgmtNode is one graph node. Kind: self | sub | external.
@@ -245,6 +246,11 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 			subs[i].AvgLenOut = a.sumOut / a.countOut
 		}
 		subs[i].TopContacts = top(subs[i].Address)
+		// Liveness weak evidence: the sub's own latest inbox read. Looked
+		// up per sub (≤10) outside the message scan; misses stay 0.
+		if acc, err := s.GetAccount(subs[i].Address); err == nil {
+			subs[i].LastReadAt = s.LastReadAt(acc.UUID)
+		}
 	}
 	out.Subs = subs
 

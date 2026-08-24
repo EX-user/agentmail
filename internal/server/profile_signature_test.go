@@ -77,3 +77,45 @@ func TestProfileSignatureTriState(t *testing.T) {
 		t.Fatalf("after explicit clear, signature = %q, want empty", s)
 	}
 }
+
+// TestPrefsLivenessNumericKeys pins the typed whitelist: liveness.weakHours
+// /strongHours accept positive numeric hours (and null to remove) and are
+// stored; booleans-only keys still reject numbers and vice versa; unknown
+// keys stay rejected.
+func TestPrefsLivenessNumericKeys(t *testing.T) {
+	ts, _ := newRegisterTestServer(t)
+	post := func(body string) int {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/profile/self", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.SetBasicAuth("admin@test.example", "adminpassword1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode
+	}
+	if code := post(`{"prefs":{"liveness.weakHours":72,"liveness.strongHours":12}}`); code != http.StatusOK {
+		t.Fatalf("numeric prefs post = %d, want 200", code)
+	}
+	if code := post(`{"prefs":{"liveness.weakHours":0}}`); code != http.StatusBadRequest {
+		t.Fatalf("zero hours = %d, want 400", code)
+	}
+	if code := post(`{"prefs":{"liveness.weakHours":"48"}}`); code != http.StatusBadRequest {
+		t.Fatalf("string hours = %d, want 400", code)
+	}
+	if code := post(`{"prefs":{"liveness.weakHours":99999}}`); code != http.StatusBadRequest {
+		t.Fatalf("over-cap hours = %d, want 400", code)
+	}
+	if code := post(`{"prefs":{"audio_autoplay":12}}`); code != http.StatusBadRequest {
+		t.Fatalf("number for bool key = %d, want 400", code)
+	}
+	if code := post(`{"prefs":{"nope":true}}`); code != http.StatusBadRequest {
+		t.Fatalf("unknown key = %d, want 400", code)
+	}
+	if code := post(`{"prefs":{"liveness.weakHours":null}}`); code != http.StatusOK {
+		t.Fatalf("null remove = %d, want 200", code)
+	}
+}

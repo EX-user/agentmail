@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,14 +17,14 @@ var ErrMessageNotFound = errors.New("message not found")
 
 // Message is the stored record for one piece of mail.
 type Message struct {
-	ID          string           `json:"id"`          // ULID
-	From        string           `json:"from"`        // sender address
-	To          []string         `json:"to"`          // recipient addresses
+	ID          string           `json:"id"`           // ULID
+	From        string           `json:"from"`         // sender address
+	To          []string         `json:"to"`           // recipient addresses
 	CC          []string         `json:"cc,omitempty"` // carbon-copy addresses (delivered like To; visible to recipients)
 	Subject     string           `json:"subject"`
 	Body        string           `json:"body"`
 	Attachments []AttachmentMeta `json:"attachments,omitempty"` // metadata only; content lives in the file store
-	ReceivedAt  int64            `json:"received_at"`          // unix seconds
+	ReceivedAt  int64            `json:"received_at"`           // unix seconds
 }
 
 // AttachmentMeta is the message-side projection of an uploaded file: what
@@ -151,7 +152,6 @@ func (s *Store) Send(from, fromName string, to []string, cc []string, subject, b
 	}
 	return &SendResult{MessageID: msgID}, nil
 }
-
 
 // ReadAllAccountsMessages returns the newest messages across EVERY
 // account, filtered by folder ("inbox" = delivered to at least one
@@ -575,7 +575,10 @@ func (s *Store) MarkRead(uuidHex, messageID string) error {
 		if ub == nil {
 			return nil
 		}
-		return ub.Delete(key)
+		if err := ub.Delete(key); err != nil {
+			return err
+		}
+		return touchLastRead(tx, uuidHex, s.now().Unix())
 	})
 }
 
@@ -599,7 +602,7 @@ func (s *Store) GetMessageAdmin(messageID string) (*Message, error) {
 
 // DayCount is one day's message count for the portal's 7-day chart.
 type DayCount struct {
-	Date  string `json:"date"`  // "2006-01-02" (UTC)
+	Date  string `json:"date"` // "2006-01-02" (UTC)
 	Count int    `json:"count"`
 }
 
@@ -652,10 +655,10 @@ func (s *Store) MessageGrowth(now time.Time) (Growth, error) {
 			case m.ReceivedAt >= monthStart:
 				g.Month++
 			}
-		if m.ReceivedAt >= chartFloor.Unix() {
-			// UTC has no DST, so integer day arithmetic on the timestamp
-			// is exact. Clamp guards corrupt far-future timestamps.
-			idx := int((m.ReceivedAt - chartFloor.Unix()) / 86400)
+			if m.ReceivedAt >= chartFloor.Unix() {
+				// UTC has no DST, so integer day arithmetic on the timestamp
+				// is exact. Clamp guards corrupt far-future timestamps.
+				idx := int((m.ReceivedAt - chartFloor.Unix()) / 86400)
 				if idx >= 0 && idx < len(days) {
 					days[idx].Count++
 				}
@@ -850,7 +853,45 @@ func (s *Store) MarkAllRead(address string) (int, error) {
 				return err
 			}
 		}
+		if err := touchLastRead(tx, acc.UUID, s.now().Unix()); err != nil {
+			return err
+		}
 		return nil
 	})
 	return len(keys), err
+}
+
+// lastReadKey is the bMeta key under which an account's most recent
+// unread->read transition is stamped (liveness "weak evidence").
+func lastReadKey(uuidHex string) []byte {
+	return []byte("lastread:" + uuidHex)
+}
+
+// touchLastRead stamps the account's latest read event. Called from the
+// same transaction that clears an unread flag, so the stamp is exactly as
+// durable as the read itself.
+func touchLastRead(tx *bolt.Tx, uuidHex string, at int64) error {
+	mb := tx.Bucket(bMeta)
+	if mb == nil {
+		return nil
+	}
+	return mb.Put(lastReadKey(uuidHex), []byte(fmt.Sprintf("%d", at)))
+}
+
+// LastReadAt returns the account's most recent unread->read transition
+// (unix seconds; 0 = never). Inbox reads only — sending is the strong
+// liveness signal and lives on last_out_at.
+func (s *Store) LastReadAt(uuidHex string) int64 {
+	var out int64
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(bMeta)
+		if mb == nil {
+			return nil
+		}
+		if raw := mb.Get(lastReadKey(uuidHex)); raw != nil {
+			out, _ = strconv.ParseInt(string(raw), 10, 64)
+		}
+		return nil
+	})
+	return out
 }

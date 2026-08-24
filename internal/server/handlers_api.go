@@ -476,18 +476,38 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionProfileUpdate, who,
 		fmt.Sprintf("visible=%v sig_set=%v sig_len=%d", body.Visible, sigSet, len(sig)))
-	// Preference keys: a closed whitelist per preference page v1. Unknown
-	// keys are rejected so the map can never become a junk drawer.
+	// Preference keys: a closed whitelist per preference page. Unknown
+	// keys are rejected so the map can never become a junk drawer. Values
+	// are typed per key (bool toggles; numeric liveness thresholds in
+	// hours, stored per-caller for their own overview rendering).
 	if body.Prefs != nil {
-		validKeys := map[string]bool{"audio_autoplay": true, "image_preview": true}
+		typeSpec := map[string]string{
+			"audio_autoplay":       "bool",
+			"image_preview":        "bool",
+			"liveness.weakHours":   "number",
+			"liveness.strongHours": "number",
+		}
 		for k, v := range *body.Prefs {
-			if !validKeys[k] {
+			kind, ok := typeSpec[k]
+			if !ok {
 				badRequest(w, "unknown pref key: "+k)
 				return
 			}
-			if _, ok := v.(bool); v != nil && !ok {
-				badRequest(w, "pref "+k+" must be a boolean (or null to remove)")
-				return
+			if v == nil {
+				continue // null removes the key
+			}
+			switch kind {
+			case "bool":
+				if _, ok := v.(bool); !ok {
+					badRequest(w, "pref "+k+" must be a boolean (or null to remove)")
+					return
+				}
+			case "number":
+				f, ok := v.(float64)
+				if !ok || f <= 0 || f > 8760 {
+					badRequest(w, "pref "+k+" must be a number of hours in (0, 8760] (or null to remove)")
+					return
+				}
 			}
 		}
 		if err := s.store.UpdatePrefs(who, *body.Prefs); err != nil {
