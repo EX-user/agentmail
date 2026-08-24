@@ -1887,6 +1887,122 @@
     }
   }
 
+  // ---- v0.6 mail management views ----
+  // Segment capsule switches between the Messages view (the existing dual
+  // pane, preserved verbatim) and the Subs Overview aggregate. The choice
+  // persists; overview lazy-loads on first entry and re-renders on language
+  // change. Rows deep-link into Messages with the account preselected.
+
+  function mgmtIsActive(s) {
+    // Liveness (superior: 存活检测): active within 48h of the latest of the
+    // full-history last_in/last_out timestamps; 0 = never.
+    var ts = Math.max(s.last_in_at || 0, s.last_out_at || 0);
+    if (!ts) return "never";
+    return (Date.now() / 1000 - ts) <= 48 * 3600 ? "active" : "idle";
+  }
+
+  function mgmtOverviewHtml(d) {
+    var subs = (d && d.subs) || [];
+    var box = "";
+    if (!subs.length) {
+      return '<div class="mgmt-empty"><div>' + t("mgmt.emptyTitle") + '</div><div class="sub">' +
+        t("mgmt.emptySub") + '</div><button class="row-action" data-mgmt-go="accounts">' +
+        t("mgmt.goAccounts") + "</button></div>";
+    }
+    var live = 0, in7 = 0, out7 = 0;
+    subs.forEach(function (s) {
+      if (mgmtIsActive(s) === "active") live++;
+      in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
+    });
+    box += '<div class="mgmt-sum">' + t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 }) +
+      ' <button class="row-action mgmt-refresh" data-mgmt-go="refresh">' + t("mgmt.refresh") + "</button></div>";
+    box += '<table class="mgmt-ovw"><thead><tr>' +
+      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colLive") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
+    subs.forEach(function (s) {
+      var st = mgmtIsActive(s);
+      var liveTxt = st === "never" ? t("mgmt.never") : (st === "active" ? t("mgmt.active") : t("mgmt.idle"));
+      var top = (s.top_contacts || []).map(function (c) {
+        return shortAddr(c.address) + "×" + c.count;
+      }).join(" · ") || "—";
+      function fmtAvg(v) { return v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(v)) : "—"; }
+      box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
+        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
+        (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
+        '<td data-label="' + esc(t("mgmt.colLive")) + '"><span class="dot ' + (st === "active" ? "live" : "idle") + '"></span>' + liveTxt + "</td>" +
+        '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
+        '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
+        '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
+    });
+    box += "</tbody></table>";
+    return box;
+  }
+
+  function shortAddr(a) {
+    return String(a || "").split("@")[0];
+  }
+
+  var mgmtOverviewLoaded = false;
+  async function loadMgmtOverview() {
+    var box = $("#mgmt-overview");
+    if (!box) return;
+    box.textContent = t("common.loading");
+    try {
+      var d = await api("/api/mgmt/subs-overview", { keepSession: true });
+      box.innerHTML = mgmtOverviewHtml(d);
+      mgmtOverviewLoaded = true;
+    } catch (e) {
+      box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
+    }
+  }
+
+  (function wireMgmt() {
+    var seg = $("#mgmt-seg");
+    if (!seg) return;
+    function setView(v) {
+      var browse = $("#mgmt-browse"), overview = $("#mgmt-overview");
+      if (v !== "overview") v = "browse";
+      if (browse) browse.classList.toggle("hidden", v !== "browse");
+      if (overview) overview.classList.toggle("hidden", v !== "overview");
+      $$("#mgmt-seg button").forEach(function (b) {
+        b.classList.toggle("on", b.dataset.mview === v);
+      });
+      try { localStorage.setItem("mgmt-view", v); } catch (_) {}
+      if (v === "overview" && !mgmtOverviewLoaded) loadMgmtOverview();
+    }
+    seg.addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-mview]");
+      if (b) setView(b.dataset.mview);
+    });
+    var start = "browse";
+    try { start = localStorage.getItem("mgmt-view") || "browse"; } catch (_) {}
+    setView(start);
+    // In-view actions: refresh, or deep-link to Accounts / Messages.
+    $("#mgmt-overview").addEventListener("click", function (ev) {
+      var btn = ev.target.closest("[data-mgmt-go]");
+      if (btn) {
+        if (btn.dataset.mgmtGo === "accounts") { activateTab("accounts"); return; }
+        if (btn.dataset.mgmtGo === "refresh") { loadMgmtOverview(); return; }
+      }
+      var row = ev.target.closest("tr[data-mgmt-acct]");
+      if (!row) return;
+      var acct = row.dataset.mgmtAcct;
+      setView("browse");
+      var sel = $("#mail-account");
+      if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === acct; })) {
+        sel.value = acct;
+        var folder = $("#mail-folder");
+        if (folder) folder.value = "inbox";
+        var loadBtn = $("#btn-load-mail");
+        if (loadBtn) loadBtn.click();
+      } else {
+        toast(t("mgmt.acctNotInList"), "error");
+      }
+    });
+    document.addEventListener("i18n:change", function () {
+      if (mgmtOverviewLoaded) loadMgmtOverview();
+    });
+  })();
+
   // ---- audit ----
 
   async function loadAudit() {
@@ -3264,6 +3380,9 @@
       refreshInboxBadge();
       // Per-user caches must not leak across logins (logout keeps the DOM).
       subsCache = null;
+      mgmtOverviewLoaded = false;
+      var mgmtBox = $("#mgmt-overview");
+      if (mgmtBox) mgmtBox.textContent = "";
       invalidateMailAccountOptions();
       // Refresh preferences from the account record (silent; localStorage
       // seed already applied). keepSession: a failure here must not log
