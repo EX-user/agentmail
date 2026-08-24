@@ -1058,15 +1058,13 @@ nav .tab { flex: 0 0 auto; }
 }
 .btn-logout-pill:hover { color: var(--error); border-color: var(--error); background: var(--panel); }
 
-/* Attachment management card (v2, superior-approved): collapsed head +
-   compact single-line rows shared by desktop and mobile. */
-.am-head { display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; cursor: pointer; }
-.am-head .t { font-size: 13px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--muted); }
-.am-head .sum { font-size: 12px; color: var(--muted);
+/* Attachment management card (v2, superior-approved): native <details> fold
+   (same disclosure triangle as the subordinate section) + compact
+   single-line rows shared by desktop and mobile. */
+#am-details summary { cursor: pointer; padding: 4px 0; }
+#am-details[open] > summary { margin-bottom: 4px; }
+#am-details summary #am-sum { font-size: 12px; color: var(--muted);
   font-family: ui-monospace, Consolas, monospace; }
-.am-head .chev { font-size: 11px; color: var(--muted); }
 .am-body { margin-top: 10px; }
 .quota-bar { height: 5px; border-radius: 999px; background: var(--panel-2);
   overflow: hidden; margin-bottom: 8px; }
