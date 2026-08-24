@@ -227,12 +227,13 @@
   <header id="app-header" class="hidden">
     <div class="header-row">
       <h1>agentmail <small id="version-badge" class="version-badge"></small></h1>
+      <span id="whoami" class="muted"></span>
       <div class="header-actions">
-        <span id="whoami" class="muted"></span>
         <button id="btn-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button>
         <!-- Logout as a pill (superior-approved): same family as the language
-           toggle; hover turns red to signal exit. -->
-          <button id="btn-logout" class="btn-logout-pill" title="Sign out" data-i18n-title="nav.logoutTitle"><span data-i18n="nav.logout">Log out</span> <span aria-hidden="true">&#9211;</span></button>
+           toggle; hover turns red to signal exit. The power glyph is an
+           inline SVG — the U+23FB codepoint renders as tofu on Android. -->
+        <button id="btn-logout" class="btn-logout-pill" title="Sign out" data-i18n-title="nav.logoutTitle"><span data-i18n="nav.logout">Log out</span><svg class="logout-ico" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3.5V11"/><path d="M7 6.4a7.2 7.2 0 1 0 10 0"/></svg></button>
       </div>
     </div>
     <nav>
