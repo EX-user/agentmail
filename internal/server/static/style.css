@@ -1046,6 +1046,53 @@ nav .tab { flex: 0 0 auto; }
 }
 .attach-x:hover { color: var(--error); }
 
+/* Logout pill (superior-approved): same family as the language toggle —
+   same track/radius/height (28px, matched to .lang-toggle incl. border),
+   hover turns red to signal exit. */
+.btn-logout-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 16px; height: 26px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; cursor: pointer; line-height: 1;
+  font-family: inherit;
+}
+.btn-logout-pill:hover { color: var(--error); border-color: var(--error); background: var(--panel); }
+
+/* Attachment management card (v2, superior-approved): collapsed head +
+   compact single-line rows shared by desktop and mobile. */
+.am-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; cursor: pointer; }
+.am-head .t { font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); }
+.am-head .sum { font-size: 12px; color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace; }
+.am-head .chev { font-size: 11px; color: var(--muted); }
+.am-body { margin-top: 10px; }
+.quota-bar { height: 5px; border-radius: 999px; background: var(--panel-2);
+  overflow: hidden; margin-bottom: 8px; }
+.quota-bar i { display: block; height: 100%; background: var(--accent); }
+.am-row { display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.am-row:last-child { border-bottom: none; }
+.am-row.expired .fn, .am-row.expired .meta { opacity: .55; }
+.am-row .fn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.am-row .meta { flex: 0 0 auto; font-size: 11px; color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace; }
+.am-row .meta .soon { color: var(--error); }
+.am-row .btns { flex: 0 0 auto; display: flex; gap: 6px; }
+.am-mini { font-size: 11px; padding: 2px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); cursor: pointer;
+  color: var(--muted); }
+.am-mini:hover { color: var(--text); border-color: var(--accent); }
+.am-mini.del:hover { color: var(--error); border-color: var(--error); }
+.confirm-tip { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
+@media (max-width: 520px) {
+  .am-row { flex-wrap: wrap; }
+  .am-row .fn { flex: 1 1 100%; }
+  .am-row .meta { flex: 1 1 auto; }
+}
+
 /* Language switch: segmented pill (superior reference image) — a rounded
    track with 中 / EN segments; the active language sits on a raised pill.
    Replaces the old text button (.lang-inline retired). */
