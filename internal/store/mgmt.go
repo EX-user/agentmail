@@ -149,6 +149,15 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 			for _, a := range m.CC {
 				recips[strings.ToLower(a)] = true
 			}
+			// Contact/edge attribution (contract change 01M0T4RY): a
+			// message's counterparty pair is (from, to[0]) ONLY — cc and
+			// 2nd/3rd recipients never feed top_contacts or the graph.
+			// Mailbox counts (count_in/last_in …) still honor the full
+			// recipient set ("其余不变").
+			attribTo := ""
+			if len(m.To) > 0 {
+				attribTo = strings.ToLower(m.To[0])
+			}
 			bodyRunes := len([]rune(m.Body))
 			inWindow := m.ReceivedAt >= windowStart
 
@@ -161,13 +170,13 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 					c.countOut++
 					c.sumOut += bodyRunes
 				}
-				for r := range recips {
-					addDir(from, r, m.ReceivedAt, inWindow)
+				if attribTo != "" {
+					addDir(from, attribTo, m.ReceivedAt, inWindow)
 					if inWindow {
 						if contacts[from] == nil {
 							contacts[from] = map[string]int{}
 						}
-						contacts[from][r]++
+						contacts[from][attribTo]++
 					}
 				}
 			}
@@ -182,17 +191,17 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 						c.sumIn += bodyRunes
 					}
 					_, senderIsCore := core[from]
-					if !senderIsCore {
-						// Cross edges are counted from the sender side when
-						// the sender is core; count here only when the
-						// sender is external (so pairs never double-count).
+					if attribTo == r && !senderIsCore {
+						// Cross attribution is counted from the sender side
+						// when the sender is core; count here only when the
+						// sender is external (no double counting).
 						addDir(from, r, m.ReceivedAt, inWindow)
-					}
-					if inWindow && !senderIsCore {
-						if contacts[r] == nil {
-							contacts[r] = map[string]int{}
+						if inWindow {
+							if contacts[r] == nil {
+								contacts[r] = map[string]int{}
+							}
+							contacts[r][from]++
 						}
-						contacts[r][from]++
 					}
 				}
 			}

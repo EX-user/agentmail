@@ -177,3 +177,68 @@ func TestMgmtSubsOverviewEmpty(t *testing.T) {
 		t.Errorf("json contains null: %s", b)
 	}
 }
+
+// TestMgmtAttributionTo0 pins the contract change (01M0T4RY): contact and
+// graph attribution uses ONLY (from, to[0]) — cc and 2nd+ recipients feed
+// neither top_contacts nor edges, while mailbox counts still see them.
+func TestMgmtAttributionTo0(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	if err := s.DeclareSubordinate("me@t", "sub2@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC).Unix()
+	w := base - 3600
+
+	// ext1 → [sub1, sub2]: attributed to sub1 only.
+	putMsg(t, s, "ext1@t", []string{"sub1@t", "sub2@t"}, nil, str(60), w)
+	// me → sub1, cc sub2: attributed to sub1 only (cc never counts).
+	putMsg(t, s, "me@t", []string{"sub1@t"}, []string{"sub2@t"}, str(15), w)
+
+	s.now = func() time.Time { return time.Unix(base, 0).UTC() }
+	out, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	var sub2 MgmtSubSummary
+	for _, x := range out.Subs {
+		if x.Address == "sub2@t" {
+			sub2 = x
+		}
+	}
+	// sub2 RECEIVED both messages (mailbox semantics unchanged)…
+	if sub2.CountIn7d != 2 || sub2.AvgLenIn != (60+15)/2 || sub2.LastInAt != w {
+		t.Errorf("sub2 mailbox = %+v, want in=2 avg=37 last=w", sub2)
+	}
+	// …but no contact attribution: no top_contacts, no edges to sub2.
+	if len(sub2.TopContacts) != 0 {
+		t.Errorf("sub2 top_contacts = %+v, want empty (To[1]/cc never attributed)", sub2.TopContacts)
+	}
+	for _, e := range out.Graph.Edges {
+		if e.A == "sub2@t" || e.B == "sub2@t" {
+			t.Errorf("edge touching sub2 should not exist: %+v", e)
+		}
+	}
+	// sub1 owns both attributions: ext1 (external→to0) and me (core→to0).
+	var sub1 MgmtSubSummary
+	for _, x := range out.Subs {
+		if x.Address == "sub1@t" {
+			sub1 = x
+		}
+	}
+	got := map[string]int{}
+	for _, c := range sub1.TopContacts {
+		got[c.Address] = c.Count
+	}
+	if got["ext1@t"] != 1 || got["me@t"] != 1 {
+		t.Errorf("sub1 contacts = %v, want ext1:1 me:1", got)
+	}
+	// me↔ext2 has no message here: no such edge at all.
+	for _, e := range out.Graph.Edges {
+		if (e.A == "me@t" && e.B == "ext2@t") || (e.A == "ext2@t" && e.B == "me@t") {
+			t.Errorf("me-ext2 edge should not exist: %+v", e)
+		}
+	}
+}
