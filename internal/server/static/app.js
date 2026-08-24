@@ -1385,12 +1385,30 @@
     });
   }
 
+  // mailStepNav steps through the loaded Messages list (own or subordinate
+  // view alike); boundaries toast, matching the inbox pill's behavior minus
+  // auto paging (the mail list loads in one shot per account/folder).
+  function mailStepNav(item, dir) {
+    const items = $$("#mail-list .mail-item");
+    const idx = items.indexOf(item);
+    const target = items[idx + dir];
+    if (target) target.click();
+    else toast(t("inbox.noMore"), "error");
+  }
+
+  function wireMailNav(detail, item) {
+    const p = $('[data-nav="-1"]', detail), n = $('[data-nav="1"]', detail);
+    if (p) p.addEventListener("click", function () { mailStepNav(item, -1); });
+    if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
+  }
+
   async function showDetail(id, item) {
     resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
-    detail.textContent = t("common.loading");
+    detail.innerHTML = inboxDetailFrame('<div class="inbox-loading">' + t("common.loading") + "</div>");
+    wireMailNav(detail, item);
     revealDetailOnMobile("mail-grid", detail);
     // Locally mark the item as read (UI feedback) immediately.
     if (item) {
@@ -1407,7 +1425,13 @@
         ? "/api/message?id=" + encodeURIComponent(id)
         : "/admin/message?id=" + encodeURIComponent(id);
       const m = await api(detailPath);
-      detail.innerHTML =
+      // Self-addressed letters (from me to me) get a reply affordance, styled
+      // like the subordinate view's "reply as myself" (superior's request).
+      const myAddr = ((viewer && viewer.address) || "").toLowerCase();
+      const selfNote = myAddr &&
+        String(m.from || "").toLowerCase() === myAddr &&
+        (m.to || []).some(function (a) { return String(a).toLowerCase() === myAddr; });
+      detail.innerHTML = inboxDetailFrame(
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
@@ -1415,14 +1439,20 @@
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
-        '<div class="row" style="margin-top:12px;"><button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
-        attachmentCards(m);
+        '<div class="row" style="margin-top:12px;">' +
+        (selfNote ? '<button class="primary" id="btn-mail-reply-self">' + t("act.reply") + "</button> " : "") +
+        '<button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
+        attachmentCards(m));
+      wireMailNav(detail, item);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      const rbtn = $("#btn-mail-reply-self");
+      if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(m); });
       const fwdBtn = $("#btn-mail-forward");
       if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
-      detail.textContent = t("common.error", { msg: e.message });
+      detail.innerHTML = inboxDetailFrame('<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
+      wireMailNav(detail, item);
     }
   }
 
@@ -1521,13 +1551,14 @@
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
     if (item) item.classList.add("selected");
     const detail = $("#mail-detail");
+    detail.innerHTML = inboxDetailFrame('<div class="inbox-loading">' + t("common.loading") + "</div>");
+    wireMailNav(detail, item);
     revealDetailOnMobile("mail-grid", detail);
     if (item) {
       item.classList.remove("unread");
       const dot = $(".unread-dot", item);
       if (dot) dot.remove();
     }
-    detail.innerHTML = '<div class="muted">' + t("common.loading") + "</div>";
     let full = null;
     try {
       const d = await api("/api/subs/" + encodeURIComponent(subAddr) +
@@ -1539,7 +1570,7 @@
     // Sent mail by the subordinate gets no reply affordance.
     const canReply = msg.from && msg.from !== subAddr;
     const atts = (msg.attachments || []);
-    detail.innerHTML =
+    detail.innerHTML = inboxDetailFrame(
       '<div class="detail-row"><span class="badge-sub">' + t("subs.badge") + "</span> " +
       esc(subAddr) + ' · <i class="muted">' + t("subs.readonly") + "</i></div>" +
       '<div class="detail-row"><b>From:</b> ' + esc(msg.from) + "</div>" +
@@ -1561,7 +1592,8 @@
       (canReply
         ? '<div class="row" style="margin-top:12px;"><button class="primary" id="btn-reply-as-self">' +
           t("subs.replyAsSelf") + "</button></div>"
-        : "");
+        : ""));
+    wireMailNav(detail, item);
     const rbtn = $("#btn-reply-as-self");
     if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(msg); });
   }
