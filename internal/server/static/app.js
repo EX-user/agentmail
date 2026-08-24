@@ -2832,7 +2832,7 @@
   (function wireAttachMgmt() {
     const card = $("#attach-mgmt-card");
     if (!card) return;
-    let expanded = false, loaded = false;
+    let loaded = false;
 
     function daysLeft(ts) {
       if (!ts) return null;
@@ -2899,17 +2899,11 @@
       }
     }
 
-    function setExpand(open) {
-      expanded = open;
-      $("#am-body").classList.toggle("hidden", !open);
-      const chev = $("#am-chev");
-      if (chev) chev.textContent = open ? "\u25BE" : "\u25B8";
-      if (open && !loaded) loadRows();
-    }
-
-    $("#am-head").addEventListener("click", function () { setExpand(!expanded); });
-    $("#am-head").addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpand(!expanded); }
+    // Native <details> fold (same pattern as the subordinate section):
+    // open/close is the browser's; we only lazy-load rows on first open.
+    const amDetails = $("#am-details");
+    amDetails.addEventListener("toggle", function () {
+      if (amDetails.open && !loaded) loadRows();
     });
 
     $("#am-rows").addEventListener("click", async function (ev) {
@@ -3344,7 +3338,10 @@
         // team_size rides along so older servers still accept the request.
         const res = await api("/api/register-team", {
           method: "POST",
-          body: { username: name, password: pw, team_size: members.length, members: members },
+          // api() passes the body through to fetch verbatim — a raw object
+          // would stringify to "[object Object]" and the server would reject
+          // it ("invalid character 'o'"). Every other call site stringifies.
+          body: JSON.stringify({ username: name, password: pw, team_size: members.length, members: members }),
         });
         renderTeamSuccess(res);
         $("#team-copy-status").textContent = "";
