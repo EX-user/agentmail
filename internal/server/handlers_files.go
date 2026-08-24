@@ -7,16 +7,24 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/agentmail/agentmail/internal/audit"
 	"github.com/agentmail/agentmail/internal/store"
 )
 
 // Attachment system endpoints (v0.5 Phase 1): upload + download.
+// Management endpoints (v0.5.18, attachment management card):
 //
-//   POST /api/files/upload           (multipart: file, allowed="a@x,b@y")
+//   POST   /api/files/upload           (multipart: file, allowed="a@x,b@y")
 //     -> {"id","access_code","filename","size"}
-//   GET  /api/files/{id}/download?code=...   -> raw content
+//   GET    /api/files/{id}/download?code=...   -> raw content
+//   GET    /api/files/list              -> {files:[{id,filename,size,created_at,expires_at}]}
+//                                         (auth=self; expiry ascending; not-yet-swept
+//                                         expired files included)
+//   DELETE /api/files/{id}              -> {deleted} (own files only; immediate,
+//                                         quota reclaims implicitly; sent mail's
+//                                         download links 404 afterwards)
 //
 // Download authorization: the Basic-auth account must be the owner or on
 // the file's allowed list, AND the access code must match. Wrong
@@ -88,14 +96,98 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFileDownload streams a file's content to an authorized account.
-func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
+// extendRateLimit caps attachment renewals per account per hour (the
+// window is hourly — stricter than a per-minute cap but ample for
+// interactive management).
+const extendRateLimit = 10
+
+// allowFileOp counts management-card mutations per account per hour
+// (extend today; delete can join the same window if it ever needs a cap).
+func (s *Server) allowFileOp(account string, limit int) bool {
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	now := time.Now()
+	rw := s.fileRates[account]
+	if rw == nil || now.Sub(rw.windowStart) >= time.Hour {
+		rw = &rateWindow{windowStart: now}
+		s.fileRates[account] = rw
+	}
+	if rw.count >= limit {
+		return false
+	}
+	rw.count++
+	return true
+}
+
+// handleFileList returns the authenticated account's files for the// attachment management card: expiry ascending, derived ExpiresAt
+// (CreatedAt + FileTTL). GET only.
+func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
 	}
 	who := accountFrom(r.Context())
-	// Route: /api/files/{id}/download -> ["api","files",id,"download"]
+	files, err := s.store.ListAccountFiles(who)
+	if err != nil {
+		internalError(w, "list files: "+err.Error())
+		return
+	}
+	if files == nil {
+		files = []store.FileSummary{} // stable JSON shape: [] not null
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+// handleFileDownload serves GET /api/files/{id}/download and dispatches
+// the management-card mutations: DELETE /api/files/{id} (delete) and
+// POST /api/files/{id}/extend (renew expiry to now+TTL).
+func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	who := accountFrom(r.Context())
+	// POST /api/files/{id}/extend -> ["api","files",id,"extend"]
+	if r.Method == http.MethodPost && len(parts) == 4 && parts[3] == "extend" {
+		id := parts[2]
+		if parts[0] != "api" || parts[1] != "files" || id == "" {
+			http.NotFound(w, r)
+			return
+		}
+		// Anti-churn: renewal is harmless but not free — cap per account.
+		if !s.allowFileOp(who, extendRateLimit) {
+			http.Error(w, fmt.Sprintf("file operation rate limit exceeded (%d/hour)", extendRateLimit), http.StatusTooManyRequests)
+			return
+		}
+		expires, err := s.store.ExtendFile(id, who)
+		if err != nil {
+			// Foreign, missing, and corrupt ids all look the same.
+			http.NotFound(w, r)
+			return
+		}
+		_ = s.audit.Record(r.Context(), audit.ActionFileExtend, who,
+			fmt.Sprintf("id=%s expires_at=%d", id, expires))
+		writeJSON(w, http.StatusOK, map[string]any{"id": id, "expires_at": expires})
+		return
+	}
+	// DELETE /api/files/{id} -> ["api","files",id]
+	if r.Method == http.MethodDelete {
+		if len(parts) != 3 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" {
+			http.NotFound(w, r)
+			return
+		}
+		id := parts[2]
+		if err := s.store.DeleteFile(id, who); err != nil {
+			// Foreign, missing, and corrupt ids all look the same.
+			http.NotFound(w, r)
+			return
+		}
+		_ = s.audit.Record(r.Context(), audit.ActionFileDelete, who, "id="+id)
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
+		return
+	}
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	// Route: /api/files/{id}/download -> ["api","files",id,"download"]
 	if len(parts) != 4 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" || parts[3] != "download" {
 		http.NotFound(w, r)
 		return
