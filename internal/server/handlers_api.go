@@ -23,9 +23,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 //   GET /api/status -> {"initialized": bool, "domain": "..."}
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"initialized":                  s.store.IsInitialized(),
-		"domain":                       s.domain(),
-		"version":                      Version,
+		"initialized":                   s.store.IsInitialized(),
+		"domain":                        s.domain(),
+		"version":                       Version,
 		"suggested_min_gateway_version": SuggestedMinGatewayVersion,
 	})
 }
@@ -45,8 +45,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		AdminPassword string `json:"admin_password"`
-		Domain        string `json:"domain"`
+		AdminPassword  string `json:"admin_password"`
+		Domain         string `json:"domain"`
 		AdminLocalPart string `json:"admin_local_part"` // optional, default "admin"
 	}
 	if err := decodeJSON(r, &body); err != nil {
@@ -407,13 +407,13 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		}
 		used, fileCount, expiring := s.store.AccountFileStats(acc.Address)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"address":               acc.Address,
-			"visible":               acc.Visible,
-			"signature":             acc.Signature,
-			"files_used_bytes":      used,
-			"attachments_count":     fileCount,
-			"attachments_expiring":  expiring,
-			"prefs":                 acc.Prefs,
+			"address":              acc.Address,
+			"visible":              acc.Visible,
+			"signature":            acc.Signature,
+			"files_used_bytes":     used,
+			"attachments_count":    fileCount,
+			"attachments_expiring": expiring,
+			"prefs":                acc.Prefs,
 		})
 		return
 	}
@@ -422,9 +422,9 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Visible   *bool            `json:"visible"`   // nil = keep current (omitting must NOT reset)
-		Signature *string          `json:"signature"` // nil = keep current; "" (explicit) clears
-		Prefs     *map[string]any  `json:"prefs"`     // nil = keep current; keys whitelist-validated below
+		Visible   *bool           `json:"visible"`   // nil = keep current (omitting must NOT reset)
+		Signature *string         `json:"signature"` // nil = keep current; "" (explicit) clears
+		Prefs     *map[string]any `json:"prefs"`     // nil = keep current; keys whitelist-validated below
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -675,10 +675,14 @@ func decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-func badRequest(w http.ResponseWriter, msg string)  { http.Error(w, msg, http.StatusBadRequest) }
-func conflict(w http.ResponseWriter, msg string)    { http.Error(w, msg, http.StatusConflict) }
-func internalError(w http.ResponseWriter, msg string) { http.Error(w, msg, http.StatusInternalServerError) }
-func methodNotAllowed(w http.ResponseWriter)         { http.Error(w, "method not allowed", http.StatusMethodNotAllowed) }
+func badRequest(w http.ResponseWriter, msg string) { http.Error(w, msg, http.StatusBadRequest) }
+func conflict(w http.ResponseWriter, msg string)   { http.Error(w, msg, http.StatusConflict) }
+func internalError(w http.ResponseWriter, msg string) {
+	http.Error(w, msg, http.StatusInternalServerError)
+}
+func methodNotAllowed(w http.ResponseWriter) {
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
 
 func queryInt(r *http.Request, key string, def int) int {
 	v := r.URL.Query().Get(key)
@@ -756,9 +760,10 @@ func (s *Server) handleRegisterTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		TeamSize int    `json:"team_size"`
+		Username string   `json:"username"`
+		Password string   `json:"password"`
+		TeamSize int      `json:"team_size"`
+		Members  []string `json:"members"` // v2: caller-chosen member local-parts
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
@@ -781,15 +786,33 @@ func (s *Server) handleRegisterTeam(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "team_size must be 1-10")
 		return
 	}
-	owner, members, err := s.store.RegisterTeam(name, s.domain(), body.Password, size)
+	// v2: when a member name list is supplied it must match team_size and
+	// each name must pass the same charset rule as the owner. The store
+	// de-duplicates collisions (serial suffix, then random fallback), so we
+	// accept duplicates in the request itself.
+	members := body.Members
+	if len(members) > 0 {
+		if len(members) != size {
+			badRequest(w, fmt.Sprintf("members length %d must equal team_size %d", len(members), size))
+			return
+		}
+		for _, m := range members {
+			m = strings.TrimSpace(m)
+			if m == "" || !isASCIILocalPart(m) {
+				badRequest(w, "each member name must be ASCII letters, digits, '-' or '_'")
+				return
+			}
+		}
+	}
+	owner, membersRes, err := s.store.RegisterTeam(name, s.domain(), body.Password, size, members)
 	if err != nil {
 		badRequest(w, err.Error())
 		return
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionRegisterTeam, owner.Address,
-		fmt.Sprintf("team_size=%d members=%d", size, len(*members)))
+		fmt.Sprintf("team_size=%d members=%d named=%d", size, len(*membersRes), len(members)))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"owner":   owner,
-		"members": members,
+		"members": membersRes,
 	})
 }

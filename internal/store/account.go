@@ -513,15 +513,29 @@ type TeamMember struct {
 }
 
 // RegisterTeam provisions an owner account plus teamSize subordinate
-// bot accounts and their declare edges in ONE transaction (crash = nothing
-// half-created). team_size counts MEMBERS ONLY — the owner is extra
-// (architect ruling: default 3 = 1 owner + 3 members; 10 = the subordinate
-// cap). The caller validates username/password shape; the store
-// enforces uniqueness and names members bot-<8random>. Passwords are
-// generated (owner uses the caller-supplied one).
-func (s *Store) RegisterTeam(username, domain, password string, teamSize int) (*TeamMember, *[]TeamMember, error) {
+// member accounts and their declare edges in ONE transaction (crash =
+// nothing half-created). team_size counts MEMBERS ONLY — the owner is
+// extra (architect ruling: default 3 = 1 owner + 3 members; 10 = the
+// subordinate cap).
+//
+// memberNames is the v2 contract: when non-empty (len == teamSize) those
+// caller-chosen local-parts are used as the member names. A name that
+// collides with an existing account (or another member in this batch) is
+// serially de-duplicated with a -2/--3… suffix, and after a few tries a
+// random bot-<8> name is the final fallback. When memberNames is empty
+// (the v1 path), members are named bot-<8random> as before. The owner
+// uses the caller-supplied password; member passwords are generated. The
+// returned members carry the ACTUAL addresses (post-dedup) so the caller
+// can show them verbatim.
+func (s *Store) RegisterTeam(username, domain, password string, teamSize int, memberNames []string) (*TeamMember, *[]TeamMember, error) {
 	if teamSize < 1 || teamSize > 10 {
 		return nil, nil, fmt.Errorf("team_size must be 1-10")
+	}
+	// v2: a member name list, when supplied, must match team_size. The
+	// handler validates shape/charset before calling; here we only enforce
+	// the count contract so the store is safe to call directly.
+	if len(memberNames) > 0 && len(memberNames) != teamSize {
+		return nil, nil, fmt.Errorf("members length %d != team_size %d", len(memberNames), teamSize)
 	}
 	ownerAddr := strings.ToLower(username + "@" + domain)
 	ownerHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -546,19 +560,60 @@ func (s *Store) RegisterTeam(username, domain, password string, teamSize int) (*
 		if err := ab.Put([]byte(ownerAddr), val); err != nil {
 			return err
 		}
-		// Members: bot-<8random>, each declared under the owner.
-		for i := 0; i < teamSize; i++ {
-			var name string
-			ok := false
+		// allocated tracks local-parts already claimed in THIS tx so two
+		// members can't collide with each other even before their keys land.
+		allocated := map[string]bool{ownerAddr: true}
+		// allocateMemberName resolves a non-conflicting lowercase local-part
+		// for the i-th member: v2 uses the caller's name (serial -2/-3…
+		// suffix on collision, then a bot-<8> fallback); v1 (no list) uses
+		// bot-<8> directly.
+		allocateMemberName := func(i int) (string, error) {
+			base := ""
+			if i < len(memberNames) {
+				base = strings.ToLower(strings.TrimSpace(memberNames[i]))
+			}
+			if base == "" {
+				// v1 path, or a v2 caller that sent an empty slot.
+				for attempt := 0; attempt < 5; attempt++ {
+					cand := "bot-" + generatePassword(8)
+					addr := cand + "@" + domain
+					if !allocated[addr] && ab.Get([]byte(addr)) == nil {
+						allocated[addr] = true
+						return cand, nil
+					}
+				}
+				return "", fmt.Errorf("could not allocate member name")
+			}
+			// v2 path: try the base, then base-2, base-3… up to 20, then
+			// fall back to a random bot- name so the registration never
+			// fails purely on naming congestion.
+			cand := base
+			for attempt := 0; ; attempt++ {
+				addr := cand + "@" + domain
+				if !allocated[addr] && ab.Get([]byte(addr)) == nil {
+					allocated[addr] = true
+					return cand, nil
+				}
+				if attempt >= 20 {
+					break // fall through to random fallback
+				}
+				cand = fmt.Sprintf("%s-%d", base, attempt+2)
+			}
 			for attempt := 0; attempt < 5; attempt++ {
-				name = "bot-" + generatePassword(8)
-				if ab.Get([]byte(name+"@"+domain)) == nil {
-					ok = true
-					break
+				cand = "bot-" + generatePassword(8)
+				addr := cand + "@" + domain
+				if !allocated[addr] && ab.Get([]byte(addr)) == nil {
+					allocated[addr] = true
+					return cand, nil
 				}
 			}
-			if !ok {
-				return fmt.Errorf("could not allocate member name")
+			return "", fmt.Errorf("could not allocate member name (base %q exhausted)", base)
+		}
+		// Members: each declared under the owner.
+		for i := 0; i < teamSize; i++ {
+			name, err := allocateMemberName(i)
+			if err != nil {
+				return err
 			}
 			pw := generatePassword(24)
 			hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
