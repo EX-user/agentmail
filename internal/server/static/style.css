@@ -1061,8 +1061,7 @@ nav .tab { flex: 0 0 auto; }
 /* Attachment management card (v2, superior-approved): native <details> fold
    (same disclosure triangle as the subordinate section) + compact
    single-line rows shared by desktop and mobile. */
-#am-details summary { cursor: pointer; padding: 4px 0; }
-#am-details[open] > summary { margin-bottom: 4px; }
+#am-details summary { cursor: pointer; }
 #am-details summary #am-sum { font-size: 12px; color: var(--muted);
   font-family: ui-monospace, Consolas, monospace; }
 .am-body { margin-top: 10px; }
