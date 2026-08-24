@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,16 +24,16 @@ var (
 
 // Limits (Phase 1 constants; the total cap is admin-tunable via settings).
 const (
-	FileMaxBytes     = 1 << 20 // 1MB per file
+	FileMaxBytes     = 1 << 20  // 1MB per file
 	FileQuotaPerAcct = 20 << 20 // 20MB per account
 	FileTTL          = 30 * 24 * time.Hour
 )
 
 // FileRecord is the metadata half of an uploaded file.
 type FileRecord struct {
-	ID         string   `json:"id"`          // ULID
-	Owner      string   `json:"owner"`       // uploader address
-	Filename   string   `json:"filename"`    // original name (sanitized on use)
+	ID         string   `json:"id"`       // ULID
+	Owner      string   `json:"owner"`    // uploader address
+	Filename   string   `json:"filename"` // original name (sanitized on use)
 	Size       int64    `json:"size"`
 	AccessCode string   `json:"access_code"` // random hex, required at download
 	Allowed    []string `json:"allowed"`     // addresses that may download
@@ -346,6 +347,68 @@ func sortStrings(list []string) {
 	}
 }
 
+// FileSummary is one row of the account's attachment list (the panel's
+// attachment management card). ExpiresAt is derived: CreatedAt + FileTTL.
+type FileSummary struct {
+	ID        string `json:"id"`
+	Filename  string `json:"filename"`
+	Size      int64  `json:"size"`
+	CreatedAt int64  `json:"created_at"`
+	ExpiresAt int64  `json:"expires_at"`
+}
+
+// ListAccountFiles returns the owner's files sorted by expiry ascending
+// (oldest CreatedAt first — expiry is a fixed offset of it). Expired but
+// not-yet-swept files are included: the sweep will remove them shortly,
+// and until then showing them is more honest than hiding them.
+func (s *Store) ListAccountFiles(owner string) ([]FileSummary, error) {
+	var out []FileSummary
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bFiles).Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var fr FileRecord
+			if json.Unmarshal(v, &fr) != nil || !strings.EqualFold(fr.Owner, owner) {
+				continue
+			}
+			out = append(out, FileSummary{
+				ID:        fr.ID,
+				Filename:  fr.Filename,
+				Size:      fr.Size,
+				CreatedAt: fr.CreatedAt,
+				ExpiresAt: fr.CreatedAt + int64(FileTTL.Seconds()),
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	return out, nil
+}
+
+// DeleteFile removes the owner's file (metadata + content) in one
+// transaction. A foreign or missing id returns ErrFileNotFound — the
+// caller must not learn whether the id exists. Quota is reclaimed
+// implicitly (usage is derived from live records). Sent messages keep
+// their snapshot metadata; their download links simply 404 afterwards.
+func (s *Store) DeleteFile(id, owner string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		fb := tx.Bucket(bFiles)
+		raw := fb.Get([]byte(id))
+		if raw == nil {
+			return ErrFileNotFound
+		}
+		var fr FileRecord
+		if json.Unmarshal(raw, &fr) != nil || !strings.EqualFold(fr.Owner, owner) {
+			return ErrFileNotFound
+		}
+		if err := tx.Bucket(bFileData).Delete(fileDataKey(fr.ID)); err != nil {
+			return err
+		}
+		return fb.Delete([]byte(id))
+	})
+}
 
 // AccountFilesUsed returns the total bytes of the account's live files.
 func (s *Store) AccountFilesUsed(owner string) int64 {

@@ -13,10 +13,17 @@ import (
 )
 
 // Attachment system endpoints (v0.5 Phase 1): upload + download.
+// Management endpoints (v0.5.18, attachment management card):
 //
-//   POST /api/files/upload           (multipart: file, allowed="a@x,b@y")
+//   POST   /api/files/upload           (multipart: file, allowed="a@x,b@y")
 //     -> {"id","access_code","filename","size"}
-//   GET  /api/files/{id}/download?code=...   -> raw content
+//   GET    /api/files/{id}/download?code=...   -> raw content
+//   GET    /api/files/list              -> {files:[{id,filename,size,created_at,expires_at}]}
+//                                         (auth=self; expiry ascending; not-yet-swept
+//                                         expired files included)
+//   DELETE /api/files/{id}              -> {deleted} (own files only; immediate,
+//                                         quota reclaims implicitly; sent mail's
+//                                         download links 404 afterwards)
 //
 // Download authorization: the Basic-auth account must be the owner or on
 // the file's allowed list, AND the access code must match. Wrong
@@ -88,14 +95,53 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFileDownload streams a file's content to an authorized account.
+// handleFileList returns the authenticated account's files for the
+// attachment management card: expiry ascending, derived ExpiresAt
+// (CreatedAt + FileTTL). GET only.
+func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	files, err := s.store.ListAccountFiles(who)
+	if err != nil {
+		internalError(w, "list files: "+err.Error())
+		return
+	}
+	if files == nil {
+		files = []store.FileSummary{} // stable JSON shape: [] not null
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+// handleFileDownload serves GET /api/files/{id}/download and dispatches
+// DELETE /api/files/{id} to the delete flow (management card).
 func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	// DELETE /api/files/{id} -> ["api","files",id]
+	if r.Method == http.MethodDelete {
+		if len(parts) != 3 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" {
+			http.NotFound(w, r)
+			return
+		}
+		id := parts[2]
+		who := accountFrom(r.Context())
+		if err := s.store.DeleteFile(id, who); err != nil {
+			// Foreign, missing, and corrupt ids all look the same.
+			http.NotFound(w, r)
+			return
+		}
+		_ = s.audit.Record(r.Context(), audit.ActionFileDelete, who, "id="+id)
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
+		return
+	}
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
 		return
 	}
 	who := accountFrom(r.Context())
 	// Route: /api/files/{id}/download -> ["api","files",id,"download"]
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) != 4 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" || parts[3] != "download" {
 		http.NotFound(w, r)
 		return
