@@ -58,6 +58,9 @@ header {
   justify-content: space-between;
   gap: 16px;
 }
+/* The address sits next to the title (one line on mobile too); the
+   auto margin keeps the controls pinned right on desktop. */
+.header-row #whoami { margin-right: auto; }
 .header-actions {
   display: flex;
   align-items: center;
@@ -880,13 +883,17 @@ nav .tab { flex: 0 0 auto; }
   main { margin: 16px auto; padding: 0 14px; }
   header { padding: 10px 14px; }
 
-  /* Long addresses must not push the lang/logout controls off-screen
-     (feedback, round 2): the header row wraps — title on the first
-     line, whoami + controls on their own right-aligned line — and the
-     whoami line additionally truncates with an ellipsis. */
-  .header-row { flex-wrap: wrap; gap: 8px; min-width: 0; }
-  #whoami { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
-  .header-actions { flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
+  /* Mobile header (superior-approved layout): line 1 = title + address
+     (address truncates with an ellipsis), line 2 = language toggle +
+     logout pill, right-aligned. The address lives next to the title in
+     the markup, so wrapping naturally yields the two lines. */
+  .header-row { flex-wrap: wrap; row-gap: 8px; min-width: 0; }
+  #whoami {
+    flex: 1 1 0; min-width: 0; text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* Controls take their own full-width line, right-aligned. */
+  .header-actions { flex-basis: 100%; justify-content: flex-end; gap: 8px; min-width: 0; }
 }
 
 /* Accessibility: freeze all portal motion when the user prefers reduced
