@@ -1187,3 +1187,55 @@ nav .tab { flex: 0 0 auto; }
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--error);
 }
+
+/* ===== v0.6 mail management views ===== */
+/* Segment capsule switching Messages | Overview (same family as the
+   language toggle). Content-hugging width; both segments equal padding. */
+.mgmt-seg {
+  display: inline-flex; padding: 2px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  margin: 0 0 12px;
+}
+.mgmt-seg button {
+  font-size: 12px; padding: 4px 16px; border-radius: 999px;
+  border: none; background: transparent; color: var(--muted);
+  cursor: pointer; font-family: inherit; line-height: 1.4;
+}
+.mgmt-seg button.on {
+  background: var(--panel); color: var(--text); font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+/* Subs overview: full-width table on desktop, data-label cards on mobile
+   (same grammar as the Accounts table). */
+.mgmt-sum { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.mgmt-refresh { min-height: 0; padding: 2px 10px; font-size: 11px; margin-left: 8px; }
+.mgmt-ovw { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mgmt-ovw th {
+  text-align: left; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--muted); padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.mgmt-ovw td { padding: 8px; border-bottom: 1px solid var(--border); }
+.mgmt-ovw tbody tr { cursor: pointer; }
+.mgmt-ovw tbody tr:hover td { background: var(--panel-2); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 5px; vertical-align: 1px; }
+.dot.live { background: #2e9e5b; }
+.dot.idle { background: var(--muted); opacity: .5; }
+.mgmt-empty {
+  border: 1px dashed var(--border); border-radius: 8px;
+  padding: 18px 14px; text-align: center; color: var(--text);
+}
+.mgmt-empty .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.mgmt-empty .row-action { min-height: 0; padding: 3px 12px; font-size: 12px; margin-top: 8px; }
+@media (max-width: 520px) {
+  .mgmt-ovw th { display: none; }
+  .mgmt-ovw tbody tr { display: block; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+  .mgmt-ovw td { display: block; border: none; padding: 2px 0; }
+  .mgmt-ovw td::before {
+    content: attr(data-label); color: var(--muted);
+    font-size: 11px; margin-right: 6px;
+  }
+}

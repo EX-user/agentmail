@@ -325,33 +325,44 @@
          their own mail plus any subordinate accounts (self-declared edges,
          read-only, attachments metadata only). -->
     <section id="tab-mail" class="tab-panel hidden">
-      <h2>Mail <small class="muted" data-i18n="mail.subtitle">— browse mail (yours and subordinate accounts)</small></h2>
-      <div class="row">
-        <label>Account:
-          <select id="mail-account"><option value="">Loading…</option></select>
-        </label>
-        <label>Folder:
-          <select id="mail-folder">
-            <option value="inbox">Inbox</option>
-            <option value="sent">Sent</option>
-            <option value="all">All (mixed)</option>
-          </select>
-        </label>
-        <label>Limit:
-          <input type="number" id="mail-limit" value="50" min="1" max="500" />
-        </label>
-        <button id="btn-load-mail" class="primary" data-i18n="mail.load">Load</button>
+      <h2><span data-i18n="mgmt.title">Manage</span> <small class="muted" data-i18n="mail.subtitle">— browse mail (yours and subordinate accounts)</small></h2>
+      <!-- v0.6 management views: Messages is the existing dual-pane lookup
+           (one of the management views — "直接查信件", code and ids
+           preserved verbatim per superior's instruction); Overview
+           aggregates subordinate activity from GET /api/mgmt/subs-overview. -->
+      <div class="mgmt-seg" id="mgmt-seg">
+        <button type="button" class="on" data-mview="browse" data-i18n="mgmt.tabBrowse">Messages</button>
+        <button type="button" data-mview="overview" data-i18n="mgmt.tabOverview">Overview</button>
       </div>
-      <!-- Mobile (<=800px): List | Message tabs — one pane at a time, the
-           standard phone pattern; desktop keeps the side-by-side grid. -->
-      <div class="mail-tabs" data-grid="mail">
-        <button type="button" class="mtab on" data-pane="list" data-i18n="mail.tabList">List</button>
-        <button type="button" class="mtab" data-pane="detail" data-i18n="mail.tabMessage">Message</button>
+      <div id="mgmt-browse">
+        <div class="row">
+          <label>Account:
+            <select id="mail-account"><option value="">Loading…</option></select>
+          </label>
+          <label>Folder:
+            <select id="mail-folder">
+              <option value="inbox">Inbox</option>
+              <option value="sent">Sent</option>
+              <option value="all">All (mixed)</option>
+            </select>
+          </label>
+          <label>Limit:
+            <input type="number" id="mail-limit" value="50" min="1" max="500" />
+          </label>
+          <button id="btn-load-mail" class="primary" data-i18n="mail.load">Load</button>
+        </div>
+        <!-- Mobile (<=800px): List | Message tabs — one pane at a time, the
+             standard phone pattern; desktop keeps the side-by-side grid. -->
+        <div class="mail-tabs" data-grid="mail">
+          <button type="button" class="mtab on" data-pane="list" data-i18n="mail.tabList">List</button>
+          <button type="button" class="mtab" data-pane="detail" data-i18n="mail.tabMessage">Message</button>
+        </div>
+        <div class="mail-grid" id="mail-grid">
+          <div id="mail-list" class="pane">Pick an account and click Load.</div>
+          <div id="mail-detail" class="pane">Select a message to view its body.</div>
+        </div>
       </div>
-      <div class="mail-grid" id="mail-grid">
-        <div id="mail-list" class="pane">Pick an account and click Load.</div>
-        <div id="mail-detail" class="pane">Select a message to view its body.</div>
-      </div>
+      <div id="mgmt-overview" class="hidden"></div>
     </section>
 
     <!-- Inbox (personal inbox, all users) -->
