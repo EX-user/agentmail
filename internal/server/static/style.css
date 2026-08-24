@@ -1174,9 +1174,11 @@ nav .tab { flex: 0 0 auto; }
    want it too (feedback). The pager-hide stays phone-only (tabs layout).
    (v0.5.19, superior-approved) The two buttons form one compact pill in
    its own band above the letter; the letter body scrolls in a separate
-   region below (#inbox-detail is a flex column), so the buttons never
-   overlap content and never scroll away. */
-#inbox-detail { display: flex; flex-direction: column; }
+   region below (#inbox-detail / #mail-detail are flex columns), so the
+   buttons never overlap content and never scroll away. The Manage >
+   Messages detail (#mail-detail) shares the pattern (superior's request:
+   prev/next there too, same style). */
+#inbox-detail, #mail-detail { display: flex; flex-direction: column; }
 .detail-scroll {
   overflow-y: auto; min-height: 0; flex: 1;
 }
