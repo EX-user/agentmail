@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/agentmail/agentmail/internal/audit"
 	"github.com/agentmail/agentmail/internal/store"
@@ -95,8 +96,30 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFileDownload streams a file's content to an authorized account.
-// handleFileList returns the authenticated account's files for the
-// attachment management card: expiry ascending, derived ExpiresAt
+// extendRateLimit caps attachment renewals per account per hour (the
+// window is hourly — stricter than a per-minute cap but ample for
+// interactive management).
+const extendRateLimit = 10
+
+// allowFileOp counts management-card mutations per account per hour
+// (extend today; delete can join the same window if it ever needs a cap).
+func (s *Server) allowFileOp(account string, limit int) bool {
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	now := time.Now()
+	rw := s.fileRates[account]
+	if rw == nil || now.Sub(rw.windowStart) >= time.Hour {
+		rw = &rateWindow{windowStart: now}
+		s.fileRates[account] = rw
+	}
+	if rw.count >= limit {
+		return false
+	}
+	rw.count++
+	return true
+}
+
+// handleFileList returns the authenticated account's files for the// attachment management card: expiry ascending, derived ExpiresAt
 // (CreatedAt + FileTTL). GET only.
 func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -116,9 +139,34 @@ func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFileDownload serves GET /api/files/{id}/download and dispatches
-// DELETE /api/files/{id} to the delete flow (management card).
+// the management-card mutations: DELETE /api/files/{id} (delete) and
+// POST /api/files/{id}/extend (renew expiry to now+TTL).
 func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	who := accountFrom(r.Context())
+	// POST /api/files/{id}/extend -> ["api","files",id,"extend"]
+	if r.Method == http.MethodPost && len(parts) == 4 && parts[3] == "extend" {
+		id := parts[2]
+		if parts[0] != "api" || parts[1] != "files" || id == "" {
+			http.NotFound(w, r)
+			return
+		}
+		// Anti-churn: renewal is harmless but not free — cap per account.
+		if !s.allowFileOp(who, extendRateLimit) {
+			http.Error(w, fmt.Sprintf("file operation rate limit exceeded (%d/hour)", extendRateLimit), http.StatusTooManyRequests)
+			return
+		}
+		expires, err := s.store.ExtendFile(id, who)
+		if err != nil {
+			// Foreign, missing, and corrupt ids all look the same.
+			http.NotFound(w, r)
+			return
+		}
+		_ = s.audit.Record(r.Context(), audit.ActionFileExtend, who,
+			fmt.Sprintf("id=%s expires_at=%d", id, expires))
+		writeJSON(w, http.StatusOK, map[string]any{"id": id, "expires_at": expires})
+		return
+	}
 	// DELETE /api/files/{id} -> ["api","files",id]
 	if r.Method == http.MethodDelete {
 		if len(parts) != 3 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" {
@@ -126,7 +174,6 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id := parts[2]
-		who := accountFrom(r.Context())
 		if err := s.store.DeleteFile(id, who); err != nil {
 			// Foreign, missing, and corrupt ids all look the same.
 			http.NotFound(w, r)
@@ -140,7 +187,6 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w)
 		return
 	}
-	who := accountFrom(r.Context())
 	// Route: /api/files/{id}/download -> ["api","files",id,"download"]
 	if len(parts) != 4 || parts[0] != "api" || parts[1] != "files" || parts[2] == "" || parts[3] != "download" {
 		http.NotFound(w, r)

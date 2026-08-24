@@ -410,6 +410,35 @@ func (s *Store) DeleteFile(id, owner string) error {
 	})
 }
 
+// ExtendFile renews the owner's file: expiry is overwritten to now+FileTTL
+// (renewal semantics, not accumulation — implemented as CreatedAt = now,
+// since expiry is derived from it). A foreign or missing id returns
+// ErrFileNotFound (same masquerade as delete). Sent messages keep their
+// snapshot metadata, so old download links keep working for the renewed
+// window too. Returns the new absolute expiry (unix seconds).
+func (s *Store) ExtendFile(id, owner string) (int64, error) {
+	var expires int64
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		fb := tx.Bucket(bFiles)
+		raw := fb.Get([]byte(id))
+		if raw == nil {
+			return ErrFileNotFound
+		}
+		var fr FileRecord
+		if json.Unmarshal(raw, &fr) != nil || !strings.EqualFold(fr.Owner, owner) {
+			return ErrFileNotFound
+		}
+		fr.CreatedAt = s.now().Unix()
+		expires = fr.CreatedAt + int64(FileTTL.Seconds())
+		val, err := json.Marshal(fr)
+		if err != nil {
+			return err
+		}
+		return fb.Put([]byte(id), val)
+	})
+	return expires, err
+}
+
 // AccountFilesUsed returns the total bytes of the account's live files.
 func (s *Store) AccountFilesUsed(owner string) int64 {
 	used, _, _ := s.AccountFileStats(owner)

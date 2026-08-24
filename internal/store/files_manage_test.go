@@ -83,3 +83,44 @@ func TestDeleteFile(t *testing.T) {
 		t.Errorf("used after delete = %d, want %d (quota not reclaimed)", used, usedBefore-rec.Size)
 	}
 }
+
+// TestExtendFile pins the renewal contract: expiry is OVERWRITTEN to
+// now+TTL (not accumulated), a foreign id masquerades as missing, and the
+// new expiry is visible through ListAccountFiles.
+func TestExtendFile(t *testing.T) {
+	s := newFilesStore(t)
+	base := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return base.Add(-20 * 24 * time.Hour) } // 20 days ago
+	rec, err := s.SaveFile("a@t", "keep.txt", nil, []byte("keep"))
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	files, _ := s.ListAccountFiles("a@t")
+	oldExp := files[0].ExpiresAt
+
+	// Foreign owner: looks like missing, file untouched.
+	if _, err := s.ExtendFile(rec.ID, "b@t"); !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("foreign extend = %v, want ErrFileNotFound", err)
+	}
+	// Owner extend at base time: new expiry = base + TTL (overwrite).
+	s.now = func() time.Time { return base }
+	expires, err := s.ExtendFile(rec.ID, "a@t")
+	if err != nil {
+		t.Fatalf("extend: %v", err)
+	}
+	want := base.Add(FileTTL).Unix()
+	if expires != want {
+		t.Errorf("returned expires = %d, want %d", expires, want)
+	}
+	if expires <= oldExp {
+		t.Errorf("expiry not extended: %d <= old %d", expires, oldExp)
+	}
+	files, _ = s.ListAccountFiles("a@t")
+	if files[0].ExpiresAt != want {
+		t.Errorf("list expiry after extend = %d, want %d", files[0].ExpiresAt, want)
+	}
+	// Missing id.
+	if _, err := s.ExtendFile("no-such-id", "a@t"); !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("missing extend = %v, want ErrFileNotFound", err)
+	}
+}

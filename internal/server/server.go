@@ -47,15 +47,16 @@ type rateWindow struct {
 
 // Server wires the store and audit log to the HTTP router.
 type Server struct {
-	store    *store.Store
-	audit    *audit.Store
-	cfg      *config.Config
+	store *store.Store
+	audit *audit.Store
+	cfg   *config.Config
 
 	// Rate limiters (in-memory, 1-hour sliding window).
 	rateMu       sync.Mutex
 	sendRates    map[string]*rateWindow // address -> send count window
 	recvRates    map[string]*rateWindow // address -> byte receive window
 	declareRates map[string]*rateWindow // address -> subordinate-declare count window
+	fileRates    map[string]*rateWindow // address -> attachment-management op window
 
 	// regLimit throttles registration attempts per client IP (the threshold
 	// itself lives in the store so admins can tune it live).
@@ -69,6 +70,7 @@ func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 		sendRates:    make(map[string]*rateWindow),
 		recvRates:    make(map[string]*rateWindow),
 		declareRates: make(map[string]*rateWindow),
+		fileRates:    make(map[string]*rateWindow),
 		regLimit:     newRegLimiter(time.Hour),
 	}
 }
@@ -161,10 +163,10 @@ func (s *Server) Handler() http.Handler {
 
 	// Admin API (admin Basic auth) — requires initialization.
 	mux.HandleFunc("/admin/messages", s.requireInitialized(s.requireAdmin(s.handleAdminMessages)))
-mux.HandleFunc("/admin/messages-all", s.requireInitialized(s.requireAdmin(s.handleAdminMessagesAll)))
+	mux.HandleFunc("/admin/messages-all", s.requireInitialized(s.requireAdmin(s.handleAdminMessagesAll)))
 	mux.HandleFunc("/admin/sent", s.requireInitialized(s.requireAdmin(s.handleAdminSent)))
 	mux.HandleFunc("/admin/message", s.requireInitialized(s.requireAdmin(s.handleAdminMessage)))
-mux.HandleFunc("/admin/thread", s.requireInitialized(s.requireAdmin(s.handleAdminThread)))
+	mux.HandleFunc("/admin/thread", s.requireInitialized(s.requireAdmin(s.handleAdminThread)))
 	mux.HandleFunc("/admin/accounts", s.requireInitialized(s.requireAdmin(s.handleAdminAccounts)))
 	mux.HandleFunc("/admin/audit", s.requireInitialized(s.requireAdmin(s.handleAdminAudit)))
 	mux.HandleFunc("/admin/stats", s.requireInitialized(s.requireAdmin(s.handleAdminStats)))
