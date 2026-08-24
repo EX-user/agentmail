@@ -2850,7 +2850,8 @@
     "dupont moreau laurent durand lefebvre roux fontaine mercier girard boyer chevalier petit " +
     "fischer weber meyer wagner becker schulz hoffmann koch bauer richter klein wolf neumann " +
     "ivanov petrov sidorov smirnov kuznetsov volkov sokolov popov orlov makarov nikolaev morozov").split(" ");
-  const TEAM_JOIN_STYLES = ["pascal", "flat", "under", "hyphen"];
+  // "flat" removed (superior: all-lowercase names are hard to read).
+  const TEAM_JOIN_STYLES = ["pascal", "under", "hyphen"];
   let teamJoinStyle = "hyphen";
 
   function cap(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
