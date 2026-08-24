@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -24,12 +25,12 @@ var ErrAccountDisabled = errors.New("account disabled")
 
 // Account is the stored record for a mail account.
 type Account struct {
-	UUID        string `json:"uuid"`
-	Address     string `json:"address"`
+	UUID         string `json:"uuid"`
+	Address      string `json:"address"`
 	PasswordHash []byte `json:"password_hash"`
-	IsAdmin     bool   `json:"is_admin"`
-	Disabled    bool   `json:"disabled"`
-	CreatedAt   int64  `json:"created_at"` // unix seconds
+	IsAdmin      bool   `json:"is_admin"`
+	Disabled     bool   `json:"disabled"`
+	CreatedAt    int64  `json:"created_at"` // unix seconds
 	// Visible controls whether the account appears in the public directory
 	// (query=directory). Defaults to false; old records missing this field
 	// unmarshal to false, so no data migration is needed.
@@ -68,7 +69,11 @@ func (s *Store) CreateAccountWithPassword(name, domain string, isAdmin bool, pas
 
 func (s *Store) createAccountWithPassword(name, domain string, isAdmin bool, password string) (*CreateAccountResult, error) {
 	name = strings.TrimSpace(name)
-	address := name + "@" + domain
+	// Normalize to lowercase so Foo@ and foo@ can't become two accounts (the
+	// bSubs graph already lowercases its keys; the accounts bucket did not,
+	// and an outside user reported exactly this double-listing). All entry
+	// points funnel through here, so this is the single fix point.
+	address := strings.ToLower(name + "@" + domain)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -101,11 +106,14 @@ func (s *Store) createAccountWithPassword(name, domain string, isAdmin bool, pas
 	return &CreateAccountResult{Address: address, Password: password, UUID: uuid}, nil
 }
 
-// GetAccount loads an account by address.
+// GetAccount loads an account by address. The lookup lowercases the address
+// first: account keys are normalized to lowercase at creation, and this also
+// lets a caller who still sends mixed case (an old client, or pre-fix data)
+// find their record instead of silently 404ing into a duplicate.
 func (s *Store) GetAccount(address string) (*Account, error) {
 	var acc Account
 	err := s.db.View(func(tx *bolt.Tx) error {
-		val := tx.Bucket(bAccounts).Get([]byte(address))
+		val := tx.Bucket(bAccounts).Get([]byte(strings.ToLower(address)))
 		if val == nil {
 			return ErrAccountNotFound
 		}
@@ -193,6 +201,84 @@ func (s *Store) ResetPassword(address, newPassword string) error {
 		}
 		return b.Put([]byte(address), newVal)
 	})
+}
+
+// CaseNormResult reports what NormalizeAccountCase did: how many account
+// keys were already lowercase (untouched), how many were rewritten to their
+// lowercase form (renamed), and how many were deleted as duplicates of an
+// already-lowercase record (the lowercase twin wins — it is the one future
+// logins resolve to).
+type CaseNormResult struct {
+	AlreadyLower int `json:"already_lower"`
+	Renamed      int `json:"renamed"`
+	DeletedDupes int `json:"deleted_duplicates"`
+}
+
+// NormalizeAccountCase repairs pre-fix account keys that were stored with
+// uppercase letters: each key not already lowercase is rewritten to its
+// lowercase form. When the lowercase key already exists (the double-listing
+// an outside user reported), the uppercase record is dropped as a
+// duplicate and the lowercase record is kept (it is what GetAccount now
+// resolves to). One transaction; on conflict the lowercase record's
+// password/visibility/signature/prefs are the ones that survive. Safe to
+// run repeatedly — a clean store is a no-op.
+func (s *Store) NormalizeAccountCase() (CaseNormResult, error) {
+	var res CaseNormResult
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bAccounts)
+		// First pass: collect the keys that need work (cursor mutation
+		// during iteration is risky in bbolt).
+		type pending struct {
+			oldKey, lowerKey []byte
+			val              []byte
+		}
+		var todo []pending
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			lk := bytes.ToLower(k)
+			if bytes.Equal(k, lk) {
+				res.AlreadyLower++
+				continue
+			}
+			todo = append(todo, pending{oldKey: cloneBytes(k), lowerKey: cloneBytes(lk), val: cloneBytes(v)})
+		}
+		for _, p := range todo {
+			if b.Get(p.lowerKey) != nil {
+				// Lowercase twin exists — keep it, drop the uppercase dupe.
+				if err := b.Delete(p.oldKey); err != nil {
+					return err
+				}
+				res.DeletedDupes++
+				continue
+			}
+			// Rewrite under the lowercase key, fix the embedded Address
+			// field, drop the old key.
+			var acc Account
+			if err := json.Unmarshal(p.val, &acc); err == nil && acc.Address != string(p.lowerKey) {
+				acc.Address = string(p.lowerKey)
+				if nv, err := json.Marshal(acc); err == nil {
+					p.val = nv
+				}
+			}
+			if err := b.Put(p.lowerKey, p.val); err != nil {
+				return err
+			}
+			if err := b.Delete(p.oldKey); err != nil {
+				return err
+			}
+			res.Renamed++
+		}
+		return nil
+	})
+	return res, err
+}
+
+// cloneBytes copies a bbolt-owned byte slice (bucket values are only valid
+// for the transaction lifetime). bytes.Clone is unavailable before 1.20.
+func cloneBytes(b []byte) []byte {
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
 }
 
 // ErrWrongPassword is returned by ChangePassword when the old password does not
@@ -437,7 +523,7 @@ func (s *Store) RegisterTeam(username, domain, password string, teamSize int) (*
 	if teamSize < 1 || teamSize > 10 {
 		return nil, nil, fmt.Errorf("team_size must be 1-10")
 	}
-	ownerAddr := username + "@" + domain
+	ownerAddr := strings.ToLower(username + "@" + domain)
 	ownerHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("hash password: %w", err)

@@ -174,6 +174,7 @@ mux.HandleFunc("/admin/thread", s.requireInitialized(s.requireAdmin(s.handleAdmi
 	mux.HandleFunc("/admin/set-registration", s.requireInitialized(s.requireAdmin(s.handleAdminSetRegistration)))
 	mux.HandleFunc("/admin/set-oneclick-register", s.requireInitialized(s.requireAdmin(s.handleAdminSetOneclickRegister)))
 	mux.HandleFunc("/admin/set-random-register", s.requireInitialized(s.requireAdmin(s.handleAdminSetRandomRegister)))
+	mux.HandleFunc("/admin/normalize-account-case", s.requireInitialized(s.requireAdmin(s.handleAdminNormalizeAccountCase)))
 	mux.HandleFunc("/admin/set-showcase", s.requireInitialized(s.requireAdmin(s.handleAdminSetShowcase)))
 	mux.HandleFunc("/admin/set-danmaku", s.requireInitialized(s.requireAdmin(s.handleAdminSetDanmaku)))
 	mux.HandleFunc("/admin/clear-showcase", s.requireInitialized(s.requireAdmin(s.handleAdminClearShowcase)))

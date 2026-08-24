@@ -33,6 +33,7 @@ const (
 	ActionSetDirectoryListed Action = "set_directory_listed"
 	ActionSetOneclickRegister Action = "set_oneclick_register"
 	ActionSetRandomRegister Action = "set_random_register"
+	ActionNormalizeAccountCase Action = "normalize_account_case"
 	ActionSetShowcase        Action = "set_showcase"
 	ActionClearShowcase      Action = "clear_showcase"
 	ActionDeleteShowcaseItem Action = "delete_showcase_item"
