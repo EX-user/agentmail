@@ -57,7 +57,7 @@
       "nav.accounts": "Accounts",
       "nav.inbox": "Inbox",
       "nav.compose": "Compose",
-      "nav.mail": "Mail",
+      "nav.mail": "Manage",
       "nav.directory": "Directory",
       "nav.profile": "Preferences & settings",
       "nav.settings": "Settings",
