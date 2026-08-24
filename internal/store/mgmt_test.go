@@ -232,8 +232,25 @@ func TestMgmtAttributionTo0(t *testing.T) {
 	for _, c := range sub1.TopContacts {
 		got[c.Address] = c.Count
 	}
-	if got["ext1@t"] != 1 || got["me@t"] != 1 {
-		t.Errorf("sub1 contacts = %v, want ext1:1 me:1", got)
+	// ext1→[sub1,sub2] attributes to sub1; me→sub1 attributes to ME's
+	// contacts (sender side), not sub1's — sub1's own contacts only gain
+	// "me" from messages sub1 SENDS to me (none here).
+	if len(got) != 1 || got["ext1@t"] != 1 {
+		t.Errorf("sub1 contacts = %v, want ext1:1 only", got)
+	}
+	// The me→sub1 message does surface as a directed edge (sender side).
+	var meSub1 *MgmtEdge
+	for i := range out.Graph.Edges {
+		e := &out.Graph.Edges[i]
+		if (e.A == "me@t" && e.B == "sub1@t") || (e.A == "sub1@t" && e.B == "me@t") {
+			meSub1 = e
+		}
+	}
+	if meSub1 == nil {
+		t.Fatal("me-sub1 edge missing")
+	}
+	if meSub1.A == "me@t" && meSub1.AToB != 1 || meSub1.B == "me@t" && meSub1.BToA != 1 {
+		t.Errorf("me-sub1 edge direction wrong: %+v", meSub1)
 	}
 	// me↔ext2 has no message here: no such edge at all.
 	for _, e := range out.Graph.Edges {
