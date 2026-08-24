@@ -1046,6 +1046,18 @@ nav .tab { flex: 0 0 auto; }
 }
 .attach-x:hover { color: var(--error); }
 
+/* Logout pill (superior-approved): same family as the language toggle —
+   same track/radius/height (28px, matched to .lang-toggle incl. border),
+   hover turns red to signal exit. */
+.btn-logout-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 16px; height: 26px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; cursor: pointer; line-height: 1;
+  font-family: inherit;
+}
+.btn-logout-pill:hover { color: var(--error); border-color: var(--error); background: var(--panel); }
+
 /* Attachment management card (v2, superior-approved): collapsed head +
    compact single-line rows shared by desktop and mobile. */
 .am-head { display: flex; align-items: center; justify-content: space-between;

@@ -230,7 +230,9 @@
       <div class="header-actions">
         <span id="whoami" class="muted"></span>
         <button id="btn-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button>
-        <button id="btn-logout" class="row-action" title="Sign out" data-i18n-title="nav.logoutTitle" data-i18n="nav.logout">Log out</button>
+        <!-- Logout as a pill (superior-approved): same family as the language
+           toggle; hover turns red to signal exit. -->
+          <button id="btn-logout" class="btn-logout-pill" title="Sign out" data-i18n-title="nav.logoutTitle"><span data-i18n="nav.logout">Log out</span> <span aria-hidden="true">&#9211;</span></button>
       </div>
     </div>
     <nav>
