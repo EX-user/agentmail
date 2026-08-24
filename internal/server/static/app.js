@@ -2824,6 +2824,117 @@
   // POST /api/register-team. The success view lists every credential and
   // ONE copy-all button — no per-account agent prompts (future first-login
   // welcome page may carry those).
+  // ---- attachment management card (v2, superior-approved) ----
+  // Collapsed head renders from data the profile already carries
+  // (used/quota + attachments_count); expanding fetches the per-file list
+  // and offers extend(+30d) / release. Endpoints land server-side soon —
+  // everything degrades gracefully until then.
+  (function wireAttachMgmt() {
+    const card = $("#attach-mgmt-card");
+    if (!card) return;
+    let expanded = false, loaded = false;
+
+    function daysLeft(ts) {
+      if (!ts) return null;
+      return Math.max(0, Math.ceil((ts - Date.now() / 1000) / 86400));
+    }
+
+    async function loadSummary() {
+      const sum = $("#am-sum");
+      try {
+        const [prof, setg] = await Promise.all([
+          api("/api/profile/self", { keepSession: true }).catch(function () { return null; }),
+          api("/api/info?query=settings", { keepSession: true }).catch(function () { return null; }),
+        ]);
+        const used = prof && typeof prof.files_used_bytes === "number" ? prof.files_used_bytes : null;
+        const cap = setg && typeof setg.file_quota_per_acct === "number" ? setg.file_quota_per_acct : null;
+        const cnt = prof && typeof prof.attachments_count === "number" ? prof.attachments_count : null;
+        const parts = [];
+        if (used != null && cap != null && cap > 0) {
+          parts.push(fmtBytes(used) + " / " + fmtBytes(cap));
+          const bar = $("#am-bar");
+          if (bar) bar.style.width = Math.min(100, Math.round(used / cap * 100)) + "%";
+        }
+        if (cnt != null) parts.push(t("am.count", { n: cnt }));
+        if (sum) sum.textContent = parts.join(" · ") || "—";
+      } catch (_) {
+        if (sum) sum.textContent = "—";
+      }
+    }
+
+    function rowHtml(f) {
+      const d = daysLeft(f.expires_at);
+      const meta = fmtBytes(f.size || 0) + (d != null ? " · " +
+        '<span' + (d <= 7 ? ' class="soon"' : "") + ">" + d + '天</span>' : "");
+      return '<div class="am-row" data-fid="' + esc(f.id) + '">' +
+        '<span class="fn" title="' + esc(f.filename || "") + '">' + esc(f.filename || f.id) + "</span>" +
+        '<span class="meta">' + meta + "</span>" +
+        '<span class="btns">' +
+        '<button class="am-mini" data-am="extend">' + t("am.extend") + "</button>" +
+        '<button class="am-mini del" data-am="release">' + t("am.release") + "</button>" +
+        "</span></div>";
+    }
+
+    async function loadRows() {
+      const box = $("#am-rows");
+      if (!box) return;
+      box.textContent = t("common.loading");
+      try {
+        const res = await api("/api/files/list", { keepSession: true });
+        const files = (res && res.files) || [];
+        box.innerHTML = files.length
+          ? files.map(rowHtml).join("")
+          : '<div class="am-row"><span class="fn muted">' + t("am.empty") + "</span></div>";
+        loaded = true;
+      } catch (e) {
+        box.innerHTML = '<div class="am-row"><span class="fn muted">' + t("am.unavailable") + "</span></div>";
+      }
+    }
+
+    function setExpand(open) {
+      expanded = open;
+      $("#am-body").classList.toggle("hidden", !open);
+      const chev = $("#am-chev");
+      if (chev) chev.textContent = open ? "\u25BE" : "\u25B8";
+      if (open && !loaded) loadRows();
+    }
+
+    $("#am-head").addEventListener("click", function () { setExpand(!expanded); });
+    $("#am-head").addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpand(!expanded); }
+    });
+
+    $("#am-rows").addEventListener("click", async function (ev) {
+      const btn = ev.target.closest("button[data-am]");
+      if (!btn) return;
+      const row = btn.closest(".am-row");
+      const fid = row && row.dataset.fid;
+      if (!fid) return;
+      const fn = (row.querySelector(".fn") && row.querySelector(".fn").textContent) || fid;
+      if (btn.dataset.am === "release") {
+        if (!confirm(t("am.confirmRelease", { name: fn }))) return;
+        try {
+          await api("/api/files/" + encodeURIComponent(fid), { method: "DELETE" });
+          toast(t("am.released"), "success");
+        } catch (e) { toast(t("common.error", { msg: e.message }), "error"); return; }
+      } else {
+        try {
+          await api("/api/files/" + encodeURIComponent(fid) + "/extend", { method: "POST" });
+          toast(t("am.extended"), "success");
+        } catch (e) { toast(t("common.error", { msg: e.message }), "error"); return; }
+      }
+      loadRows();
+      loadSummary();
+    });
+
+    // Refresh the summary whenever the preferences tab (re)loads.
+    const origLoadProfile = loadProfile;
+    loadProfile = async function () {
+      await origLoadProfile.apply(this, arguments);
+      loadSummary().catch(function () {});
+    };
+  })();
+
   // ---- team register v2: name-like member names ----
   // Multi-cultural pools (superior-approved: en/ja-romaji/zh-pinyin/fr/de/ru;
   // 161 given x 113 surname = 18,193 combos; measured team-collision 0.009%
