@@ -3005,12 +3005,8 @@
     $$("#team-member-rows .team-mrow input").forEach(function (inp) {
       if (inp.value) used[inp.value] = 1;
     });
-    while (box.children.length > n) {
-      box.removeChild(box.lastChild); // row
-      if (box.lastChild) box.removeChild(box.lastChild); // hint
-    }
-    while (box.children.length < n * 2) {
-      var idx = Math.floor(box.children.length / 2) + 1;
+    while (box.children.length > n) box.removeChild(box.lastChild);
+    while (box.children.length < n) {
       var row = document.createElement("div");
       row.className = "team-mrow";
       var input = document.createElement("input");
@@ -3020,24 +3016,15 @@
       var dice = document.createElement("button");
       dice.type = "button";
       dice.className = "dice";
-      dice.textContent = "\u2680";
+      // Colorful dice emoji (U+1F3B2) — the thin U+2680 glyph rendered
+      // badly on some platforms (superior feedback).
+      dice.textContent = "\uD83C\uDFB2";
       dice.title = t("team.reroll");
       row.appendChild(dice);
       box.appendChild(row);
-      var hint = document.createElement("div");
-      hint.className = "addr-hint";
-      hint.textContent = input.value + "@" + systemDomain;
-      box.appendChild(hint);
     }
     var num = $("#team-size-n");
     if (num) num.textContent = String(n);
-  }
-  function refreshTeamHints() {
-    $$("#team-member-rows .team-mrow").forEach(function (row) {
-      var input = row.querySelector("input");
-      var hint = row.nextElementSibling;
-      if (input && hint) hint.textContent = (input.value || "name") + "@" + systemDomain;
-    });
   }
 
   function showTeamForm() {
@@ -3330,16 +3317,11 @@
         if (inp !== input && inp.value) used[inp.value] = 1;
       });
       input.value = randomTeamName(used);
-      refreshTeamHints();
     });
     $("#btn-team-reroll-all").addEventListener("click", function () {
       var inputs = $$("#team-member-rows .team-mrow input");
       var used = {};
       inputs.forEach(function (inp) { inp.value = randomTeamName(used); });
-      refreshTeamHints();
-    });
-    $("#team-member-rows").addEventListener("input", function (ev) {
-      if (ev.target.tagName === "INPUT") refreshTeamHints();
     });
     submit.addEventListener("click", async function () {
       const name = ($("#team-name").value || "").trim();
