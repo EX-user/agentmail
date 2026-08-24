@@ -3230,6 +3230,26 @@
     });
   }
 
+  // An over-wide address auto-scrolls (ping-pong) instead of just clipping:
+  // reveal the head of the address, then ease back to the tail. Skipped for
+  // reduced-motion users (plain ellipsis stays).
+  function maybeMarqueeWhoami() {
+    const el = $("#whoami");
+    if (!el) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const diff = el.scrollWidth - el.clientWidth;
+    if (diff > 8) {
+      el.style.setProperty("--wm-shift", diff + "px");
+      el.style.setProperty("--wm-dur", Math.max(4, diff / 20) + "s");
+      el.classList.add("marquee");
+    } else {
+      el.classList.remove("marquee");
+      el.style.removeProperty("--wm-shift");
+      el.style.removeProperty("--wm-dur");
+    }
+  }
+  window.addEventListener("resize", maybeMarqueeWhoami);
+
   // showApp reveals the panel and applies role-based tab visibility.
   function showApp() {
     hideAllScreens();
@@ -3237,7 +3257,9 @@
     document.querySelector("main").classList.remove("hidden");
     const s = getSession();
     if (s) {
-      $("#whoami").textContent = s.address + (s.is_admin ? " (admin)" : "");
+      $("#whoami").innerHTML = '<span class="wm-txt">' +
+        esc(s.address + (s.is_admin ? " (admin)" : "")) + "</span>";
+      maybeMarqueeWhoami();
       applyRole(!!s.is_admin);
       refreshInboxBadge();
       // Per-user caches must not leak across logins (logout keeps the DOM).
