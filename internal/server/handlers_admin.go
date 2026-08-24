@@ -507,6 +507,25 @@ func (s *Server) handleAdminSetRandomRegister(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]any{"random_register_enabled": body.Enabled})
 }
 
+// handleAdminNormalizeAccountCase repairs pre-fix account keys stored with
+// uppercase letters (the double-listing an outside user reported). Safe to
+// run repeatedly — a clean store is a no-op. Back up the db first.
+//   POST /admin/normalize-account-case  -> {already_lower, renamed, deleted_duplicates}
+func (s *Server) handleAdminNormalizeAccountCase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	res, err := s.store.NormalizeAccountCase()
+	if err != nil {
+		internalError(w, "normalize account case: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionNormalizeAccountCase, "accounts",
+		fmt.Sprintf("by=admin already_lower=%d renamed=%d deleted_dupes=%d", res.AlreadyLower, res.Renamed, res.DeletedDupes))
+	writeJSON(w, http.StatusOK, res)
+}
+
 // handleAdminClearShowcase empties the showcase bucket (e.g. after bad data
 // such as encoding-mangled entries landed). Real mail is untouched.
 //   POST /admin/clear-showcase
