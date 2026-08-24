@@ -159,6 +159,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/password", s.requireInitialized(s.requireAccount(s.handleChangePassword)))
 	mux.HandleFunc("/api/subs", s.requireInitialized(s.requireAccount(s.handleSubs)))
 	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
+	mux.HandleFunc("/api/mgmt/subs-overview", s.requireInitialized(s.requireAccount(s.handleMgmtSubsOverview)))
 	mux.HandleFunc("/api/register-subordinate", s.requireInitialized(s.requireAccount(s.handleRegisterSubordinate)))
 
 	// Admin API (admin Basic auth) — requires initialization.
