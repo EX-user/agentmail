@@ -1150,8 +1150,22 @@ nav .tab { flex: 0 0 auto; }
 .attach-ttl-over { color: var(--error); }
 
 /* Inbox prev/next (v0.5.4.1): visible on every width — desktop readers
-   want it too (feedback). The pager-hide stays phone-only (tabs layout). */
-.inbox-nav { display: flex; }
+   want it too (feedback). The pager-hide stays phone-only (tabs layout).
+   (v0.5.19, superior-approved) The two buttons form one compact pill,
+   sticky at the top-left of the reading pane — they used to ride the top
+   of the letter body and scroll out of reach on long messages. */
+.inbox-nav {
+  position: sticky; top: 8px; z-index: 6;
+  display: inline-flex;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 999px; overflow: hidden; margin: 0 0 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+}
+.inbox-nav .row-action {
+  border: none; border-radius: 0;
+  padding: 4px 12px; font-size: 12px; min-height: 0;
+}
+.inbox-nav .row-action + .row-action { border-left: 1px solid var(--border); }
 @media (max-width: 800px) {
   /* The pager belongs to the List tab; hide it while reading a message. */
   #inbox-grid.mshow-detail ~ .inbox-pager { display: none; }

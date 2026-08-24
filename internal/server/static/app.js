@@ -1817,7 +1817,9 @@
   }
 
   function inboxNavRow() {
-    return '<div class="row inbox-nav" style="margin:0 0 8px; justify-content:space-between;">' +
+    // Compact sticky pill (superior-approved): pinned at the top-left of the
+    // reading pane so prev/next stay tappable wherever the letter is scrolled.
+    return '<div class="inbox-nav">' +
       '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
       '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
       "</div>";
