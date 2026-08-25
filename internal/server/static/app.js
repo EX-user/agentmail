@@ -369,6 +369,7 @@
     const s = getSession();
     if (s && !s.is_admin) {
       await loadAccountsRegular(s.address);
+      maybeMarqueeSigs();
       return;
     }
     // Admin view has global tools; the subordinate manager is regular-only.
@@ -399,7 +400,7 @@
         return "<tr" + rowCls + ">" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
           '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(a.signature || "") + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(a.signature || "") + "</span></td>" +
           '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">' + t("act.compose") + '</button><button class="row-action" data-reset="' + esc(a.address) + '">' + t("act.resetPw") + '</button>' +
           toggleBtn + "</td>" +
@@ -420,6 +421,7 @@
       $$("[data-enable]", tbody).forEach(function (btn) {
         btn.addEventListener("click", function () { setDisabled(btn.dataset.enable, false); });
       });
+      maybeMarqueeSigs();
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="5">Error: ' + esc(e.message) + "</td></tr>";
     }
@@ -471,7 +473,7 @@
       "<tr>" +
       '<td class="addr-cell" data-label="' + t("col.address") + '"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span>' + (ownVisible ? ' <span class="badge-listed">listed</span>' : "") + "</td>" +
-      '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(ownSig) + "</td>" +
+      '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(ownSig) + "</span></td>" +
       "<td data-label=\"Created\"></td>" +
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
@@ -490,7 +492,7 @@
         '<tr class="subrow-pc">' +
         '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
         '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
-        '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(sig) + "</td>" +
+        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(sig) + "</span></td>" +
         "<td data-label=\"Created\"></td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-action" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + "</button></td>" +
         "</tr>";
@@ -533,7 +535,7 @@
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
           '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(listedSig[c] || "") + "</td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(listedSig[c] || "") + "</span></td>" +
           "<td data-label=\"Created\"></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
@@ -2109,7 +2111,7 @@
       // column wrapped at five characters); the dot keeps its meaning via
       // the hover title.
       box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
-        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="dot ' + dotCls + '" title="' + esc(liveTxt) + '"></span><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
+        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="dot ' + dotCls + '" title="' + esc(liveTxt) + '"></span><span class="mono">' + esc(s.address) + '</span>' +
         (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
         '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
@@ -2207,11 +2209,17 @@
       });
       function mgmtGraphEdge(from, to, count, last, orig) {
         var k = graphScale(count);
+        // v0.6.6: alpha rides the same normalization as width — light
+        // traffic reads thin AND faint. Label = count only; the
+        // last-activity time moved to the hover tooltip (it occluded the
+        // graph at real volumes).
+        var alpha = 0.35 + 0.65 * k;
         return {
-          from: from, to: to, label: count + "→" + last,
+          from: from, to: to, label: String(count),
+          title: count + " · " + last,
           arrows: { to: { enabled: true, scaleFactor: 0.45 + 0.65 * k } },
           width: 0.6 + 2.2 * k,
-          color: { color: "#5b6b7d", highlight: "#3b82f6" },
+          color: { color: "rgba(91,107,125," + alpha.toFixed(2) + ")", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
           smooth: { type: "curvedCW", roundness: 0.2 },
           _sub: pickGraphSub(orig, myAddr)
@@ -2370,13 +2378,14 @@
       tbody.innerHTML = entries.map(function (e) {
         return "<tr>" +
           '<td class="addr-cell">' + esc(e.address) + "</td>" +
-          '<td class="sig-cell">' + esc(e.signature || "") + "</td>" +
+          '<td class="sig-cell"><span class="sig-mtxt">' + esc(e.signature || "") + "</span></td>" +
           '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button></td>' +
           "</tr>";
       }).join("");
       $$("[data-compose]", tbody).forEach(function (btn) {
         btn.addEventListener("click", function () { composeTo(btn.dataset.compose); });
       });
+      maybeMarqueeSigs();
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="3">Error: ' + esc(e.message) + "</td></tr>";
     }
@@ -2385,6 +2394,23 @@
   // ---- profile (edit your own visibility + signature) ----
 
   // ---- user preferences (v0.6) ----
+
+  // Liveness steppers (v0.6.6, feedback: native number spinners unusable in
+  // the superior's environment): explicit −/+ buttons flanking the input,
+  // clamped to the same 1..8760 contract as the field itself.
+  (function wirePrefSteppers() {
+    document.addEventListener("click", function (ev) {
+      const btn = ev.target.closest(".pref-step");
+      if (!btn) return;
+      const input = document.getElementById(btn.dataset.stepTarget || "");
+      if (!input) return;
+      const cur = parseInt(input.value, 10);
+      const next = (isFinite(cur) ? cur : 1) + parseInt(btn.dataset.stepDir, 10);
+      const min = parseInt(input.min, 10) || 1;
+      const max = parseInt(input.max, 10) || 8760;
+      input.value = Math.min(max, Math.max(min, next));
+    });
+  })();
   // Read order: server account.prefs > localStorage fallback > defaults.
   // Cached in memory: message rendering consults it without a request.
   const PREFS_DEFAULTS = { audio_autoplay: false, image_preview: true, livenessWeakHours: 48, livenessStrongHours: 24 };
@@ -3715,6 +3741,26 @@
     }
   }
   window.addEventListener("resize", maybeMarqueeWhoami);
+
+  // maybeMarqueeSigs ping-pong-scrolls over-wide signature cells (Accounts
+  // + Directory) instead of clipping them — same pattern as #whoami,
+  // generalized per cell. Reduced-motion users keep the ellipsis.
+  function maybeMarqueeSigs() {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    $$(".sig-cell").forEach(function (cell) {
+      const diff = cell.scrollWidth - cell.clientWidth;
+      if (diff > 8) {
+        cell.style.setProperty("--wm-shift", diff + "px");
+        cell.style.setProperty("--wm-dur", Math.max(4, diff / 20) + "s");
+        cell.classList.add("marquee");
+      } else {
+        cell.classList.remove("marquee");
+        cell.style.removeProperty("--wm-shift");
+        cell.style.removeProperty("--wm-dur");
+      }
+    });
+  }
+  window.addEventListener("resize", maybeMarqueeSigs);
 
   // showApp reveals the panel and applies role-based tab visibility.
   function showApp() {
