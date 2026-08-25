@@ -26,6 +26,7 @@ import (
 //   DELETE /api/subs?superior=...                                          (auth = A)
 //   GET    /api/subs                                                        (auth = caller: own edges both ways)
 //   GET    /api/subs/{A}/messages?folder=inbox|sent|both&limit=            (auth = B)
+//   POST   /api/subs/remove         {"address": "x@y"}                     (auth = either end; v0.6.5)
 
 // declareRateLimit is the per-account hourly cap on declare calls (anti
 // spamming of relationship edges; revokes are free).
@@ -137,6 +138,48 @@ func (s *Server) handleSubsRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionSubRevoke, me, "revoke-sub superior="+superior)
 	writeJSON(w, http.StatusOK, map[string]any{"status": "revoked", "superior": superior})
+}
+
+// handleSubsRemove implements the v0.6.5 bidirectional removal contract
+// (alice 01M0VCEDB): the authenticated account removes its subordinate
+// relationship with {address} — the unique edge is deleted regardless of
+// which end the initiator occupies, and the server auto-sends a system
+// notification mail to the other party in the same transaction. A missing
+// relationship is 404, matching the subs masquerade semantics (no
+// existence leak); no idempotency beyond that.
+func (s *Server) handleSubsRemove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w)
+		return
+	}
+	me := accountFrom(r.Context())
+	raw, _ := io.ReadAll(io.LimitReader(r.Body, 4096))
+	var body struct {
+		Address string `json:"address"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		badRequest(w, "invalid JSON body")
+		return
+	}
+	addr := strings.ToLower(strings.TrimSpace(body.Address))
+	if addr == "" {
+		badRequest(w, "address is required")
+		return
+	}
+	role, err := s.store.RemoveSubordinate(strings.ToLower(me), addr)
+	if errors.Is(err, store.ErrNoSubRelationship) {
+		http.Error(w, "no such relationship", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		internalError(w, err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionSubRemoved, me, "sub-remove target="+addr+" initiator_role="+role)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"removed":         true,
+		"initiator_role":  role,
+	})
 }
 
 // handleSubsMessages lets B (authenticated) read A's messages. Authorization

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -90,6 +91,83 @@ func (s *Store) RevokeSubordinate(superior, subordinate string) error {
 		return fmt.Errorf("revoke subordinate: %w", err)
 	}
 	return nil
+}
+
+// ErrNoSubRelationship is returned by RemoveSubordinate when no edge exists
+// between the two accounts in either direction.
+var ErrNoSubRelationship = errors.New("no subordinate relationship")
+
+// RemoveSubordinate deletes the unique edge between caller and other,
+// whichever end each account occupies — that bidirectionality is the whole
+// point of the v0.6.5 contract (either side may end the relationship). In
+// the same transaction it also deposits a system-generated notification
+// mail (From = the remover, so the event stays traceable in mail space)
+// into the other party's inbox, so removal and notification can never
+// diverge. Returns the initiator's role on the removed edge: "superior"
+// when caller owned it as B, "subordinate" when caller had declared
+// under other. No idempotency: a missing edge is ErrNoSubRelationship
+// (callers surface it as 404, matching subs read semantics).
+func (s *Store) RemoveSubordinate(caller, other string) (string, error) {
+	role := ""
+	msgID := newULID()
+	now := s.now().Unix()
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		sb := tx.Bucket(bSubs)
+		// The relationship is a single record; try both orientations.
+		if k := subKey(other, caller); sb.Get(k) != nil {
+			if err := sb.Delete(k); err != nil {
+				return err
+			}
+			role = "subordinate" // caller had declared under other
+		} else if k := subKey(caller, other); sb.Get(k) != nil {
+			if err := sb.Delete(k); err != nil {
+				return err
+			}
+			role = "superior" // caller owned the edge
+		} else {
+			return ErrNoSubRelationship
+		}
+
+		// First server-generated message: same-tx notification mail.
+		ts := time.Unix(now, 0).UTC().Format("2006-01-02 15:04:05 UTC")
+		msg := Message{
+			ID:      msgID,
+			From:    caller,
+			To:      []string{other},
+			Subject: fmt.Sprintf("[从属关系解除] %s 与 %s", caller, other),
+			Body: fmt.Sprintf("%s 于 %s 解除了与 %s 的从属关系，双方的从属可见性就此终止。本信由系统代发。",
+				caller, ts, other),
+			ReceivedAt: now,
+		}
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		if err := tx.Bucket(bMessages).Put([]byte(msgID), msgBytes); err != nil {
+			return err
+		}
+		// Inbox + unread reference for the other party (mirrors Send).
+		if acc, err := getAccountInTx(tx, other); err == nil {
+			key := indexKey(acc.UUID, msgID)
+			if err := tx.Bucket(bInbox).Put(key, nil); err != nil {
+				return err
+			}
+			if err := tx.Bucket(bUnread).Put(key, nil); err != nil {
+				return err
+			}
+		}
+		// Sent reference for the remover (traceability in their own view).
+		if acc, err := getAccountInTx(tx, caller); err == nil {
+			if err := tx.Bucket(bSent).Put(indexKey(acc.UUID, msgID), nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("remove subordinate: %w", err)
+	}
+	return role, nil
 }
 
 // IsSubordinate reports whether subordinate (A) currently declares under

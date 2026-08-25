@@ -46,6 +46,7 @@ const (
 	ActionSubDeclare         Action = "sub_declare"
 	ActionSubRevoke          Action = "sub_revoke"
 	ActionSubRead            Action = "sub_read"
+	ActionSubRemoved         Action = "sub_removed"
 )
 
 // Entry is one audit record.
