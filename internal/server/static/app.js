@@ -2147,11 +2147,15 @@
     return visNetworkReady;
   }
 
+  // Live graph handle (v0.6.8): kept for re-fit on tab re-entry so the
+  // viewport stays centered on the nodes between visits.
+  var mgmtNetwork = null;
   function renderMgmtGraph(graph, subs) {
     var el = $("#mgmt-graph");
     if (!el) return;
     var nodes = (graph && graph.nodes) || [];
     var edges = (graph && graph.edges) || [];
+    mgmtNetwork = null; // fresh render invalidates the old instance
     if (!nodes.length) { el.textContent = ""; return; }
     var livenessByAddr = {};
     (subs || []).forEach(function (s) { livenessByAddr[String(s.address).toLowerCase()] = mgmtIsActive(s); });
@@ -2233,18 +2237,25 @@
         return null;
       }
       var data = { nodes: vn, edges: new vis.DataSet(ve) };
-      new vis.Network(el, data, {
+      // Keep the instance: re-entering the tab re-fits the viewport so the
+      // graph never drifts off-center between visits (superior feedback).
+      mgmtNetwork = new vis.Network(el, data, {
         // Roomier layout (feedback: nodes sat too close at real volumes):
         // stronger repulsion + longer springs spread the pairs so the
-        // (now capped) arrows never bury the labels.
+        // (now capped) arrows never bury the labels. Iterations trimmed
+        // 400 -> 260: visibly faster first paint, layout quality held.
         physics: {
           enabled: true, solver: "barnesHut",
           barnesHut: { gravitationalConstant: -6000, springLength: 160, springConstant: 0.04, damping: 0.12 },
-          stabilization: { iterations: 400, fit: true }
+          stabilization: { iterations: 260, fit: true }
         },
         interaction: { hover: true, dragView: true, zoomView: true },
         edges: { selectionWidth: 2 }
-      }).on("click", function (params) {
+      });
+      mgmtNetwork.once("stabilizationIterationsDone", function () {
+        try { mgmtNetwork.fit({ animation: false }); } catch (_) {}
+      });
+      mgmtNetwork.on("click", function (params) {
         // Node click: jump to Messages preselected on that sub; edge click:
         // preselect the sub endpoint of the pair.
         var jump = null;
@@ -2303,6 +2314,13 @@
       // Only auto-load with a session — at boot this can run pre-login and
       // would fail; activateTab("mail") re-kicks it afterwards.
       if (v === "overview" && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
+      // Re-fit on every overview entry: the canvas keeps its viewport across
+      // tab switches, which made the graph drift off-center (superior report).
+      if (v === "overview" && mgmtNetwork) {
+        setTimeout(function () {
+          try { mgmtNetwork.fit({ animation: false }); } catch (_) {}
+        }, 0);
+      }
     }
     seg.addEventListener("click", function (ev) {
       var b = ev.target.closest("button[data-mview]");
@@ -2394,23 +2412,6 @@
   // ---- profile (edit your own visibility + signature) ----
 
   // ---- user preferences (v0.6) ----
-
-  // Liveness steppers (v0.6.6, feedback: native number spinners unusable in
-  // the superior's environment): explicit −/+ buttons flanking the input,
-  // clamped to the same 1..8760 contract as the field itself.
-  (function wirePrefSteppers() {
-    document.addEventListener("click", function (ev) {
-      const btn = ev.target.closest(".pref-step");
-      if (!btn) return;
-      const input = document.getElementById(btn.dataset.stepTarget || "");
-      if (!input) return;
-      const cur = parseInt(input.value, 10);
-      const next = (isFinite(cur) ? cur : 1) + parseInt(btn.dataset.stepDir, 10);
-      const min = parseInt(input.min, 10) || 1;
-      const max = parseInt(input.max, 10) || 8760;
-      input.value = Math.min(max, Math.max(min, next));
-    });
-  })();
   // Read order: server account.prefs > localStorage fallback > defaults.
   // Cached in memory: message rendering consults it without a request.
   const PREFS_DEFAULTS = { audio_autoplay: false, image_preview: true, livenessWeakHours: 48, livenessStrongHours: 24 };

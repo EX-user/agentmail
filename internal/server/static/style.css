@@ -1287,11 +1287,12 @@ nav .tab { flex: 0 0 auto; }
   color: var(--muted); margin: 18px 0 8px;
 }
 .mgmt-graph {
-  height: 380px; border: 1px solid var(--border); border-radius: 8px;
+  /* +40% vertical (superior feedback): 380 -> 532 PC, 300 -> 420 phones. */
+  height: 532px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--panel); touch-action: none;
 }
 @media (max-width: 520px) {
-  .mgmt-graph { height: 300px; }
+  .mgmt-graph { height: 420px; }
 }
 
 /* Modern text inputs (v0.6.3 feedback: search box + register-name field
@@ -1307,23 +1308,16 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
-/* Liveness threshold controls (v0.6.6 feedback: native spinners unusable —
-   explicit −/+ steppers with large touch targets; number field keeps
-   direct typing and the modern .app-input look). */
+/* Liveness threshold controls (v0.6.8 feedback: match the admin-settings
+   input rows — label + number input + unit inline, .app-input look). */
 .pref-lv-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 6px 0; flex-wrap: wrap;
 }
 .pref-lv-label { font-size: 13px; color: var(--muted); }
-.pref-stepper { display: inline-flex; align-items: center; gap: 6px; }
-.pref-step {
-  width: 34px; height: 34px; min-height: 34px; padding: 0;
-  border-radius: 8px; font-size: 17px; line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center;
-}
 .pref-num {
-  width: 76px; padding: 7px 8px; font-size: 14px; font-family: inherit;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  width: 90px; padding: 7px 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
   color: var(--text); text-align: center; box-sizing: border-box;
 }
 .pref-num:focus {
@@ -1332,8 +1326,7 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
 }
 @media (max-width: 520px) {
   .pref-lv-row { flex-basis: 100%; }
-  .pref-step { width: 44px; height: 44px; min-height: 44px; }
-  .pref-num { min-height: 44px; width: 84px; }
+  .pref-num { min-height: 44px; width: 96px; }
 }
 
 /* Register-subordinate ask modal (v0.6 named option): radio pair + name
