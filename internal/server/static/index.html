@@ -452,10 +452,12 @@
            activity within the weak window (script-like); gray = else. -->
       <div class="settings-section pref-card">
         <h4 class="pref-title" data-i18n="prefs.livenessTitle">Liveness thresholds</h4>
-        <div class="pref-lv-row"><span class="pref-lv-label" data-i18n="prefs.livenessStrong">Green window (hours): mail traffic counts as active</span>
-          <span class="pref-stepper"><button type="button" class="pref-step" data-step-target="pref-liveness-strong" data-step-dir="-1" aria-label="-">−</button><input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /><button type="button" class="pref-step" data-step-target="pref-liveness-strong" data-step-dir="1" aria-label="+">+</button></span></div>
-        <div class="pref-lv-row"><span class="pref-lv-label" data-i18n="prefs.livenessWeak">Yellow window (hours): inbox checks count as seen</span>
-          <span class="pref-stepper"><button type="button" class="pref-step" data-step-target="pref-liveness-weak" data-step-dir="-1" aria-label="-">−</button><input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /><button type="button" class="pref-step" data-step-target="pref-liveness-weak" data-step-dir="1" aria-label="+">+</button></span></div>
+        <!-- v0.6.8 (superior feedback): admin-settings-style input rows —
+             label + number input + unit inline, replacing the −/+ stepper. -->
+        <div class="pref-lv-row"><label class="pref-lv-label" for="pref-liveness-strong"><span data-i18n="prefs.livenessStrong">Green window (hours): mail traffic counts as active</span></label>
+          <input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /> <small class="muted" data-i18n="prefs.hoursUnit">h</small></div>
+        <div class="pref-lv-row"><label class="pref-lv-label" for="pref-liveness-weak"><span data-i18n="prefs.livenessWeak">Yellow window (hours): inbox checks count as seen</span></label>
+          <input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /> <small class="muted" data-i18n="prefs.hoursUnit">h</small></div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prefs.livenessHint">Used by the Manage &gt; Overview liveness dots: sending/receiving mail within the green window shows green; checking the inbox within the yellow window (without traffic) shows yellow.</p>
         <div class="row" style="margin-top:10px;">
           <button id="btn-save-prefs" class="primary" data-i18n="prefs.save">Save preferences</button>
@@ -496,8 +498,12 @@
            <details>/<summary> fold (same as the subordinate section above)
            so the disclosure triangle reads the same across cards. -->
       <div class="settings-section pref-card" id="attach-mgmt-card">
+        <!-- Section title hoisted out of the <summary> (superior feedback):
+             the card gets a bold caption like the other pref sections, and
+             the fold line keeps just the live stats. -->
+        <h4 class="pref-title" data-i18n="am.title">Attachment management</h4>
         <details id="am-details">
-          <summary><span data-i18n="am.title">Attachment management</span> <small class="muted" id="am-sum">…</small></summary>
+          <summary><small class="muted" id="am-sum">…</small></summary>
           <div class="am-body" id="am-body">
             <div class="quota-bar"><i id="am-bar" style="width:0%"></i></div>
             <div id="am-rows"></div>
