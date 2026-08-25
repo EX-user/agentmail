@@ -569,8 +569,19 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 @keyframes portal-pulse { 70% { box-shadow: 0 0 0 9px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
 .portal-title {
   font-size: clamp(44px, 8vw, 76px); letter-spacing: -2.5px; margin: 26px 0 14px; font-weight: 800;
-  background: linear-gradient(100deg, #fff 20%, #5ea2ff 55%, #8a7bff 80%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  /* Mobile-invisibility report (superior): the pure-white leading stop is
+     see-through whenever the aurora backdrop does not paint (low-power /
+     reduced-transparency modes), and a bare background-clip:text hides the
+     word entirely on engines that drop the clip. Solid color is the base;
+     the gradient applies only where the clip is actually supported. */
+  color: var(--text);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .portal-title {
+    background: linear-gradient(100deg, #e8f0ff 20%, #5ea2ff 55%, #8a7bff 80%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
 }
 /* Corner-mark placement (superior, round 5): the WORD stays perfectly
    centered (text-align unchanged); a shrink-wrapped .portal-title-word
