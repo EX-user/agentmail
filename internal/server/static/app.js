@@ -145,7 +145,16 @@
     if (name === "overview") loadOverview();
     if (name === "accounts") loadAccounts();
     if (name === "inbox") loadInbox();
-    if (name === "mail") ensureAccountOptions();
+    if (name === "mail") {
+      ensureAccountOptions();
+      // The mgmt segment may have restored "overview" at boot — pre-login
+      // that first load fired without a session and failed silently; kick
+      // it again now that the tab is actually visible with a session
+      // (bug report: overview appeared empty until Messages was visited).
+      var seg = $("#mgmt-seg");
+      var onOverview = seg && seg.querySelector('button[data-mview="overview"].on');
+      if (onOverview && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
+    }
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); ensureComposeShowcaseVisibility(); }
     if (name === "directory") loadDirectory();
     if (name === "profile") loadProfile();
@@ -1044,10 +1053,37 @@
         const first = list.querySelector(".mail-item");
         if (first && msgs.length) first.click();
       }
+      applyMailSearch();
     } catch (e) {
       list.textContent = t("common.error", { msg: e.message });
     }
   }
+
+  // Messages search box (superior's request): instant client-side filter of
+  // the LOADED list (from / subject / preview, case-insensitive). Server-side
+  // full-text search is a separate contract if wanted later.
+  function applyMailSearch() {
+    var input = $("#mail-search");
+    var list = $("#mail-list");
+    if (!input || !list) return;
+    var q = (input.value || "").trim().toLowerCase();
+    var items = $$(".mail-item", list);
+    var shown = 0;
+    items.forEach(function (el) {
+      var hit = !q || (el.textContent || "").toLowerCase().indexOf(q) !== -1;
+      el.classList.toggle("hidden", !hit);
+      if (hit) shown++;
+    });
+    var status = $("#mail-search-status");
+    if (status) {
+      status.textContent = q ? t("mail.searchCount", { n: shown, m: items.length }) : "";
+    }
+  }
+  (function wireMailSearch() {
+    var input = $("#mail-search");
+    if (!input) return;
+    input.addEventListener("input", applyMailSearch);
+  })();
 
   // ---- inbox/mail mobile List|Message tabs (<=800px) ----
   // One pane visible at a time; opening a message flips to Message. The
@@ -2012,7 +2048,9 @@
         b.classList.toggle("on", b.dataset.mview === v);
       });
       try { localStorage.setItem("mgmt-view", v); } catch (_) {}
-      if (v === "overview" && !mgmtOverviewLoaded) loadMgmtOverview();
+      // Only auto-load with a session — at boot this can run pre-login and
+      // would fail; activateTab("mail") re-kicks it afterwards.
+      if (v === "overview" && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
     }
     seg.addEventListener("click", function (ev) {
       var b = ev.target.closest("button[data-mview]");
