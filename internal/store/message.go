@@ -861,8 +861,10 @@ func (s *Store) MarkAllRead(address string) (int, error) {
 	return len(keys), err
 }
 
-// lastReadKey is the bMeta key under which an account's most recent
-// unread->read transition is stamped (liveness "weak evidence").
+// lastReadKey is the bMeta key under which an account's most recent read
+// event is stamped (liveness "weak evidence"). Since the v0.6.6.1-era
+// contract addendum this covers BOTH unread->read transitions and the
+// owner's own inbox pulls.
 func lastReadKey(uuidHex string) []byte {
 	return []byte("lastread:" + uuidHex)
 }
@@ -878,9 +880,28 @@ func touchLastRead(tx *bolt.Tx, uuidHex string, at int64) error {
 	return mb.Put(lastReadKey(uuidHex), []byte(fmt.Sprintf("%d", at)))
 }
 
-// LastReadAt returns the account's most recent unread->read transition
-// (unix seconds; 0 = never). Inbox reads only — sending is the strong
-// liveness signal and lives on last_out_at.
+// TouchLastReadPull stamps a read event for the owner's own inbox pull
+// (contract addendum, superior ruling via Felix 01M0VFNX): a watcher that
+// polls GET /api/inbox is exactly the automation the yellow tier wants to
+// surface, while pure unread->read transitions alone left it almost
+// unreachable. Separate best-effort transaction — the pull itself is a
+// read, so the stamp lands right after it serves. Superior browsing via
+// the subs path must NOT call this (Q2 semantics: viewing must not
+// pollute the viewed account's liveness).
+func (s *Store) TouchLastReadPull(address string) {
+	acc, err := s.GetAccount(address)
+	if err != nil {
+		return
+	}
+	_ = s.db.Update(func(tx *bolt.Tx) error {
+		return touchLastRead(tx, acc.UUID, s.now().Unix())
+	})
+}
+
+// LastReadAt returns the account's most recent read event (unix seconds;
+// 0 = never): an unread->read transition or the owner's own inbox pull,
+// whichever happened last. Sending is the strong liveness signal and lives
+// on last_out_at.
 func (s *Store) LastReadAt(uuidHex string) int64 {
 	var out int64
 	_ = s.db.View(func(tx *bolt.Tx) error {

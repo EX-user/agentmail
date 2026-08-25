@@ -272,6 +272,12 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 
 // handleInbox lists the authenticated account's inbox.
 //   GET /api/inbox?limit=20  -> {"messages": [...], "count": N}
+// Every owner pull also stamps the liveness weak-evidence mark (contract
+// addendum, superior ruling): a watcher polling this endpoint is exactly
+// the automation the yellow tier wants to surface. This is the single
+// choke point for own-inbox pulls — web panel, gateway read_inbox,
+// wait_for_new_mail and duty loops all land here, while superior browsing
+// goes through the separate subs handler and stays non-stamping.
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	who := accountFrom(r.Context())
 	limit := queryInt(r, "limit", 20)
@@ -285,6 +291,7 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	// the nav badge reads it and must not depend on limit/offset.
 	unread, _ := s.store.CountUnread(who)
 	total, _ := s.store.CountInbox(who)
+	s.store.TouchLastReadPull(who)
 	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d total=%d", len(msgs), unread, total))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages":     msgs,
