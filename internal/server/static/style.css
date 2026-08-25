@@ -1278,3 +1278,25 @@ nav .tab { flex: 0 0 auto; }
 @media (max-width: 520px) {
   .mgmt-graph { height: 300px; }
 }
+
+/* Modern text inputs (v0.6.3 feedback: search box + register-name field
+   should look like the rest of the app's inputs, comfortably sized).
+   Applies the compose-form look to the standalone search/name fields. */
+input[type="search"].app-input, input[type="text"].app-input {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 12px; font-size: 14px; font-family: inherit;
+  box-sizing: border-box;
+}
+input[type="search"].app-input:focus, input[type="text"].app-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Liveness threshold inputs (feedback: too small to adjust) */
+.pref-num {
+  width: 130px; padding: 7px 10px; font-size: 14px;
+  border-radius: 6px;
+}
+@media (max-width: 520px) {
+  .pref-num { min-height: 44px; width: 120px; }
+}

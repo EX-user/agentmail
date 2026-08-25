@@ -1995,7 +1995,7 @@
     box += '<div class="mgmt-sum">' + t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 }) +
       ' <button class="row-action mgmt-refresh" data-mgmt-go="refresh">' + t("mgmt.refresh") + "</button></div>";
     box += '<table class="mgmt-ovw"><thead><tr>' +
-      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colLive") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
+      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
     subs.forEach(function (s) {
       var st = mgmtIsActive(s);
       var dotCls = st === "strong" ? "green" : (st === "weak" ? "yellow" : "idle");
@@ -2006,10 +2006,12 @@
         return shortAddr(c.address) + "×" + c.count;
       }).join(" · ") || "—";
       function fmtAvg(v) { return v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(v)) : "—"; }
+      // Liveness moved into the account cell (feedback: the standalone
+      // column wrapped at five characters); the dot keeps its meaning via
+      // the hover title.
       box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
-        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
+        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="dot ' + dotCls + '" title="' + esc(liveTxt) + '"></span><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
         (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colLive")) + '"><span class="dot ' + dotCls + '"></span>' + liveTxt + "</td>" +
         '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
@@ -2067,11 +2069,12 @@
           : "#f2f4f7";
         return {
           id: n.address, label: (isMe ? t("mgmt.meLabel") : shortAddr(n.address)) +
-            (kind !== "external" ? "\n" + (n.volume || 0) : ""),
+            (kind !== "external" ? "\n7d " + (n.volume || 0) : ""),
           shape: "box", borderWidth: isMe ? 2 : 1,
           color: { background: bg, border: border },
           font: { face: "ui-monospace, Consolas, monospace", size: 11, color: "#23303f" },
           value: Math.max(1, n.volume || 1), scaling: { min: 8, max: 26, label: { enabled: false } },
+          title: shortAddr(n.address) + (kind !== "external" ? " · 7d " + (n.volume || 0) : ""),
           _kind: kind
         };
       }));
@@ -2086,18 +2089,25 @@
           return;
         }
         // Two directed arcs per pair (superior: arrows in both directions,
-        // each with its own count) — A4 wedges scale with volume.
+        // each with its own count). Scale is LOG-NORMALIZED and capped —
+        // linear scaling blew up on real volumes (hundreds of letters per
+        // pair) and the wedges buried the graph (v0.6.3 feedback).
         if (ab) ve.push(mgmtGraphEdge(e.a, e.b, ab, last, e));
         if (ba) ve.push(mgmtGraphEdge(e.b, e.a, ba, last, e));
       });
+      var LOG_CAP = 400; // volume at which the visual scale saturates
+      function graphScale(count) {
+        return Math.min(1, Math.log10(1 + (count || 0)) / Math.log10(1 + LOG_CAP));
+      }
       function mgmtGraphEdge(from, to, count, last, orig) {
+        var k = graphScale(count);
         return {
           from: from, to: to, label: count + "→" + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.7 + Math.min(count, 40) / 24 } },
-          width: 1 + Math.min(count, 40) / 9,
+          arrows: { to: { enabled: true, scaleFactor: 0.5 + 0.5 * k } },
+          width: 1 + 1.4 * k,
           color: { color: "#5b6b7d", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
-          smooth: { type: "curvedCW", roundness: 0.16 },
+          smooth: { type: "curvedCW", roundness: 0.2 },
           _sub: pickGraphSub(orig, myAddr)
         };
       }
@@ -2110,7 +2120,14 @@
       }
       var data = { nodes: vn, edges: new vis.DataSet(ve) };
       new vis.Network(el, data, {
-        physics: { enabled: true, stabilization: { iterations: 300, fit: true } },
+        // Roomier layout (feedback: nodes sat too close at real volumes):
+        // stronger repulsion + longer springs spread the pairs so the
+        // (now capped) arrows never bury the labels.
+        physics: {
+          enabled: true, solver: "barnesHut",
+          barnesHut: { gravitationalConstant: -6000, springLength: 160, springConstant: 0.04, damping: 0.12 },
+          stabilization: { iterations: 400, fit: true }
+        },
         interaction: { hover: true, dragView: true, zoomView: true },
         edges: { selectionWidth: 2 }
       }).on("click", function (params) {
