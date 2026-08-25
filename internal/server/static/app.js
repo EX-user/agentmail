@@ -1677,7 +1677,12 @@
       var st = subregAskState();
       var errEl = $("#subreg-ask-err");
       var prev = $("#subreg-addr-prev");
-      var domain = (window.location.hostname || "agentmail.local");
+      // Preview domain = the owner's own address domain (that's what the
+      // backend mints subordinates under). location.hostname is only a
+      // fallback — on self-hosted setups host ≠ mail domain.
+      var sess = getSession();
+      var myAddr = (sess && sess.address) || "";
+      var domain = myAddr.split("@")[1] || window.location.hostname || "agentmail.local";
       if (!st.named) {
         prev.textContent = "";
         errEl.hidden = true;
