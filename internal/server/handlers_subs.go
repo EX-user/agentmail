@@ -1,7 +1,11 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,9 +111,9 @@ func (s *Server) handleSubsDeclare(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionSubDeclare, me, "declare-sub superior="+body.Superior)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"status":    "declared",
-		"superior":  body.Superior,
-		"scope":     "both",
+		"status":   "declared",
+		"superior": body.Superior,
+		"scope":    "both",
 	})
 }
 
@@ -301,19 +305,53 @@ func (s *Server) handleRegisterSubordinate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Random bot-<8hex> name, retried on (unlikely) collision.
+	// v0.6.4 contract: an optional {username} names the subordinate
+	// explicitly. Taken names answer 409 (the one-time password display
+	// must match what the caller typed — no silent renames). Absent/empty
+	// body keeps the random bot-<8> behavior.
 	domain := s.domain()
-	var res *store.CreateAccountResult
-	for i := 0; i < 5; i++ {
-		name := "bot-" + store.GeneratePassword(8)
-		r, err := s.store.CreateAccount(name, domain, false)
-		if err == nil {
-			res = r
-			break
+	named := ""
+	if raw, _ := io.ReadAll(io.LimitReader(r.Body, 4096)); len(bytes.TrimSpace(raw)) > 0 {
+		var body struct {
+			Username string `json:"username"`
 		}
-		if !strings.Contains(err.Error(), "exists") {
+		if err := json.Unmarshal(raw, &body); err != nil {
+			badRequest(w, "invalid body: "+err.Error())
+			return
+		}
+		named = strings.TrimSpace(body.Username)
+		if named != "" {
+			if len(named) > 32 || !isASCIILocalPart(named) {
+				badRequest(w, "username must be ASCII letters, digits, '-' or '_' (max 32 chars)")
+				return
+			}
+		}
+	}
+	var res *store.CreateAccountResult
+	if named != "" {
+		r, err := s.store.CreateAccount(named, domain, false)
+		if err != nil {
+			if errors.Is(err, store.ErrAccountExists) {
+				conflict(w, "address already taken")
+				return
+			}
 			badRequest(w, "create subordinate: "+err.Error())
 			return
+		}
+		res = r
+	} else {
+		// Random bot-<8hex> name, retried on (unlikely) collision.
+		for i := 0; i < 5; i++ {
+			name := "bot-" + store.GeneratePassword(8)
+			r, err := s.store.CreateAccount(name, domain, false)
+			if err == nil {
+				res = r
+				break
+			}
+			if !strings.Contains(err.Error(), "exists") {
+				badRequest(w, "create subordinate: "+err.Error())
+				return
+			}
 		}
 	}
 	if res == nil {

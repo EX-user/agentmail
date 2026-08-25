@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -71,5 +72,56 @@ func TestRegisterPasswordlessGatedByRandomToggle(t *testing.T) {
 	}
 	if code := post(`{"name":"pwless-again"}`); code != http.StatusForbidden {
 		t.Fatalf("passwordless register after disable = %d, want 403", code)
+	}
+}
+
+// TestRegisterSubordinateNamed pins the v0.6.4 contract: an optional
+// {username} names the subordinate; a taken name answers 409 (no silent
+// rename); an absent/empty body keeps the random bot- path.
+func TestRegisterSubordinateNamed(t *testing.T) {
+	ts, st := newRegisterTestServer(t)
+	// Bootstrap admin already owns admin@test.example.
+	post := func(body string, user string) int {
+		t.Helper()
+		var rd io.Reader
+		if body != "" {
+			rd = strings.NewReader(body)
+		}
+		req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/register-subordinate", rd)
+		req.Header.Set("Content-Type", "application/json")
+		req.SetBasicAuth(user, "adminpassword1")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode
+	}
+	// Named creation succeeds and uses the exact name.
+	if code := post(`{"username":"my-agent"}`, "admin@test.example"); code != http.StatusCreated {
+		t.Fatalf("named register = %d, want 201", code)
+	}
+	if _, err := st.GetAccount("my-agent@test.example"); err != nil {
+		t.Errorf("my-agent not created: %v", err)
+	}
+	// Same name again -> 409, original untouched.
+	if code := post(`{"username":"my-agent"}`, "admin@test.example"); code != http.StatusConflict {
+		t.Fatalf("taken name = %d, want 409", code)
+	}
+	// Existing top-level account name also conflicts.
+	if code := post(`{"username":"admin"}`, "admin@test.example"); code != http.StatusConflict {
+		t.Fatalf("existing name = %d, want 409", code)
+	}
+	// Charset and length validation.
+	if code := post(`{"username":"bad name!"}`, "admin@test.example"); code != http.StatusBadRequest {
+		t.Fatalf("bad charset = %d, want 400", code)
+	}
+	if code := post(`{"username":"`+strings.Repeat("a", 33)+`"}`, "admin@test.example"); code != http.StatusBadRequest {
+		t.Fatalf("too long = %d, want 400", code)
+	}
+	// Empty body keeps the random path.
+	if code := post("", "admin@test.example"); code != http.StatusCreated {
+		t.Fatalf("random register = %d, want 201", code)
 	}
 }
