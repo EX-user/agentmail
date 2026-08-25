@@ -1094,6 +1094,16 @@ nav .tab { flex: 0 0 auto; }
   font-family: inherit;
 }
 .btn-logout-pill:hover { color: var(--error); border-color: var(--error); background: var(--panel); }
+/* Prefs pill (v0.6.9): opens the nav-less profile panel — same family as
+   the logout pill, neutral hover. */
+.btn-pref-pill {
+  display: inline-flex; align-items: center;
+  padding: 0 16px; height: 26px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; cursor: pointer; line-height: 1;
+  font-family: inherit;
+}
+.btn-pref-pill:hover { color: var(--text); border-color: var(--accent); background: var(--panel); }
 
 /* Attachment management card (v2, superior-approved): native <details> fold
    (same disclosure triangle as the subordinate section) + compact
