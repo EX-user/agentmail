@@ -1979,11 +1979,131 @@
         '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
     });
     box += "</tbody></table>";
+    // Connections graph (superior: force-directed, N2 label blocks + A4
+    // volume-scaled wedges, shown on BOTH desktop and mobile, inside the
+    // Overview view). The container is rendered by renderMgmtGraph after
+    // this HTML lands in the DOM.
+    box += '<h4 class="mgmt-graph-title">' + t("mgmt.graphTitle") + "</h4>" +
+      '<div id="mgmt-graph" class="mgmt-graph"></div>';
     return box;
   }
 
   function shortAddr(a) {
     return String(a || "").split("@")[0];
+  }
+
+  // Lazy-load the vendored vis-network (688KB) the first time the graph
+  // renders — the login page and other tabs never pay for it.
+  var visNetworkReady = null;
+  function loadVisNetwork() {
+    if (window.vis && window.vis.Network) return Promise.resolve();
+    if (visNetworkReady) return visNetworkReady;
+    visNetworkReady = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "/static/vis-network.min.js";
+      s.onload = function () { resolve(); };
+      s.onerror = function () { visNetworkReady = null; reject(new Error("vis-network load failed")); };
+      document.head.appendChild(s);
+    });
+    return visNetworkReady;
+  }
+
+  function renderMgmtGraph(graph, subs) {
+    var el = $("#mgmt-graph");
+    if (!el) return;
+    var nodes = (graph && graph.nodes) || [];
+    var edges = (graph && graph.edges) || [];
+    if (!nodes.length) { el.textContent = ""; return; }
+    var livenessByAddr = {};
+    (subs || []).forEach(function (s) { livenessByAddr[String(s.address).toLowerCase()] = mgmtIsActive(s); });
+    el.innerHTML = '<div class="muted">' + t("common.loading") + "</div>";
+    loadVisNetwork().then(function () {
+      var myAddr = ((getSession() || {}).address || "").toLowerCase();
+      var vn = new vis.DataSet(nodes.map(function (n) {
+        var kind = n.kind || "external";
+        var isMe = kind === "self";
+        var st = livenessByAddr[String(n.address || "").toLowerCase()];
+        var border = isMe ? "#1d4ed8"
+          : kind === "sub" ? (st === "strong" ? "#2e9e5b" : st === "weak" ? "#d9a419" : "#9aa4b2")
+          : "#a7b1bd";
+        var bg = isMe ? "#dbeafe"
+          : kind === "sub" ? (st === "strong" ? "#dcf2e4" : st === "weak" ? "#f7edd4" : "#eceff3")
+          : "#f2f4f7";
+        return {
+          id: n.address, label: (isMe ? t("mgmt.meLabel") : shortAddr(n.address)) +
+            (kind !== "external" ? "\n" + (n.volume || 0) : ""),
+          shape: "box", borderWidth: isMe ? 2 : 1,
+          color: { background: bg, border: border },
+          font: { face: "ui-monospace, Consolas, monospace", size: 11, color: "#23303f" },
+          value: Math.max(1, n.volume || 1), scaling: { min: 8, max: 26, label: { enabled: false } },
+          _kind: kind
+        };
+      }));
+      var ve = [];
+      edges.forEach(function (e) {
+        var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
+        var last = e.last_at ? "\n" + fmtTime(e.last_at) : "";
+        if (!ab && !ba) {
+          ve.push({ from: e.a, to: e.b, label: "—" + last, dashes: true,
+            color: { color: "#c4ccd6" }, width: 1, font: { size: 9, face: "Consolas" },
+            smooth: { type: "curvedCW", roundness: 0.16 }, _sub: pickGraphSub(e, myAddr) });
+          return;
+        }
+        // Two directed arcs per pair (superior: arrows in both directions,
+        // each with its own count) — A4 wedges scale with volume.
+        if (ab) ve.push(mgmtGraphEdge(e.a, e.b, ab, last, e));
+        if (ba) ve.push(mgmtGraphEdge(e.b, e.a, ba, last, e));
+      });
+      function mgmtGraphEdge(from, to, count, last, orig) {
+        return {
+          from: from, to: to, label: count + "→" + last,
+          arrows: { to: { enabled: true, scaleFactor: 0.7 + Math.min(count, 40) / 24 } },
+          width: 1 + Math.min(count, 40) / 9,
+          color: { color: "#5b6b7d", highlight: "#3b82f6" },
+          font: { size: 9, face: "Consolas" },
+          smooth: { type: "curvedCW", roundness: 0.16 },
+          _sub: pickGraphSub(orig, myAddr)
+        };
+      }
+      function pickGraphSub(e, me) {
+        // Edge click → Messages preselected on the subordinate endpoint.
+        var a = String(e.a || "").toLowerCase(), b = String(e.b || "").toLowerCase();
+        if (a !== me && (livenessByAddr[a] || b === me)) return e.a;
+        if (b !== me && (livenessByAddr[b] || a === me)) return e.b;
+        return null;
+      }
+      var data = { nodes: vn, edges: new vis.DataSet(ve) };
+      new vis.Network(el, data, {
+        physics: { enabled: true, stabilization: { iterations: 300, fit: true } },
+        interaction: { hover: true, dragView: true, zoomView: true },
+        edges: { selectionWidth: 2 }
+      }).on("click", function (params) {
+        // Node click: jump to Messages preselected on that sub; edge click:
+        // preselect the sub endpoint of the pair.
+        var jump = null;
+        if (params.nodes && params.nodes.length) {
+          var id = String(params.nodes[0]).toLowerCase();
+          if (id !== myAddr && livenessByAddr[id]) jump = params.nodes[0];
+        } else if (params.edges && params.edges.length) {
+          var ed = ve.filter(function (x) { return x.id === params.edges[0]; })[0];
+          if (ed && ed._sub) jump = ed._sub;
+        }
+        if (!jump) return;
+        var seg = $("#mgmt-seg");
+        if (seg) {
+          var btn = seg.querySelector('button[data-mview="browse"]');
+          if (btn) btn.click();
+        }
+        var sel = $("#mail-account");
+        if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === jump; })) {
+          sel.value = jump;
+          var loadBtn = $("#btn-load-mail");
+          if (loadBtn) loadBtn.click();
+        }
+      });
+    }).catch(function () {
+      el.innerHTML = '<p class="muted">' + esc(t("mgmt.graphLoadFail")) + "</p>";
+    });
   }
 
   var mgmtOverviewLoaded = false;
@@ -1995,6 +2115,7 @@
       var d = await api("/api/mgmt/subs-overview", { keepSession: true });
       box.innerHTML = mgmtOverviewHtml(d);
       mgmtOverviewLoaded = true;
+      renderMgmtGraph(d && d.graph, (d && d.subs) || []);
     } catch (e) {
       box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
     }

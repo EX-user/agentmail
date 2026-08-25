@@ -1264,3 +1264,17 @@ nav .tab { flex: 0 0 auto; }
     font-size: 11px; margin-right: 6px;
   }
 }
+
+/* Connections graph inside the Overview view (force-directed, vis-network,
+   N2 label blocks + A4 volume-scaled arrows — superior-selected combo). */
+.mgmt-graph-title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); margin: 18px 0 8px;
+}
+.mgmt-graph {
+  height: 380px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); touch-action: none;
+}
+@media (max-width: 520px) {
+  .mgmt-graph { height: 300px; }
+}
