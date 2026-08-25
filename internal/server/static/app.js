@@ -1649,11 +1649,16 @@
     $("#compose-body").focus();
   }
 
-  // ---- register-subordinate (v0.5.11, superior's request) ----
-  // Panel-only affordance: POST /api/register-subordinate mints a random
-  // account already declared under the caller. Credentials shown once.
+  // ---- register-subordinate (v0.5.11, superior's request; v0.6 named option) ----
+  // Panel-only affordance: POST /api/register-subordinate mints an account
+  // already declared under the caller — random by default, or a caller-
+  // specified name (superior-approved ask modal; a taken name errors inline
+  // rather than silently renaming, because credentials show exactly once).
   function closeSubregModal() {
     $("#subreg-modal").classList.add("hidden");
+  }
+  function closeSubregAsk() {
+    $("#subreg-ask-modal").classList.add("hidden");
   }
   (function wireSubreg() {
     const tbody = document.querySelector("#accounts-table tbody");
@@ -1662,23 +1667,91 @@
     // (#btn-subreg, via tbody delegation) and the PC above-table button
     // (#btn-subreg-pc, outside the table so it needs its own listener)
     // both run this.
+    const NAME_RE = /^[A-Za-z0-9_-]+$/;
+    function subregAskState() {
+      var named = $("#subreg-ask-modal input[value='named']").checked;
+      var name = ($("#subreg-name").value || "").trim();
+      return { named: named, name: name, ok: !named || (NAME_RE.test(name) && name.length <= 32) };
+    }
+    function updateSubregAsk() {
+      var st = subregAskState();
+      var errEl = $("#subreg-ask-err");
+      var prev = $("#subreg-addr-prev");
+      var domain = (window.location.hostname || "agentmail.local");
+      if (!st.named) {
+        prev.textContent = "";
+        errEl.hidden = true;
+        return;
+      }
+      prev.textContent = t("subs.regAddrWill", { addr: (st.name || "…") + "@" + domain });
+      if (!st.name) { errEl.hidden = true; return; }
+      if (!st.ok) { errEl.textContent = t("subs.regBad"); errEl.hidden = false; }
+      else { errEl.hidden = true; }
+    }
     async function doSubreg(btn) {
-      if (!confirm(t("subs.regConfirm"))) return;
-      const status = $("#subs-status");
+      var ask = $("#subreg-ask-modal");
+      var status = $("#subs-status");
+      if (!ask) {
+        // Fallback (ask modal missing): legacy confirm + random.
+        if (!confirm(t("subs.regConfirm"))) return;
+        await subregPost(null, btn, status);
+        return;
+      }
+      ask.classList.remove("hidden");
+      $("#subreg-name").value = "";
+      $("#subreg-ask-modal input[value='random']").checked = true;
+      updateSubregAsk();
+      $("#btn-subreg-ask-ok").focus();
+    }
+    async function subregPost(username, btn, status) {
       btn.disabled = true;
       status.textContent = t("common.loading");
+      var errEl = $("#subreg-ask-err");
       try {
-        const res = await api("/api/register-subordinate", { method: "POST" });
+        const res = await api("/api/register-subordinate", {
+          method: "POST",
+          body: JSON.stringify(username ? { username: username } : {}),
+        });
         $("#subreg-address").textContent = res.address || "";
         $("#subreg-password").textContent = res.password || "";
         $("#subreg-copy-status").textContent = "";
         $("#subreg-modal").classList.remove("hidden");
         $("#btn-subreg-close").focus();
         status.textContent = t("subs.regDone");
+        closeSubregAsk();
       } catch (e) {
-        status.textContent = t("common.error", { msg: e.message });
+        // A taken name stays in the ask modal with an inline error; other
+        // errors surface in the ask modal too (the ask replaces confirm()).
+        var msg = String(e.message || "");
+        if (errEl && /409|taken|exists|occupied|conflict/i.test(msg)) {
+          errEl.textContent = t("subs.regTaken");
+          errEl.hidden = false;
+          status.textContent = "";
+        } else if (errEl) {
+          errEl.textContent = msg;
+          errEl.hidden = false;
+          status.textContent = "";
+        } else {
+          status.textContent = t("common.error", { msg: msg });
+        }
       }
       btn.disabled = false;
+    }
+    // Ask modal wiring.
+    var askModal = $("#subreg-ask-modal");
+    if (askModal) {
+      $("#btn-subreg-ask-close").addEventListener("click", closeSubregAsk);
+      $("#btn-subreg-ask-cancel").addEventListener("click", closeSubregAsk);
+      askModal.addEventListener("click", function (e) { if (e.target === this) closeSubregAsk(); });
+      $$("#subreg-ask-modal input[name='subreg-mode']").forEach(function (r) {
+        r.addEventListener("change", updateSubregAsk);
+      });
+      $("#subreg-name").addEventListener("input", updateSubregAsk);
+      $("#btn-subreg-ask-ok").addEventListener("click", function () {
+        var st = subregAskState();
+        if (!st.ok) { updateSubregAsk(); return; }
+        subregPost(st.named ? st.name : null, this, $("#subs-status"));
+      });
     }
     tbody.addEventListener("click", function (ev) {
       const btn = ev.target.closest("#btn-subreg");
@@ -1699,6 +1772,8 @@
     });
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
+      const a = $("#subreg-ask-modal");
+      if (a && !a.classList.contains("hidden")) { closeSubregAsk(); return; }
       const m = $("#subreg-modal");
       if (m && !m.classList.contains("hidden")) $("#btn-subreg-close").click();
     });
@@ -2079,32 +2154,39 @@
         };
       }));
       var ve = [];
+      // Data-adaptive normalization (superior's note: a fixed saturation
+      // point is unreasonable): every scale is RELATIVE to the largest
+      // count in the current graph — the busiest pair always maps to full
+      // thickness, quiet pairs stay visibly thinner (log-ratio keeps the
+      // contrast readable across orders of magnitude).
+      var maxCount = 1;
+      edges.forEach(function (e) {
+        maxCount = Math.max(maxCount, e.a_to_b || 0, e.b_to_a || 0);
+      });
+      var LOG_BASE = Math.log10(1 + maxCount);
+      function graphScale(count) {
+        return Math.log10(1 + (count || 0)) / LOG_BASE;
+      }
       edges.forEach(function (e) {
         var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
         var last = e.last_at ? "\n" + fmtTime(e.last_at) : "";
         if (!ab && !ba) {
           ve.push({ from: e.a, to: e.b, label: "—" + last, dashes: true,
-            color: { color: "#c4ccd6" }, width: 1, font: { size: 9, face: "Consolas" },
+            color: { color: "#c4ccd6" }, width: 0.8, font: { size: 9, face: "Consolas" },
             smooth: { type: "curvedCW", roundness: 0.16 }, _sub: pickGraphSub(e, myAddr) });
           return;
         }
         // Two directed arcs per pair (superior: arrows in both directions,
-        // each with its own count). Scale is LOG-NORMALIZED and capped —
-        // linear scaling blew up on real volumes (hundreds of letters per
-        // pair) and the wedges buried the graph (v0.6.3 feedback).
+        // each with its own count) — A4 wedges scale with volume.
         if (ab) ve.push(mgmtGraphEdge(e.a, e.b, ab, last, e));
         if (ba) ve.push(mgmtGraphEdge(e.b, e.a, ba, last, e));
       });
-      var LOG_CAP = 400; // volume at which the visual scale saturates
-      function graphScale(count) {
-        return Math.min(1, Math.log10(1 + (count || 0)) / Math.log10(1 + LOG_CAP));
-      }
       function mgmtGraphEdge(from, to, count, last, orig) {
         var k = graphScale(count);
         return {
           from: from, to: to, label: count + "→" + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.5 + 0.5 * k } },
-          width: 1 + 1.4 * k,
+          arrows: { to: { enabled: true, scaleFactor: 0.45 + 0.65 * k } },
+          width: 0.6 + 2.2 * k,
           color: { color: "#5b6b7d", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
           smooth: { type: "curvedCW", roundness: 0.2 },
