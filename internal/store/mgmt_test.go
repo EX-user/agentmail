@@ -259,3 +259,36 @@ func TestMgmtAttributionTo0(t *testing.T) {
 		}
 	}
 }
+
+// TestMgmtOverviewNoDanglingEdgeAfterRemoval pins the v0.6.5 acceptance
+// point "解除后两端视图立即干净": after a subordinate removal the graph must
+// be clean immediately. The removal's system notification mail is itself
+// 7d-window traffic to the removed address, so edges must additionally be
+// restricted to pairs between rendered nodes — otherwise a dangling edge
+// (endpoint not in nodes[]) lingers in the payload for the whole window.
+func TestMgmtOverviewNoDanglingEdgeAfterRemoval(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	// Removal deposits the notification (me -> sub1) in the same tx.
+	if role, err := s.RemoveSubordinate("me@t", "sub1@t"); err != nil || role != "superior" {
+		t.Fatalf("remove: role=%q err=%v", role, err)
+	}
+	out, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	nodeSet := map[string]bool{}
+	for _, n := range out.Graph.Nodes {
+		nodeSet[n.Address] = true
+	}
+	for _, e := range out.Graph.Edges {
+		if e.A == "sub1@t" || e.B == "sub1@t" {
+			t.Fatalf("edge touching removed sub still present: %+v", e)
+		}
+		if !nodeSet[e.A] || !nodeSet[e.B] {
+			t.Fatalf("dangling edge (endpoint not a node): %+v", e)
+		}
+	}
+}
