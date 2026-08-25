@@ -1244,8 +1244,10 @@ nav .tab { flex: 0 0 auto; }
 .mgmt-ovw tbody tr:hover td { background: var(--panel-2); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   margin-right: 5px; vertical-align: 1px; }
-.dot.live { background: #2e9e5b; }
+.dot.green { background: #2e9e5b; }
+.dot.yellow { background: #d9a419; }
 .dot.idle { background: var(--muted); opacity: .5; }
+.pref-num { width: 90px; margin-left: 8px; }
 .mgmt-empty {
   border: 1px dashed var(--border); border-radius: 8px;
   padding: 18px 14px; text-align: center; color: var(--text);

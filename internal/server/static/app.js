@@ -1926,11 +1926,20 @@
   // change. Rows deep-link into Messages with the account preselected.
 
   function mgmtIsActive(s) {
-    // Liveness (superior: 存活检测): active within 48h of the latest of the
-    // full-history last_in/last_out timestamps; 0 = never.
-    var ts = Math.max(s.last_in_at || 0, s.last_out_at || 0);
-    if (!ts) return "never";
-    return (Date.now() / 1000 - ts) <= 48 * 3600 ? "active" : "idle";
+    // Three-tier liveness (superior's rule, v0.6): GREEN = mail traffic
+    // (send or receive) within the strong window; YELLOW = inbox read
+    // activity within the weak window but no traffic (script-like);
+    // GRAY = idle / never. Windows are user prefs (hours), defaults
+    // strong=24, weak=48.
+    var now = Date.now() / 1000;
+    var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
+    var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
+    var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
+    var read = s.last_read_at || 0;
+    if (traffic && now - traffic <= strongH * 3600) return "strong";
+    if (read && now - read <= weakH * 3600) return "weak";
+    if (!traffic && !read) return "never";
+    return "idle";
   }
 
   function mgmtOverviewHtml(d) {
@@ -1943,7 +1952,8 @@
     }
     var live = 0, in7 = 0, out7 = 0;
     subs.forEach(function (s) {
-      if (mgmtIsActive(s) === "active") live++;
+      var stt = mgmtIsActive(s);
+      if (stt === "strong" || stt === "weak") live++;
       in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
     });
     box += '<div class="mgmt-sum">' + t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 }) +
@@ -1952,7 +1962,10 @@
       "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colLive") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
     subs.forEach(function (s) {
       var st = mgmtIsActive(s);
-      var liveTxt = st === "never" ? t("mgmt.never") : (st === "active" ? t("mgmt.active") : t("mgmt.idle"));
+      var dotCls = st === "strong" ? "green" : (st === "weak" ? "yellow" : "idle");
+      var liveTxt = st === "strong" ? t("mgmt.liveStrong")
+        : (st === "weak" ? t("mgmt.liveWeak")
+        : (st === "never" ? t("mgmt.never") : t("mgmt.idle")));
       var top = (s.top_contacts || []).map(function (c) {
         return shortAddr(c.address) + "×" + c.count;
       }).join(" · ") || "—";
@@ -1960,7 +1973,7 @@
       box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
         '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
         (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colLive")) + '"><span class="dot ' + (st === "active" ? "live" : "idle") + '"></span>' + liveTxt + "</td>" +
+        '<td data-label="' + esc(t("mgmt.colLive")) + '"><span class="dot ' + dotCls + '"></span>' + liveTxt + "</td>" +
         '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
@@ -2092,13 +2105,17 @@
   // ---- user preferences (v0.6) ----
   // Read order: server account.prefs > localStorage fallback > defaults.
   // Cached in memory: message rendering consults it without a request.
-  const PREFS_DEFAULTS = { audio_autoplay: false, image_preview: true };
+  const PREFS_DEFAULTS = { audio_autoplay: false, image_preview: true, livenessWeakHours: 48, livenessStrongHours: 24 };
   let userPrefs = null;
   const PREFS_LS_KEY = "agentmail_prefs";
 
   function loadPrefsLocal() {
     try { return JSON.parse(localStorage.getItem(PREFS_LS_KEY) || "null"); }
     catch (_) { return null; }
+  }
+
+  function numHours(v, fallback) {
+    return (typeof v === "number" && v > 0 && v <= 8760) ? v : fallback;
   }
 
   function mergePrefs(serverPrefs) {
@@ -2109,16 +2126,30 @@
         : (typeof local.audio_autoplay === "boolean" ? local.audio_autoplay : PREFS_DEFAULTS.audio_autoplay),
       image_preview: typeof src.image_preview === "boolean" ? src.image_preview
         : (typeof local.image_preview === "boolean" ? local.image_preview : PREFS_DEFAULTS.image_preview),
+      livenessStrongHours: numHours(src["liveness.strongHours"],
+        numHours(local["liveness.strongHours"], PREFS_DEFAULTS.livenessStrongHours)),
+      livenessWeakHours: numHours(src["liveness.weakHours"],
+        numHours(local["liveness.weakHours"], PREFS_DEFAULTS.livenessWeakHours)),
     };
     return userPrefs;
   }
 
   async function savePrefs() {
+    const strongEl = $("#pref-liveness-strong"), weakEl = $("#pref-liveness-weak");
+    const strong = strongEl ? parseInt(strongEl.value, 10) : NaN;
+    const weak = weakEl ? parseInt(weakEl.value, 10) : NaN;
+    const status = $("#prefs-status");
+    if (strongEl && (!isFinite(strong) || strong < 1 || strong > 8760) ||
+        weakEl && (!isFinite(weak) || weak < 1 || weak > 8760)) {
+      status.textContent = t("prefs.livenessBad");
+      return;
+    }
     const prefs = {
       audio_autoplay: !!$("#pref-audio-autoplay").checked,
       image_preview: !!$("#pref-image-preview").checked,
+      "liveness.strongHours": strong,
+      "liveness.weakHours": weak,
     };
-    const status = $("#prefs-status");
     try {
       // The server REPLACES (not merges) profile fields on POST — a
       // prefs-only body wipes the signature (bug report: signatures
@@ -2139,13 +2170,15 @@
       // The response echoes the merged prefs — authoritative post-save
       // state (e.g. null resets applied server-side).
       if (res && res.prefs) mergePrefs(res.prefs);
+      // Threshold changes recolor the overview dots.
+      if (typeof loadMgmtOverview === "function" && mgmtOverviewLoaded) loadMgmtOverview();
     } catch (e) {
       // Older server (no prefs field): keep the choice browser-local so
       // the toggles still work for this user.
       try { localStorage.setItem(PREFS_LS_KEY, JSON.stringify(prefs)); } catch (_) {}
       status.textContent = t("prefs.savedLocal");
     }
-    userPrefs = prefs;
+    userPrefs = mergePrefs(prefs);
   }
   (function wirePrefs() {
     const btn = $("#btn-save-prefs");
@@ -2190,6 +2223,9 @@
       mergePrefs(p.prefs);
       $("#pref-audio-autoplay").checked = userPrefs.audio_autoplay;
       $("#pref-image-preview").checked = userPrefs.image_preview;
+      const lvS = $("#pref-liveness-strong"), lvW = $("#pref-liveness-weak");
+      if (lvS) lvS.value = userPrefs.livenessStrongHours;
+      if (lvW) lvW.value = userPrefs.livenessWeakHours;
       syncPrefLangUI();
       // Subordinate settings section (moved in from Accounts): regular
       // accounts only.
