@@ -41,8 +41,11 @@
         <span class="portal-badge"><span class="pulse-dot"></span><span id="portal-live">live</span> · <span id="portal-version" class="version-badge"></span></span>
         <!-- Language pill hugs the big word's bottom-right corner like a
              (TM)/(R) mark (superior feedback round 2) — inline in the
-             heading, tucked just above the baseline. -->
-        <h1 class="portal-title"><span class="portal-title-word">agentmail<button id="btn-portal-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button></span></h1>
+             heading, tucked just above the baseline. The word text sits in
+             .portal-title-grad (text-only clip target): the gradient must
+             not live on the h1 because the positioned .portal-title-word
+             wrapper between them makes MobileWebKit drop the clip paint. -->
+        <h1 class="portal-title"><span class="portal-title-word"><span class="portal-title-grad">agentmail</span><button id="btn-portal-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button></span></h1>
         <!-- Subtitle + inline language switch on the same line. The translatable
              text lives in an inner span so applyI18nDOM's textContent swap
              can't wipe the button (same pattern as the register preview). -->

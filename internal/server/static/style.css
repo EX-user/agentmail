@@ -569,19 +569,18 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 @keyframes portal-pulse { 70% { box-shadow: 0 0 0 9px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
 .portal-title {
   font-size: clamp(44px, 8vw, 76px); letter-spacing: -2.5px; margin: 26px 0 14px; font-weight: 800;
-  /* Mobile-invisibility report (superior): the pure-white leading stop is
-     see-through whenever the aurora backdrop does not paint (low-power /
-     reduced-transparency modes), and a bare background-clip:text hides the
-     word entirely on engines that drop the clip. Solid color is the base;
-     the gradient applies only where the clip is actually supported. */
-  color: var(--text);
+  /* Fourth fix, evidence-led (A/B pixel forensics on a reproducing engine):
+     the gradient must NOT live on this h1 — the .portal-title-word wrapper
+     (relative + inline-block, added for the corner-mark pill between v0.4.2
+     and v0.6.1) sits between the clip element and its text, and engines of
+     the WebKit/MobileChrome family silently drop the whole clip paint for
+     that shape (v0.4.2 bare-text h1 painted fine; v0.6.1+ never did).
+     The clip moves one level down onto a text-only span (no positioned
+     children) — engine-equivalent to the v0.4.2 shape that always painted. */
 }
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .portal-title {
-    background: linear-gradient(100deg, #e8f0ff 20%, #5ea2ff 55%, #8a7bff 80%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-  }
+.portal-title-grad {
+  background: linear-gradient(100deg, #e8f0ff 20%, #5ea2ff 55%, #8a7bff 80%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 /* Corner-mark placement (superior, round 5): the WORD stays perfectly
    centered (text-align unchanged); a shrink-wrapped .portal-title-word
@@ -591,7 +590,10 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 .portal-title .lang-toggle {
   position: absolute; left: calc(100% + 12px); bottom: 10px;
 }
-.portal-title .lang-toggle .seg { font-size: 11px; padding: 3px 8px; }
+/* Fill guard: -webkit-text-fill-color INHERITS — the segments re-declare it
+   from their own color so no ancestor (gradient experiments included) can
+   ever blank the capsule labels again. */
+.portal-title .lang-toggle .seg { font-size: 11px; padding: 3px 8px; -webkit-text-fill-color: currentcolor; }
 @media (max-width: 520px) {
   .portal-title .lang-toggle { left: calc(100% + 8px); bottom: 6px; }
 }
