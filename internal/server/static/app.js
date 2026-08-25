@@ -400,7 +400,7 @@
         return "<tr" + rowCls + ">" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
           '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(a.signature || "") + "</span></td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(a.signature || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(a.signature || "") + "</span></span></td>" +
           '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">' + t("act.compose") + '</button><button class="row-action" data-reset="' + esc(a.address) + '">' + t("act.resetPw") + '</button>' +
           toggleBtn + "</td>" +
@@ -473,7 +473,7 @@
       "<tr>" +
       '<td class="addr-cell" data-label="' + t("col.address") + '"><strong>' + esc(selfAddr) + "</strong> <small class=\"muted\">(you)</small></td>" +
       '<td data-label="' + t("col.tags") + '"><span class="badge-listed">you</span>' + (ownVisible ? ' <span class="badge-listed">listed</span>' : "") + "</td>" +
-      '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(ownSig) + "</span></td>" +
+      '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(ownSig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(ownSig) + "</span></span></td>" +
       "<td data-label=\"Created\"></td>" +
       '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" id="btn-change-pw">' + t("act.changePw") + '</button></td>' +
       "</tr>"
@@ -492,7 +492,7 @@
         '<tr class="subrow-pc">' +
         '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) + "</td>" +
         '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
-        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(sig) + "</span></td>" +
+        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
         "<td data-label=\"Created\"></td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-action" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + "</button></td>" +
         "</tr>";
@@ -535,7 +535,7 @@
           "<tr>" +
           '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(c) + "</td>" +
           '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-mtxt">' + esc(listedSig[c] || "") + "</span></td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           "<td data-label=\"Created\"></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
@@ -2378,7 +2378,7 @@
       tbody.innerHTML = entries.map(function (e) {
         return "<tr>" +
           '<td class="addr-cell">' + esc(e.address) + "</td>" +
-          '<td class="sig-cell"><span class="sig-mtxt">' + esc(e.signature || "") + "</span></td>" +
+          '<td class="sig-cell"><span class="sig-track"><span class="sig-txt">' + esc(e.signature || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(e.signature || "") + "</span></span></td>" +
           '<td class="actions-cell"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button></td>' +
           "</tr>";
       }).join("");
@@ -3742,21 +3742,21 @@
   }
   window.addEventListener("resize", maybeMarqueeWhoami);
 
-  // maybeMarqueeSigs ping-pong-scrolls over-wide signature cells (Accounts
-  // + Directory) instead of clipping them — same pattern as #whoami,
-  // generalized per cell. Reduced-motion users keep the ellipsis.
+  // maybeMarqueeSigs runs over-wide signature cells (Accounts + Directory)
+  // as a seamless one-way loop (superior feedback: ping-pong never reveals
+  // the whole text). The track carries the text twice; each copy has the
+  // same trailing gap, so translateX(-50%) is exactly one period.
+  // Reduced-motion users keep the ellipsis.
   function maybeMarqueeSigs() {
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     $$(".sig-cell").forEach(function (cell) {
+      cell.classList.remove("marquee"); // dup hidden again -> measure raw overflow
+      cell.style.removeProperty("--wm-dur");
       const diff = cell.scrollWidth - cell.clientWidth;
       if (diff > 8) {
-        cell.style.setProperty("--wm-shift", diff + "px");
-        cell.style.setProperty("--wm-dur", Math.max(4, diff / 20) + "s");
+        // Linear period over (overflow + one gap), ~28px/s.
+        cell.style.setProperty("--wm-dur", Math.max(8, (diff + 48) / 28) + "s");
         cell.classList.add("marquee");
-      } else {
-        cell.classList.remove("marquee");
-        cell.style.removeProperty("--wm-shift");
-        cell.style.removeProperty("--wm-dur");
       }
     });
   }
