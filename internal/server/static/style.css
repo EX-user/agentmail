@@ -149,17 +149,22 @@ td.sig-cell {
 }
 td.addr-cell { overflow-x: auto; }
 td.addr-cell::-webkit-scrollbar { height: 6px; }
-/* Signature cells (feedback): over-wide signatures ping-pong scroll
-   (see .marquee below) instead of clipping to an ellipsis. */
+/* Signature cells (feedback round 2): over-wide signatures run as a
+   seamless ONE-WAY loop (superior: ping-pong still hides the tail) —
+   the track holds two copies, each with the same trailing gap, so
+   translateX(-50%) is exactly one period and the loop never jumps. */
 td.sig-cell { overflow: hidden; text-overflow: ellipsis; }
+.sig-dup { display: none; }
 td.sig-cell.marquee { text-overflow: clip; }
-td.sig-cell.marquee .sig-mtxt {
-  display: inline-block;
-  animation: wm-pong var(--wm-dur, 6s) ease-in-out infinite alternate;
+td.sig-cell.marquee .sig-track {
+  display: inline-block; white-space: nowrap;
+  animation: sig-loop var(--wm-dur, 12s) linear infinite;
 }
-@keyframes wm-pong {
+td.sig-cell.marquee .sig-track > span { padding-right: 48px; }
+td.sig-cell.marquee .sig-dup { display: inline; }
+@keyframes sig-loop {
   from { transform: translateX(0); }
-  to { transform: translateX(var(--wm-shift, 0px)); }
+  to { transform: translateX(-50%); }
 }
 /* Keep wrapping as a fallback for very narrow viewports. */
 @media (max-width: 520px) {
