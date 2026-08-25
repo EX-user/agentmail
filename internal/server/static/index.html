@@ -452,10 +452,10 @@
            activity within the weak window (script-like); gray = else. -->
       <div class="settings-section pref-card">
         <h4 class="pref-title" data-i18n="prefs.livenessTitle">Liveness thresholds</h4>
-        <label class="pref-toggle"><span data-i18n="prefs.livenessStrong">Green window (hours): mail traffic counts as active</span>
-          <input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /></label>
-        <label class="pref-toggle"><span data-i18n="prefs.livenessWeak">Yellow window (hours): inbox checks count as seen</span>
-          <input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /></label>
+        <div class="pref-lv-row"><span class="pref-lv-label" data-i18n="prefs.livenessStrong">Green window (hours): mail traffic counts as active</span>
+          <span class="pref-stepper"><button type="button" class="pref-step" data-step-target="pref-liveness-strong" data-step-dir="-1" aria-label="-">−</button><input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /><button type="button" class="pref-step" data-step-target="pref-liveness-strong" data-step-dir="1" aria-label="+">+</button></span></div>
+        <div class="pref-lv-row"><span class="pref-lv-label" data-i18n="prefs.livenessWeak">Yellow window (hours): inbox checks count as seen</span>
+          <span class="pref-stepper"><button type="button" class="pref-step" data-step-target="pref-liveness-weak" data-step-dir="-1" aria-label="-">−</button><input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /><button type="button" class="pref-step" data-step-target="pref-liveness-weak" data-step-dir="1" aria-label="+">+</button></span></div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prefs.livenessHint">Used by the Manage &gt; Overview liveness dots: sending/receiving mail within the green window shows green; checking the inbox within the yellow window (without traffic) shows yellow.</p>
         <div class="row" style="margin-top:10px;">
           <button id="btn-save-prefs" class="primary" data-i18n="prefs.save">Save preferences</button>

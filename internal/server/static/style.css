@@ -145,11 +145,22 @@ td.actions-cell button:last-child { margin-right: 0; }
 td.addr-cell,
 td.sig-cell {
   white-space: nowrap;
-  overflow-x: auto;
   max-width: 360px;
 }
-td.addr-cell::-webkit-scrollbar,
-td.sig-cell::-webkit-scrollbar { height: 6px; }
+td.addr-cell { overflow-x: auto; }
+td.addr-cell::-webkit-scrollbar { height: 6px; }
+/* Signature cells (feedback): over-wide signatures ping-pong scroll
+   (see .marquee below) instead of clipping to an ellipsis. */
+td.sig-cell { overflow: hidden; text-overflow: ellipsis; }
+td.sig-cell.marquee { text-overflow: clip; }
+td.sig-cell.marquee .sig-mtxt {
+  display: inline-block;
+  animation: wm-pong var(--wm-dur, 6s) ease-in-out infinite alternate;
+}
+@keyframes wm-pong {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--wm-shift, 0px)); }
+}
 /* Keep wrapping as a fallback for very narrow viewports. */
 @media (max-width: 520px) {
   td.addr-cell, td.sig-cell { white-space: normal; word-break: break-all; }
@@ -1247,7 +1258,6 @@ nav .tab { flex: 0 0 auto; }
 .dot.green { background: #2e9e5b; }
 .dot.yellow { background: #d9a419; }
 .dot.idle { background: var(--muted); opacity: .5; }
-.pref-num { width: 90px; margin-left: 8px; }
 .mgmt-empty {
   border: 1px dashed var(--border); border-radius: 8px;
   padding: 18px 14px; text-align: center; color: var(--text);
@@ -1292,13 +1302,33 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
-/* Liveness threshold inputs (feedback: too small to adjust) */
+/* Liveness threshold controls (v0.6.6 feedback: native spinners unusable —
+   explicit −/+ steppers with large touch targets; number field keeps
+   direct typing and the modern .app-input look). */
+.pref-lv-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 6px 0; flex-wrap: wrap;
+}
+.pref-lv-label { font-size: 13px; color: var(--muted); }
+.pref-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.pref-step {
+  width: 34px; height: 34px; min-height: 34px; padding: 0;
+  border-radius: 8px; font-size: 17px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .pref-num {
-  width: 130px; padding: 7px 10px; font-size: 14px;
-  border-radius: 6px;
+  width: 76px; padding: 7px 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  color: var(--text); text-align: center; box-sizing: border-box;
+}
+.pref-num:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 @media (max-width: 520px) {
-  .pref-num { min-height: 44px; width: 120px; }
+  .pref-lv-row { flex-basis: 100%; }
+  .pref-step { width: 44px; height: 44px; min-height: 44px; }
+  .pref-num { min-height: 44px; width: 84px; }
 }
 
 /* Register-subordinate ask modal (v0.6 named option): radio pair + name
