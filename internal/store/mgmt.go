@@ -269,7 +269,16 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 		}
 	}
 	nodes := []MgmtNode{{Address: me, Kind: "self", Volume: core[me].countIn + core[me].countOut}}
+	// Sub nodes must be emitted in a deterministic order (sorted, like the
+	// externals below): subSet is a map and Go randomizes map iteration —
+	// an unsorted append made node order flaky across runs (bit releases
+	// v0.6.3 and v0.6.5 with transient, order-dependent test failures).
+	subList := make([]string, 0, len(subSet))
 	for a := range subSet {
+		subList = append(subList, a)
+	}
+	sort.Strings(subList)
+	for _, a := range subList {
 		nodes = append(nodes, MgmtNode{Address: a, Kind: "sub", Volume: core[a].countIn + core[a].countOut})
 	}
 	extList := make([]string, 0, len(extIsTop))
