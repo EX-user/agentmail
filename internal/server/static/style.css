@@ -1117,9 +1117,6 @@ nav .tab { flex: 0 0 auto; }
   font-family: inherit;
 }
 .btn-pref-pill:hover { color: var(--text); border-color: var(--accent); background: var(--panel); }
-/* Emoji-only header pills (superior request): label is a single emoji, the
-   word stays in the button title/tooltip for accessibility. */
-.pill-emoji { font-size: 13px; line-height: 1; }
 
 /* Attachment management card (v2, superior-approved): native <details> fold
    (same disclosure triangle as the subordinate section) + compact

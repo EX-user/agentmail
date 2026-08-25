@@ -235,10 +235,11 @@
         <button id="btn-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button>
         <!-- v0.6.9 layout (superior-approved): Preferences moves out of the
            nav into the header as a pill (same family as lang/logout); the
-           nav keeps exactly five cards, style untouched. Emoji-only label
-           (superior request): the word lives in the tooltip/title so the
-           pill stays a compact icon at any width. -->
-        <button id="btn-prefs" class="btn-pref-pill" title="Preferences &amp; settings" data-i18n-title="nav.profileTitle"><span class="pill-emoji" data-i18n="nav.prefsShort">⚙️</span></button>
+           nav keeps exactly five cards, style untouched. Icon-only pill
+           (superior revision): line-art gear SVG matches the logout power
+           glyph — emoji glyphs vary per platform font, SVG does not; the
+           word lives in the tooltip/title. -->
+        <button id="btn-prefs" class="btn-pref-pill" title="Preferences &amp; settings" data-i18n-title="nav.profileTitle"><svg class="logout-ico" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.1 14.6a1.6 1.6 0 0 0 .32 1.77l.06.06a1.9 1.9 0 1 1-2.69 2.69l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.46v.17a1.9 1.9 0 1 1-3.8 0v-.09a1.6 1.6 0 0 0-1.05-1.46 1.6 1.6 0 0 0-1.77.32l-.06.06a1.9 1.9 0 1 1-2.69-2.69l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.46-.97H3.8a1.9 1.9 0 1 1 0-3.8h.09A1.6 1.6 0 0 0 5.35 8.6a1.6 1.6 0 0 0-.32-1.77l-.06-.06A1.9 1.9 0 1 1 7.66 4.08l.06.06a1.6 1.6 0 0 0 1.77.32h.08a1.6 1.6 0 0 0 .97-1.46V3.8a1.9 1.9 0 1 1 3.8 0v.09a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.77-.32l.06-.06a1.9 1.9 0 1 1 2.69 2.69l-.06.06a1.6 1.6 0 0 0-.32 1.77v.08a1.6 1.6 0 0 0 1.46.97h.17a1.9 1.9 0 1 1 0 3.8h-.09a1.6 1.6 0 0 0-1.46.97z"/></svg></button>
         <!-- Logout as a pill (superior-approved): same family as the language
            toggle; hover turns red to signal exit. Icon-only pill (superior
            revision): the original inline power glyph returns as the face —
