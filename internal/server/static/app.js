@@ -492,7 +492,7 @@
         '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
         '<td class="sig-cell" data-label="' + t("col.signature") + '">' + esc(sig) + "</td>" +
         "<td data-label=\"Created\"></td>" +
-        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + "</button></td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-action" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + "</button></td>" +
         "</tr>";
       // Mobile container card (compact round, superior-approved): address
       // on its own line, badges + signature share one meta line, a small
@@ -501,7 +501,7 @@
         '<div class="sub-card">' +
         '<div class="sub-addr">' + esc(e.address) + "</div>" +
         '<div class="sub-meta">' + badge + (sig ? '<span class="sub-sig">' + esc(sig) + "</span>" : "") + "</div>" +
-        '<div class="sub-foot"><button class="row-action pill-btn" data-compose="' + esc(e.address) + '">' + "✉ " + t("act.compose") + "</button></div>" +
+        '<div class="sub-foot"><button class="row-action pill-btn" data-compose="' + esc(e.address) + '">' + "✉ " + t("act.compose") + '</button><button class="row-action pill-btn" data-remove-sub="' + esc(e.address) + '">' + "✕ " + t("subs.removeBtn") + "</button></div>" +
         "</div>";
     });
     rows.push(pcSubRows);
@@ -549,6 +549,11 @@
     if (btn) btn.addEventListener("click", openChangePassword);
     $$("[data-compose]", tbody).forEach(function (b) {
       b.addEventListener("click", function () { composeTo(b.dataset.compose); });
+    });
+    // v0.6.5: remove-subordinate buttons (PC rows + mobile cards) — the
+    // destructive twin of compose, guarded by a consequence-aware confirm.
+    $$("[data-remove-sub]", tbody).forEach(function (b) {
+      b.addEventListener("click", function () { removeSub(b.dataset.removeSub, "superior"); });
     });
   }
 
@@ -1501,7 +1506,8 @@
   }
 
   // renderSubsUI fills the Accounts-tab "Subordinate relationships" block:
-  // my declarations (revocable) plus the collapsed read-only list.
+  // my superiors (dissolvable from either side, v0.6.5) below the declare
+  // input.
   function renderSubsUI() {
     const section = $("#subs-section");
     if (!section || !subsCache) return;
@@ -1512,11 +1518,11 @@
       mine.innerHTML = "<h4>" + t("subs.mineTitle") + "</h4>" + subsCache.superiors.map(function (e) {
         return '<div class="row" style="justify-content:space-between;">' +
           "<span>" + esc(e.address) + ' <small class="muted">' + t("subs.since") + " " + fmtTime(e.created_at) + "</small></span>" +
-          '<button class="row-action" data-revoke-sub="' + esc(e.address) + '">' + t("subs.revoke") + "</button>" +
+          '<button class="row-action" data-unsub="' + esc(e.address) + '">' + t("subs.removeBtn") + "</button>" +
           "</div>";
       }).join("");
-      $$("[data-revoke-sub]", mine).forEach(function (btn) {
-        btn.addEventListener("click", function () { revokeSub(btn.dataset.revokeSub); });
+      $$("[data-unsub]", mine).forEach(function (btn) {
+        btn.addEventListener("click", function () { removeSub(btn.dataset.unsub, "subordinate"); });
       });
     }
   }
@@ -1541,13 +1547,26 @@
     }
   }
 
-  async function revokeSub(address) {
+  // removeSub dissolves a subordination edge from either side (v0.6.5):
+  // role picks the confirm wording — "superior" (removing one of my
+  // subordinates) or "subordinate" (leaving my superior). One endpoint,
+  // POST /api/subs/remove, deletes the single record; the server notifies
+  // the other side. Views (accounts table, subs list, mail selector, mgmt
+  // overview/graph) are all scan-derived — reload them and they are clean.
+  async function removeSub(address, role) {
+    var key = role === "subordinate" ? "subs.removeConfirmSub" : "subs.removeConfirmSuperior";
+    if (!confirm(t(key, { addr: address }))) return;
     try {
-      await api("/api/subs?superior=" + encodeURIComponent(address), { method: "DELETE" });
-      toast(t("subs.revoked"));
+      await api("/api/subs/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: address }),
+      });
+      toast(t("subs.removed"));
       await loadSubs(true);
       loadAccounts();
       invalidateMailAccountOptions();
+      if (typeof loadMgmtOverview === "function" && mgmtOverviewLoaded) loadMgmtOverview();
     } catch (e) {
       toast(e.message, "error");
     }

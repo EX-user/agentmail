@@ -786,7 +786,7 @@ nav .tab { flex: 0 0 auto; }
   .sub-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px;
     flex-wrap: wrap; }
   .sub-sig { font-size: 12px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
-  .sub-foot { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .sub-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
   button.row-action.pill-btn { font-size: 12px; padding: 3px 14px;
     border-radius: 999px; min-height: 0; }
 }
