@@ -3,6 +3,12 @@
 // after login and sent as a Basic auth header on every API call. This lets the
 // panel serve both admin and regular accounts from one login page. sessionStorage
 // is used (not localStorage) so credentials do not persist across browser sessions.
+//
+// S1 of the zero-build ESM split (governance v1): shared foundation lives in
+// ./core.js; this entry imports it and keeps every domain in place. i18n stays
+// a classic script (window.I18N). HARD CONSTRAINT: domain code imports only
+// core; cross-domain interaction goes through DOM events.
+import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthorizedHandler } from "./core.js";
 
 (function () {
   "use strict";
@@ -10,66 +16,10 @@
   // System domain from /api/status, used to construct admin address etc.
   let systemDomain = "agentmail.local";
 
-  // ---- session / auth ----
+  // The core fetch wrapper calls this on a hard 401 (stale creds) — the
+  // login screen lives here, so wire it once at module eval.
+  setUnauthorizedHandler(function () { showLogin(); });
 
-  const SESSION_KEY = "agentmail_creds"; // sessionStorage: {address, password, is_admin}
-
-  function getSession() {
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); }
-    catch (_) { return null; }
-  }
-  function setSession(s) {
-    if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
-    else sessionStorage.removeItem(SESSION_KEY);
-  }
-  // basicAuth returns the Authorization header value for the cached creds, or "".
-  function basicAuth() {
-    const s = getSession();
-    if (!s || !s.address) return "";
-    return "Basic " + btoa(unescape(encodeURIComponent(s.address + ":" + s.password)));
-  }
-
-  // ---- helpers ----
-
-  function $(sel, root) { return (root || document).querySelector(sel); }
-  function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
-
-  // api wraps fetch with the cached Basic auth header. If a call comes back 401,
-  // the cached creds are stale/wrong: clear them and surface the login page.
-  async function api(path, opts) {
-    opts = opts || {};
-    const headers = Object.assign({}, opts.headers || {});
-    const auth = basicAuth();
-    if (auth && !headers.Authorization) headers.Authorization = auth;
-    if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
-    const res = await fetch(path, Object.assign({}, opts, { headers: headers }));
-    if (res.status === 401 && getSession()) {
-      // opts.keepSession marks non-critical subrequests (fan-out reads):
-      // an endpoint-level 401 surfaces as a row-level error instead of
-      // tearing down the whole session (defense per the v0.5.10.2 review —
-      // one failed subrequest must not log the user out).
-      if (opts.keepSession) throw new Error("401 Unauthorized");
-      setSession(null); // creds invalid — force re-login
-      showLogin();
-      throw new Error("session expired — please log in again");
-    }
-    if (!res.ok) {
-      let msg = res.status + " " + res.statusText;
-      try { const t = await res.text(); if (t) msg = t; } catch (_) {}
-      throw new Error(msg);
-    }
-    const ct = res.headers.get("Content-Type") || "";
-    return ct.includes("application/json") ? res.json() : res.text();
-  }
-
-  function toast(msg, kind) {
-    const el = $("#toast");
-    el.textContent = msg;
-    el.className = "toast" + (kind ? " " + kind : "");
-    el.classList.remove("hidden");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function () { el.classList.add("hidden"); }, 4000);
-  }
 
   function fmtTime(unixOrIso) {
     if (!unixOrIso) return "—";
@@ -84,12 +34,6 @@
   // before i18n.js loads or if unavailable, fall back to the key.
   function t(key, vars) {
     return window.I18N ? window.I18N.t(key, vars) : key;
-  }
-
-  function esc(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   // ---- tab switching ----

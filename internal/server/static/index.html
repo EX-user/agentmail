@@ -751,6 +751,8 @@
   </div>
 
   <script src="/static/i18n.js"></script>
-  <script src="/static/app.js"></script>
+  <!-- S1 (governance v1): the entry is now an ES module importing ./core.js;
+       classic i18n.js stays and populates window.I18N before this runs. -->
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>
