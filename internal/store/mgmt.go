@@ -291,7 +291,16 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 	}
 	out.Graph.Nodes = nodes
 
-	// Edges: only pairs that exchanged mail in the 7d window.
+	// Edges: only pairs that exchanged mail in the 7d window — and only
+	// between rendered nodes. An edge whose endpoint is not in the node
+	// set cannot be drawn by the client anyway, and without the filter it
+	// lingers in the payload for the whole 7d window after a subordinate
+	// removal: the system notification mail itself is traffic to the
+	// removed address (caught live on v0.6.5).
+	nodeSet := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		nodeSet[n.Address] = true
+	}
 	edgeSet := map[[2]string]bool{}
 	for from, tos := range dir7 {
 		for to := range tos {
@@ -310,6 +319,9 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 	})
 	out.Graph.Edges = []MgmtEdge{}
 	for _, k := range edgeKeys {
+		if !nodeSet[k[0]] || !nodeSet[k[1]] {
+			continue // dangling edge: endpoint not a rendered node
+		}
 		out.Graph.Edges = append(out.Graph.Edges, MgmtEdge{
 			A: k[0], B: k[1],
 			AToB:   dir7[k[0]][k[1]],
