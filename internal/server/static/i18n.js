@@ -62,7 +62,7 @@
       "nav.profile": "Preferences & settings",
       "nav.settings": "Settings",
       "nav.audit": "Audit",
-      "nav.logout": "🚪",
+      "nav.logout": "Log out",
       "nav.prefsShort": "⚙️",
       "nav.profileTitle": "Preferences & settings",
       // ---- common ----
@@ -464,7 +464,7 @@
       "nav.profile": "偏好与设置",
       "nav.settings": "设置",
       "nav.audit": "审计日志",
-      "nav.logout": "🚪",
+      "nav.logout": "退出登录",
       "nav.prefsShort": "⚙️",
       "nav.profileTitle": "偏好与设置",
       // ---- common ----
