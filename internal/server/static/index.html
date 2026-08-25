@@ -235,12 +235,15 @@
         <button id="btn-lang" class="lang-toggle" title="Language" aria-label="Language"><span class="seg" data-seg="zh">中</span><span class="seg" data-seg="en">EN</span></button>
         <!-- v0.6.9 layout (superior-approved): Preferences moves out of the
            nav into the header as a pill (same family as lang/logout); the
-           nav keeps exactly five cards, style untouched. -->
-        <button id="btn-prefs" class="btn-pref-pill" title="Preferences &amp; settings" data-i18n-title="nav.profileTitle"><span data-i18n="nav.prefsShort">Settings</span></button>
+           nav keeps exactly five cards, style untouched. Emoji-only label
+           (superior request): the word lives in the tooltip/title so the
+           pill stays a compact icon at any width. -->
+        <button id="btn-prefs" class="btn-pref-pill" title="Preferences &amp; settings" data-i18n-title="nav.profileTitle"><span class="pill-emoji" data-i18n="nav.prefsShort">⚙️</span></button>
         <!-- Logout as a pill (superior-approved): same family as the language
-           toggle; hover turns red to signal exit. The power glyph is an
-           inline SVG — the U+23FB codepoint renders as tofu on Android. -->
-        <button id="btn-logout" class="btn-logout-pill" title="Sign out" data-i18n-title="nav.logoutTitle"><span data-i18n="nav.logout">Log out</span><svg class="logout-ico" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3.5V11"/><path d="M7 6.4a7.2 7.2 0 1 0 10 0"/></svg></button>
+           toggle; hover turns red to signal exit. Emoji-only label (superior
+           request) — the power glyph stays an emoji door; the word lives in
+           the tooltip/title. -->
+        <button id="btn-logout" class="btn-logout-pill" title="Sign out" data-i18n-title="nav.logoutTitle"><span class="pill-emoji" data-i18n="nav.logout">🚪</span></button>
       </div>
     </div>
     <nav>
@@ -469,10 +472,17 @@
         <h4 class="pref-title" data-i18n="prefs.livenessTitle">Liveness thresholds</h4>
         <!-- v0.6.8 (superior feedback): admin-settings-style input rows —
              label + number input + unit inline, replacing the −/+ stepper. -->
-        <div class="pref-lv-row"><label class="pref-lv-label" for="pref-liveness-strong"><span data-i18n="prefs.livenessStrong">Green window (hours): mail traffic counts as active</span></label>
-          <input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /> <small class="muted" data-i18n="prefs.hoursUnit">h</small></div>
-        <div class="pref-lv-row"><label class="pref-lv-label" for="pref-liveness-weak"><span data-i18n="prefs.livenessWeak">Yellow window (hours): inbox checks count as seen</span></label>
-          <input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /> <small class="muted" data-i18n="prefs.hoursUnit">h</small></div>
+        <!-- Liveness rows v2 (superior request): tier name + one-line meaning,
+             control grouped with its unit — stacks cleanly on phones instead
+             of squeezing label+input+unit onto one wrapped line. -->
+        <div class="pref-lv-row">
+          <label class="pref-lv-label" for="pref-liveness-strong"><span class="lv-name"><i class="lv-dot lv-dot-green"></i><span data-i18n="prefs.lvStrongName">Green · active</span></span><span class="lv-desc" data-i18n="prefs.livenessStrong">any mail sent or received within the window</span></label>
+          <span class="lv-ctrl"><input type="number" id="pref-liveness-strong" min="1" max="8760" step="1" class="pref-num" /><small class="muted" data-i18n="prefs.hoursUnit">h</small></span>
+        </div>
+        <div class="pref-lv-row">
+          <label class="pref-lv-label" for="pref-liveness-weak"><span class="lv-name"><i class="lv-dot lv-dot-yellow"></i><span data-i18n="prefs.lvWeakName">Yellow · seen</span></span><span class="lv-desc" data-i18n="prefs.livenessWeak">inbox checked within the window, no traffic</span></label>
+          <span class="lv-ctrl"><input type="number" id="pref-liveness-weak" min="1" max="8760" step="1" class="pref-num" /><small class="muted" data-i18n="prefs.hoursUnit">h</small></span>
+        </div>
         <p class="muted" style="margin:6px 0 0; font-size:12px;" data-i18n="prefs.livenessHint">Used by the Manage &gt; Overview liveness dots: sending/receiving mail within the green window shows green; checking the inbox within the yellow window (without traffic) shows yellow.</p>
         <div class="row" style="margin-top:10px;">
           <button id="btn-save-prefs" class="primary" data-i18n="prefs.save">Save preferences</button>

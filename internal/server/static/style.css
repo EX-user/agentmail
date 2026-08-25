@@ -1100,8 +1100,8 @@ nav .tab { flex: 0 0 auto; }
    same track/radius/height (28px, matched to .lang-toggle incl. border),
    hover turns red to signal exit. */
 .btn-logout-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 0 16px; height: 26px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 10px; height: 26px; border-radius: 999px;
   background: var(--panel-2); border: 1px solid var(--border);
   color: var(--muted); font-size: 12px; cursor: pointer; line-height: 1;
   font-family: inherit;
@@ -1110,13 +1110,16 @@ nav .tab { flex: 0 0 auto; }
 /* Prefs pill (v0.6.9): opens the nav-less profile panel — same family as
    the logout pill, neutral hover. */
 .btn-pref-pill {
-  display: inline-flex; align-items: center;
-  padding: 0 16px; height: 26px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 10px; height: 26px; border-radius: 999px;
   background: var(--panel-2); border: 1px solid var(--border);
   color: var(--muted); font-size: 12px; cursor: pointer; line-height: 1;
   font-family: inherit;
 }
 .btn-pref-pill:hover { color: var(--text); border-color: var(--accent); background: var(--panel); }
+/* Emoji-only header pills (superior request): label is a single emoji, the
+   word stays in the button title/tooltip for accessibility. */
+.pill-emoji { font-size: 13px; line-height: 1; }
 
 /* Attachment management card (v2, superior-approved): native <details> fold
    (same disclosure triangle as the subordinate section) + compact
@@ -1335,9 +1338,18 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
    input rows — label + number input + unit inline, .app-input look). */
 .pref-lv-row {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 6px 0; flex-wrap: wrap;
+  gap: 10px; padding: 8px 0;
 }
-.pref-lv-label { font-size: 13px; color: var(--muted); }
+/* Liveness rows v2 (superior request): tier chip (dot + name) with a muted
+   one-line meaning underneath; the input keeps its unit beside it. On
+   phones the row stacks instead of wrapping label/input/unit into a mess. */
+.pref-lv-label { font-size: 13px; color: var(--text); display: block; min-width: 0; }
+.lv-name { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.lv-desc { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.lv-ctrl { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.lv-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.lv-dot-green { background: var(--success); }
+.lv-dot-yellow { background: #d6a63c; }
 .pref-num {
   width: 90px; padding: 7px 8px; font-size: 14px; font-family: inherit;
   border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
@@ -1348,7 +1360,8 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 @media (max-width: 520px) {
-  .pref-lv-row { flex-basis: 100%; }
+  .pref-lv-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .lv-ctrl { justify-content: flex-start; }
   .pref-num { min-height: 44px; width: 96px; }
 }
 
