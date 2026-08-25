@@ -133,11 +133,39 @@
     if (document.visibilityState === "visible") refreshInboxBadge();
   });
 
+  // ---- Overview | Directory segment (v0.6.9 layout, superior-approved) ----
+  // Directory is the second in-page view of Overview; same pill pattern as
+  // the Manage tab's Messages|Overview. The prefs pill in the header opens
+  // the (now nav-less) profile panel.
+  function setOvwView(v) {
+    var main = $("#ovw-main"), dir = $("#ovw-directory");
+    if (!main || !dir) return;
+    if (v !== "directory") v = "main";
+    main.classList.toggle("hidden", v !== "main");
+    dir.classList.toggle("hidden", v !== "directory");
+    $$("#ovw-seg button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.oview === v);
+    });
+    try { localStorage.setItem("ovw-view", v); } catch (_) {}
+    if (v === "directory" && !dir.dataset.loaded) {
+      dir.dataset.loaded = "1";
+      loadDirectory();
+    }
+  }
+  (function wireOvwSeg() {
+    var seg = $("#ovw-seg");
+    if (seg) seg.addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-oview]");
+      if (b) setOvwView(b.dataset.oview);
+    });
+    var prefs = $("#btn-prefs");
+    if (prefs) prefs.addEventListener("click", function () { activateTab("profile"); });
+  })();
+
   function activateTab(name) {
     // Leaving a message view by any route (tab switch included) must stop
     // all audio (feedback: sound kept playing after leaving the content).
-    resetAudioPlayers();
-    $$(".tab").forEach(function (b) {
+    resetAudioPlayers();    $$(".tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.tab === name);
     });
     $$(".tab-panel").forEach(function (p) { p.classList.add("hidden"); });
@@ -155,8 +183,18 @@
       var onOverview = seg && seg.querySelector('button[data-mview="overview"].on');
       if (onOverview && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
     }
+    if (name === "overview") {
+      // v0.6.9: the Overview tab hosts the Directory subview — restore the
+      // last pane (same pattern as the Manage Messages|Overview segment).
+      // Pre-login restores stay on "main": the directory fetch needs a
+      // session and there is no re-kick path for it (mgmt has one).
+      var ov = "main";
+      if (getSession()) {
+        try { ov = localStorage.getItem("ovw-view") || "main"; } catch (_) {}
+      }
+      setOvwView(ov === "directory" ? "directory" : "main");
+    }
     if (name === "compose") { ensureComposeAccounts(); loadComposeThread(); ensureComposeShowcaseVisibility(); }
-    if (name === "directory") loadDirectory();
     if (name === "profile") loadProfile();
     if (name === "settings") loadSettings();
     if (name === "audit") loadAudit();
