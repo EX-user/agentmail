@@ -80,6 +80,9 @@ func TestRegisterPasswordlessGatedByRandomToggle(t *testing.T) {
 // rename); an absent/empty body keeps the random bot- path.
 func TestRegisterSubordinateNamed(t *testing.T) {
 	ts, st := newRegisterTestServer(t)
+	// Six registration attempts exceed the default 5/hour per-IP throttle;
+	// 0 disables it for this test.
+	_ = st.SetRegisterIPRateLimit(0)
 	// Bootstrap admin already owns admin@test.example.
 	post := func(body string, user string) int {
 		t.Helper()
