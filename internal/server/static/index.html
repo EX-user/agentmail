@@ -352,6 +352,13 @@
           </label>
           <button id="btn-load-mail" class="primary" data-i18n="mail.load">Load</button>
         </div>
+        <!-- Instant filter over the loaded list (from / subject / preview).
+             Server-side full-text search would be a separate contract. -->
+        <div class="row" style="margin-bottom:8px;">
+          <input type="search" id="mail-search" style="flex:1;max-width:420px;"
+                 placeholder="Filter loaded list (from / subject…)" data-i18n-ph="mail.searchPh" />
+          <span id="mail-search-status" class="muted" style="font-size:12px;"></span>
+        </div>
         <!-- Mobile (<=800px): List | Message tabs — one pane at a time, the
              standard phone pattern; desktop keeps the side-by-side grid. -->
         <div class="mail-tabs" data-grid="mail">
