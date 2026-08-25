@@ -1278,3 +1278,36 @@ nav .tab { flex: 0 0 auto; }
 @media (max-width: 520px) {
   .mgmt-graph { height: 300px; }
 }
+
+/* Modern text inputs (v0.6.3 feedback: search box + register-name field
+   should look like the rest of the app's inputs, comfortably sized).
+   Applies the compose-form look to the standalone search/name fields. */
+input[type="search"].app-input, input[type="text"].app-input {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 12px; font-size: 14px; font-family: inherit;
+  box-sizing: border-box;
+}
+input[type="search"].app-input:focus, input[type="text"].app-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Liveness threshold inputs (feedback: too small to adjust) */
+.pref-num {
+  width: 130px; padding: 7px 10px; font-size: 14px;
+  border-radius: 6px;
+}
+@media (max-width: 520px) {
+  .pref-num { min-height: 44px; width: 120px; }
+}
+
+/* Register-subordinate ask modal (v0.6 named option): radio pair + name
+   field + live address preview + inline error. */
+.regopt { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.regopt label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.regopt input[type="radio"] { accent-color: var(--accent); }
+.named-row { display: flex; gap: 8px; align-items: center; margin: 2px 0 0 24px; }
+.named-row input[type="text"] { flex: 1; }
+.addr-prev { margin: 4px 0 0 24px; font-size: 12px; color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace; }
+.reg-err { color: var(--error); font-size: 12px; margin-left: 24px; }

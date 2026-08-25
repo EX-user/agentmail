@@ -1649,11 +1649,16 @@
     $("#compose-body").focus();
   }
 
-  // ---- register-subordinate (v0.5.11, superior's request) ----
-  // Panel-only affordance: POST /api/register-subordinate mints a random
-  // account already declared under the caller. Credentials shown once.
+  // ---- register-subordinate (v0.5.11, superior's request; v0.6 named option) ----
+  // Panel-only affordance: POST /api/register-subordinate mints an account
+  // already declared under the caller — random by default, or a caller-
+  // specified name (superior-approved ask modal; a taken name errors inline
+  // rather than silently renaming, because credentials show exactly once).
   function closeSubregModal() {
     $("#subreg-modal").classList.add("hidden");
+  }
+  function closeSubregAsk() {
+    $("#subreg-ask-modal").classList.add("hidden");
   }
   (function wireSubreg() {
     const tbody = document.querySelector("#accounts-table tbody");
@@ -1662,23 +1667,96 @@
     // (#btn-subreg, via tbody delegation) and the PC above-table button
     // (#btn-subreg-pc, outside the table so it needs its own listener)
     // both run this.
+    const NAME_RE = /^[A-Za-z0-9_-]+$/;
+    function subregAskState() {
+      var named = $("#subreg-ask-modal input[value='named']").checked;
+      var name = ($("#subreg-name").value || "").trim();
+      return { named: named, name: name, ok: !named || (NAME_RE.test(name) && name.length <= 32) };
+    }
+    function updateSubregAsk() {
+      var st = subregAskState();
+      var errEl = $("#subreg-ask-err");
+      var prev = $("#subreg-addr-prev");
+      // Preview domain = the owner's own address domain (that's what the
+      // backend mints subordinates under). location.hostname is only a
+      // fallback — on self-hosted setups host ≠ mail domain.
+      var sess = getSession();
+      var myAddr = (sess && sess.address) || "";
+      var domain = myAddr.split("@")[1] || window.location.hostname || "agentmail.local";
+      if (!st.named) {
+        prev.textContent = "";
+        errEl.hidden = true;
+        return;
+      }
+      prev.textContent = t("subs.regAddrWill", { addr: (st.name || "…") + "@" + domain });
+      if (!st.name) { errEl.hidden = true; return; }
+      if (!st.ok) { errEl.textContent = t("subs.regBad"); errEl.hidden = false; }
+      else { errEl.hidden = true; }
+    }
     async function doSubreg(btn) {
-      if (!confirm(t("subs.regConfirm"))) return;
-      const status = $("#subs-status");
+      var ask = $("#subreg-ask-modal");
+      var status = $("#subs-status");
+      if (!ask) {
+        // Fallback (ask modal missing): legacy confirm + random.
+        if (!confirm(t("subs.regConfirm"))) return;
+        await subregPost(null, btn, status);
+        return;
+      }
+      ask.classList.remove("hidden");
+      $("#subreg-name").value = "";
+      $("#subreg-ask-modal input[value='random']").checked = true;
+      updateSubregAsk();
+      $("#btn-subreg-ask-ok").focus();
+    }
+    async function subregPost(username, btn, status) {
       btn.disabled = true;
       status.textContent = t("common.loading");
+      var errEl = $("#subreg-ask-err");
       try {
-        const res = await api("/api/register-subordinate", { method: "POST" });
+        const res = await api("/api/register-subordinate", {
+          method: "POST",
+          body: JSON.stringify(username ? { username: username } : {}),
+        });
         $("#subreg-address").textContent = res.address || "";
         $("#subreg-password").textContent = res.password || "";
         $("#subreg-copy-status").textContent = "";
         $("#subreg-modal").classList.remove("hidden");
         $("#btn-subreg-close").focus();
         status.textContent = t("subs.regDone");
+        closeSubregAsk();
       } catch (e) {
-        status.textContent = t("common.error", { msg: e.message });
+        // A taken name stays in the ask modal with an inline error; other
+        // errors surface in the ask modal too (the ask replaces confirm()).
+        var msg = String(e.message || "");
+        if (errEl && /409|taken|exists|occupied|conflict/i.test(msg)) {
+          errEl.textContent = t("subs.regTaken");
+          errEl.hidden = false;
+          status.textContent = "";
+        } else if (errEl) {
+          errEl.textContent = msg;
+          errEl.hidden = false;
+          status.textContent = "";
+        } else {
+          status.textContent = t("common.error", { msg: msg });
+        }
       }
       btn.disabled = false;
+    }
+    // Ask modal wiring.
+    var askModal = $("#subreg-ask-modal");
+    if (askModal) {
+      $("#btn-subreg-ask-close").addEventListener("click", closeSubregAsk);
+      $("#btn-subreg-ask-cancel").addEventListener("click", closeSubregAsk);
+      askModal.addEventListener("click", function (e) { if (e.target === this) closeSubregAsk(); });
+      $$("#subreg-ask-modal input[name='subreg-mode']").forEach(function (r) {
+        r.addEventListener("change", updateSubregAsk);
+      });
+      $("#subreg-name").addEventListener("input", updateSubregAsk);
+      $("#btn-subreg-ask-ok").addEventListener("click", function () {
+        var st = subregAskState();
+        if (!st.ok) { updateSubregAsk(); return; }
+        subregPost(st.named ? st.name : null, this, $("#subs-status"));
+      });
     }
     tbody.addEventListener("click", function (ev) {
       const btn = ev.target.closest("#btn-subreg");
@@ -1699,6 +1777,8 @@
     });
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
+      const a = $("#subreg-ask-modal");
+      if (a && !a.classList.contains("hidden")) { closeSubregAsk(); return; }
       const m = $("#subreg-modal");
       if (m && !m.classList.contains("hidden")) $("#btn-subreg-close").click();
     });
@@ -1995,7 +2075,7 @@
     box += '<div class="mgmt-sum">' + t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 }) +
       ' <button class="row-action mgmt-refresh" data-mgmt-go="refresh">' + t("mgmt.refresh") + "</button></div>";
     box += '<table class="mgmt-ovw"><thead><tr>' +
-      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colLive") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
+      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
     subs.forEach(function (s) {
       var st = mgmtIsActive(s);
       var dotCls = st === "strong" ? "green" : (st === "weak" ? "yellow" : "idle");
@@ -2006,10 +2086,12 @@
         return shortAddr(c.address) + "×" + c.count;
       }).join(" · ") || "—";
       function fmtAvg(v) { return v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(v)) : "—"; }
+      // Liveness moved into the account cell (feedback: the standalone
+      // column wrapped at five characters); the dot keeps its meaning via
+      // the hover title.
       box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
-        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
+        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="dot ' + dotCls + '" title="' + esc(liveTxt) + '"></span><span class="mono">' + esc(s.address) + '<span class="badge-sub">sub</span></span>' +
         (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colLive")) + '"><span class="dot ' + dotCls + '"></span>' + liveTxt + "</td>" +
         '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
         '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
@@ -2067,21 +2149,35 @@
           : "#f2f4f7";
         return {
           id: n.address, label: (isMe ? t("mgmt.meLabel") : shortAddr(n.address)) +
-            (kind !== "external" ? "\n" + (n.volume || 0) : ""),
+            (kind !== "external" ? "\n7d " + (n.volume || 0) : ""),
           shape: "box", borderWidth: isMe ? 2 : 1,
           color: { background: bg, border: border },
           font: { face: "ui-monospace, Consolas, monospace", size: 11, color: "#23303f" },
           value: Math.max(1, n.volume || 1), scaling: { min: 8, max: 26, label: { enabled: false } },
+          title: shortAddr(n.address) + (kind !== "external" ? " · 7d " + (n.volume || 0) : ""),
           _kind: kind
         };
       }));
       var ve = [];
+      // Data-adaptive normalization (superior's note: a fixed saturation
+      // point is unreasonable): every scale is RELATIVE to the largest
+      // count in the current graph — the busiest pair always maps to full
+      // thickness, quiet pairs stay visibly thinner (log-ratio keeps the
+      // contrast readable across orders of magnitude).
+      var maxCount = 1;
+      edges.forEach(function (e) {
+        maxCount = Math.max(maxCount, e.a_to_b || 0, e.b_to_a || 0);
+      });
+      var LOG_BASE = Math.log10(1 + maxCount);
+      function graphScale(count) {
+        return Math.log10(1 + (count || 0)) / LOG_BASE;
+      }
       edges.forEach(function (e) {
         var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
         var last = e.last_at ? "\n" + fmtTime(e.last_at) : "";
         if (!ab && !ba) {
           ve.push({ from: e.a, to: e.b, label: "—" + last, dashes: true,
-            color: { color: "#c4ccd6" }, width: 1, font: { size: 9, face: "Consolas" },
+            color: { color: "#c4ccd6" }, width: 0.8, font: { size: 9, face: "Consolas" },
             smooth: { type: "curvedCW", roundness: 0.16 }, _sub: pickGraphSub(e, myAddr) });
           return;
         }
@@ -2091,13 +2187,14 @@
         if (ba) ve.push(mgmtGraphEdge(e.b, e.a, ba, last, e));
       });
       function mgmtGraphEdge(from, to, count, last, orig) {
+        var k = graphScale(count);
         return {
           from: from, to: to, label: count + "→" + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.7 + Math.min(count, 40) / 24 } },
-          width: 1 + Math.min(count, 40) / 9,
+          arrows: { to: { enabled: true, scaleFactor: 0.45 + 0.65 * k } },
+          width: 0.6 + 2.2 * k,
           color: { color: "#5b6b7d", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
-          smooth: { type: "curvedCW", roundness: 0.16 },
+          smooth: { type: "curvedCW", roundness: 0.2 },
           _sub: pickGraphSub(orig, myAddr)
         };
       }
@@ -2110,7 +2207,14 @@
       }
       var data = { nodes: vn, edges: new vis.DataSet(ve) };
       new vis.Network(el, data, {
-        physics: { enabled: true, stabilization: { iterations: 300, fit: true } },
+        // Roomier layout (feedback: nodes sat too close at real volumes):
+        // stronger repulsion + longer springs spread the pairs so the
+        // (now capped) arrows never bury the labels.
+        physics: {
+          enabled: true, solver: "barnesHut",
+          barnesHut: { gravitationalConstant: -6000, springLength: 160, springConstant: 0.04, damping: 0.12 },
+          stabilization: { iterations: 400, fit: true }
+        },
         interaction: { hover: true, dragView: true, zoomView: true },
         edges: { selectionWidth: 2 }
       }).on("click", function (params) {

@@ -355,7 +355,7 @@
         <!-- Instant filter over the loaded list (from / subject / preview).
              Server-side full-text search would be a separate contract. -->
         <div class="row" style="margin-bottom:8px;">
-          <input type="search" id="mail-search" style="flex:1;max-width:420px;"
+          <input type="search" id="mail-search" class="app-input" style="flex:1;max-width:420px;"
                  placeholder="Filter loaded list (from / subject…)" data-i18n-ph="mail.searchPh" />
           <span id="mail-search-status" class="muted" style="font-size:12px;"></span>
         </div>
@@ -688,6 +688,32 @@
 
   <!-- Register-subordinate result modal (v0.5.11): one-time credentials,
        same presentation family as the one-click register modal. -->
+  <!-- Register-subordinate ASK modal (superior-approved design): random
+       name (current behavior) or a specified name; the address preview is
+       live; a taken name errors inline (no silent rename — the one-time
+       credentials must match what was typed). -->
+  <div id="subreg-ask-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="subreg-ask-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="subreg-ask-title" data-i18n="subs.askTitle">Register an email for your AI agent</h2>
+        <button id="btn-subreg-ask-close" class="modal-x" title="Close" aria-label="Close" data-i18n-aria="modal.close">×</button>
+      </div>
+      <div class="regopt">
+        <label><input type="radio" name="subreg-mode" value="random" checked /> <span data-i18n="subs.regRandom">Random name (system-generated)</span></label>
+        <label><input type="radio" name="subreg-mode" value="named" /> <span data-i18n="subs.regNamed">Specify a name</span></label>
+        <div class="named-row">
+          <input type="text" id="subreg-name" class="app-input" placeholder="agent-john" data-i18n-ph="subs.regNamePh" />
+        </div>
+        <div class="addr-prev" id="subreg-addr-prev"></div>
+        <div class="reg-err" id="subreg-ask-err" hidden></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;">
+        <button type="button" id="btn-subreg-ask-cancel" class="row-action" data-i18n="subs.cancel">Cancel</button>
+        <button type="button" id="btn-subreg-ask-ok" class="primary" style="margin-left:8px;" data-i18n="subs.regDo">Register</button>
+      </div>
+    </div>
+  </div>
+
   <div id="subreg-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="subreg-title">
     <div class="modal-card">
       <div class="modal-head">
