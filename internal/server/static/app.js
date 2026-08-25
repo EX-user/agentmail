@@ -1425,12 +1425,6 @@
         ? "/api/message?id=" + encodeURIComponent(id)
         : "/admin/message?id=" + encodeURIComponent(id);
       const m = await api(detailPath);
-      // Self-addressed letters (from me to me) get a reply affordance, styled
-      // like the subordinate view's "reply as myself" (superior's request).
-      const myAddr = ((viewer && viewer.address) || "").toLowerCase();
-      const selfNote = myAddr &&
-        String(m.from || "").toLowerCase() === myAddr &&
-        (m.to || []).some(function (a) { return String(a).toLowerCase() === myAddr; });
       detail.innerHTML = inboxDetailFrame(
         '<div class="detail-row"><b>From:</b> ' + esc(m.from) + "</div>" +
         '<div class="detail-row"><b>To:</b> ' + esc((m.to || []).join(", ")) + "</div>" +
@@ -1440,14 +1434,11 @@
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
         '<div class="row" style="margin-top:12px;">' +
-        (selfNote ? '<button class="primary" id="btn-mail-reply-self">' + t("act.reply") + "</button> " : "") +
         '<button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
         attachmentCards(m));
       wireMailNav(detail, item);
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
-      const rbtn = $("#btn-mail-reply-self");
-      if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(m); });
       const fwdBtn = $("#btn-mail-forward");
       if (fwdBtn) fwdBtn.addEventListener("click", function () { composeForward(m); });
     } catch (e) {
@@ -1567,8 +1558,13 @@
     } catch (_) { /* fall back to summary-level rendering */ }
     const msg = full || m; // full has body/cc/attachments; summary has preview/files
     // Received mail (sender ≠ the subordinate): offer "reply as myself".
-    // Sent mail by the subordinate gets no reply affordance.
+    // Mail the subordinate sent TO the viewer: offer plain "Reply" with the
+    // same semantics as the Inbox reply (To + Re: subject, no quote).
     const canReply = msg.from && msg.from !== subAddr;
+    const viewer = getSession();
+    const myAddr = ((viewer && viewer.address) || "").toLowerCase();
+    const sentToMe = myAddr && String(msg.from || "").toLowerCase() === String(subAddr).toLowerCase() &&
+      (msg.to || []).some(function (a) { return String(a).toLowerCase() === myAddr; });
     const atts = (msg.attachments || []);
     detail.innerHTML = inboxDetailFrame(
       '<div class="detail-row"><span class="badge-sub">' + t("subs.badge") + "</span> " +
@@ -1589,13 +1585,17 @@
           }).join("") + "</div>"
         : (m.files ? '<div class="detail-row">📎 ' + m.files + t("subs.attachMeta") + "</div>" : "")) +
       "<hr><pre class=\"body\">" + esc(msg.body != null ? msg.body : (msg.preview || "")) + "</pre>" +
-      (canReply
-        ? '<div class="row" style="margin-top:12px;"><button class="primary" id="btn-reply-as-self">' +
-          t("subs.replyAsSelf") + "</button></div>"
+      (canReply || sentToMe
+        ? '<div class="row" style="margin-top:12px;">' +
+          (canReply ? '<button class="primary" id="btn-reply-as-self">' + t("subs.replyAsSelf") + "</button>" : "") +
+          (sentToMe ? '<button class="primary" id="btn-reply-to-sub"' + (canReply ? ' style="margin-left:8px;"' : "") + '>' + t("act.reply") + "</button>" : "") +
+          "</div>"
         : ""));
     wireMailNav(detail, item);
     const rbtn = $("#btn-reply-as-self");
     if (rbtn) rbtn.addEventListener("click", function () { composeReplyAsSelf(msg); });
+    const rbtn2 = $("#btn-reply-to-sub");
+    if (rbtn2) rbtn2.addEventListener("click", function () { composeReply(subAddr, msg.subject || ""); });
   }
 
   // composeReplyAsSelf: the superior replies in their own name to the
