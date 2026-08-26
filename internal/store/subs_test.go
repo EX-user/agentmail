@@ -88,10 +88,10 @@ func TestSubsReadMessages(t *testing.T) {
 		t.Fatalf("declare: %v", err)
 	}
 	// A receives mail and sends mail.
-	if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, "to-a", "x"); err != nil {
+	if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, "to-a", "x", ""); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if _, err := s.Send("a@t", "a", []string{"c@t"}, nil, "from-a", "x"); err != nil {
+	if _, err := s.Send("a@t", "a", []string{"c@t"}, nil, "from-a", "x", ""); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestUnreadCountDecrementsAfterRead(t *testing.T) {
 	s := newSubsStore(t)
 	seedSubsAccounts(t, s)
 	for i := 0; i < 3; i++ {
-		if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, fmt.Sprintf("m%d", i), "x"); err != nil {
+		if _, err := s.Send("b@t", "b", []string{"a@t"}, nil, fmt.Sprintf("m%d", i), "x", ""); err != nil {
 			t.Fatalf("send %d: %v", i, err)
 		}
 	}

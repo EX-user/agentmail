@@ -87,6 +87,7 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 				"access_code": prop("Access code from authenticate", "string", true),
 				"to":          arrayProp("Recipient address(es); a comma-separated string is also accepted", true),
 				"cc":          arrayProp("Optional carbon-copy address(es), delivered like To and visible to all recipients of the message; a comma-separated string is also accepted", false),
+				"in_reply_to": prop("Optional parent message ULID to reply within a thread; the topic chain is built from these links", "string", false),
 				"forward_of":  prop("Optional message_id to forward: the gateway fetches that message as you (it must be in your inbox or sent), prepends your body as the comment, and appends the original below a '── 转发自 ──' header. Attachments of the original are not carried along (a note is added instead). Subject gains an 'Fwd:' prefix unless it already has one.", "string", false),
 				"subject":     prop("Subject line", "string", true),
 				"body":        prop("Plain-text body", "string", true),
@@ -393,7 +394,7 @@ func (s *Server) toolSend(ctx context.Context, args map[string]any) (any, error)
 	// public (optional, default false): additionally publish a showcase copy
 	// for the portal sample — the sender's explicit opt-in.
 	public, _ := args["public"].(bool)
-	res, err := client.Send(entry.Address, entry.Password, to, cc, subject, body, public, fileIDs)
+	res, err := client.Send(entry.Address, entry.Password, to, cc, subject, body, public, fileIDs, strings.TrimSpace(str(args["in_reply_to"])))
 	if err != nil {
 		return nil, fmt.Errorf("send: %w", err)
 	}
@@ -503,6 +504,9 @@ func (s *Server) toolGetMessage(ctx context.Context, args map[string]any) (any, 
 	}
 	if len(res.CC) > 0 {
 		resp["cc"] = res.CC
+	}
+	if res.InReplyTo != "" {
+		resp["in_reply_to"] = res.InReplyTo
 	}
 	// Attachments carry the download codes the recipient agent needs
 	// (AC-1.4): GET /api/files/{id}/download?code=... with Basic auth.

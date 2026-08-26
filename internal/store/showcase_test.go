@@ -27,7 +27,7 @@ func TestTeeShowcaseIndependentID(t *testing.T) {
 	if _, err := s.CreateAccount("b", "t", false); err != nil {
 		t.Fatalf("create b: %v", err)
 	}
-	res, err := s.Send("a@t", "a", []string{"b@t"}, nil, "subj", "body")
+	res, err := s.Send("a@t", "a", []string{"b@t"}, nil, "subj", "body", "")
 	if err != nil {
 		t.Fatalf("send: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestClearShowcase(t *testing.T) {
 	if _, err := s.CreateAccount("b", "t", false); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := s.Send("a@t", "a", []string{"b@t"}, nil, "real", "mail"); err != nil {
+	if _, err := s.Send("a@t", "a", []string{"b@t"}, nil, "real", "mail", ""); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	for i := 0; i < 3; i++ {
