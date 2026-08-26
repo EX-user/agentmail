@@ -14,6 +14,22 @@ export function setUnauthorizedHandler(fn) { unauthorizedHandler = fn; }
 
 // ---- DOM helpers ----
 
+export function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+  }
+  // Legacy fallback: select a temporary node and execCommand("copy").
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+  ta.remove();
+  return Promise.resolve(ok);
+}
+
 export function fmtTime(unixOrIso) {
   if (!unixOrIso) return "\u2014";
   let d;
