@@ -2198,12 +2198,12 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
         // traffic reads thin AND faint. Label = count only; the
         // last-activity time moved to the hover tooltip (it occluded the
         // graph at real volumes).
-        var alpha = 0.35 + 0.65 * k;
+        var alpha = 0.15 + 0.85 * k;
         return {
           from: from, to: to, label: String(count),
           title: count + " · " + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.45 + 0.65 * k } },
-          width: 0.6 + 2.2 * k,
+          arrows: { to: { enabled: true, scaleFactor: 0.3 + 0.7 * k } },
+          width: 0.3 + 2.5 * k,
           color: { color: "rgba(91,107,125," + alpha.toFixed(2) + ")", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
           smooth: { type: "curvedCW", roundness: 0.2 },
