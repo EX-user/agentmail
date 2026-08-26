@@ -1112,7 +1112,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
-      wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
+      wireReplyRef(detail, m, function (pid) { showInboxDetail(pid, null, false); });
       document.dispatchEvent(new CustomEvent("badge:refresh"));
       {
         const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
