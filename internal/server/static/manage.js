@@ -570,11 +570,17 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
         '<div class="row" style="margin-top:12px;">' +
-        '<button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
+        '<button class="row-action" id="btn-mail-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
+        '<button class="row-action" id="btn-mail-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         attachmentCards(m));
       wireMailNav(detail, item);
+      wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      const replyBtn = $("#btn-mail-reply");
+      if (replyBtn) replyBtn.addEventListener("click", function () {
+        document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: replyBtn.dataset.replyTo, subject: replyBtn.dataset.replySubject, parentId: replyBtn.dataset.replyId } }));
+      });
       const fwdBtn = $("#btn-mail-forward");
       if (fwdBtn) fwdBtn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:forward", { detail: { m: m } })); });
     } catch (e) {
@@ -1471,6 +1477,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   }
 
   // ---- cross-domain event wiring (protocol surface of this module) ----
+  document.addEventListener("inbox:entered", function () { loadInbox(0); });
+
   document.addEventListener("manage:entered", function () {
     ensureMgmtPrefs();
     if (typeof ensureAccountOptions === "function") ensureAccountOptions();
