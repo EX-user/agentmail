@@ -122,8 +122,21 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         const results = await Promise.all(jobs);
         results.forEach(function (arr) { msgs = msgs.concat(arr); });
         msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
+        // Dedup by id — but a letter the viewer SENT also lives in the
+        // recipient's (subordinate's) inbox. The own-sent copy is always
+        // read; letting it shadow the recipient's unread copy made fresh
+        // mail show as read here (superior report 2026-08-27). When both
+        // copies exist, keep the unread one (its __owner also routes the
+        // detail pane to the right mailbox).
         var seenA = {}, dedupA = [];
-        msgs.forEach(function (m) { if (!seenA[m.id]) { seenA[m.id] = 1; dedupA.push(m); } });
+        msgs.forEach(function (m) {
+          if (!seenA[m.id]) { seenA[m.id] = 1; dedupA.push(m); }
+          else if (m.unread) {
+            for (var i = 0; i < dedupA.length; i++) {
+              if (dedupA[i].id === m.id) { dedupA[i] = m; break; }
+            }
+          }
+        });
         msgs = dedupA;
       } else if (isSubView) {
         const f = folder === "all" ? "both" : folder;
@@ -152,8 +165,16 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         results.forEach(function (arr) { msgs = msgs.concat(arr); });
         msgs.sort(function (a, b) { return (b.received_at || 0) - (a.received_at || 0); });
         // De-duplicate by id (a message can appear in both inbox and sent views).
+        // Same shadowing hazard as the __vis__ merge: keep the unread copy.
         var seen = {}, dedup = [];
-        msgs.forEach(function (m) { if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); } });
+        msgs.forEach(function (m) {
+          if (!seen[m.id]) { seen[m.id] = 1; dedup.push(m); }
+          else if (m.unread) {
+            for (var i = 0; i < dedup.length; i++) {
+              if (dedup[i].id === m.id) { dedup[i].unread = true; break; }
+            }
+          }
+        });
         msgs = dedup;
       }
 
