@@ -1309,17 +1309,27 @@ nav .tab { flex: 0 0 auto; }
   font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--muted); margin: 18px 0 8px;
 }
-/* Floating graph controls (superior request): one row of pill buttons
-   right above the canvas; each click cycles its value. */
-.mgmt-graph-controls {
-  display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px;
+/* Floating graph controls (superior request): circular buttons overlaid ON
+   the canvas — a DOM layer above the vis-network surface, so they never
+   move with pan/zoom. Vertical stack, top-right of the graph. */
+.mgmt-graph-wrap {
+  position: relative;
 }
-.mgmt-graph-controls .row-action {
-  font-size: 11px; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--panel); color: var(--text);
-  cursor: pointer;
+.mgmt-graph-controls.overlay {
+  position: absolute; top: 10px; right: 10px; z-index: 5;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.mgmt-graph-controls .row-action:hover { border-color: var(--accent, #3b82f6); }
+.gg-btn {
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel);
+  color: var(--text); font-size: 12px; line-height: 1.1;
+  cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; text-align: center;
+}
+.gg-btn:hover { border-color: var(--accent, #3b82f6); }
+.gg-btn.off { opacity: .45; }         /* numbers hidden state */
+.gg-btn-days { font-size: 11px; font-weight: 600; }
 .mgmt-graph {
   /* +40% vertical (superior feedback): 380 -> 532 PC, 300 -> 420 phones. */
   height: 532px; border: 1px solid var(--border); border-radius: 8px;
