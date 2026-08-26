@@ -685,14 +685,15 @@
           </div>
           <div id="cc-tags" class="cc-tags hidden"></div>
         </label>
-        <!-- In-reply-to anchor (superior request): shows the message this
-             reply chains to — a chip like Cc, click to view it. Hidden when
-             the draft carries no anchor (fresh compose / forward). -->
+        <!-- In-reply-to anchor (superior request, revised): a "＋ anchor"
+             toggle (same pattern as ＋ Cc) reveals the row; the chip part
+             only renders when the draft carries an anchor. -->
+        <button type="button" id="btn-toggle-irt" class="row-action" style="font-size:12px;">＋ In-reply-to</button>
         <div id="compose-inreplyto-row" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="muted" style="font-size:12px;">↩</span>
-          <a href="javascript:void(0)" id="compose-inreplyto-chip" class="cc-chip" style="cursor:pointer;text-decoration:none;"></a>
-          <button type="button" class="attach-x" id="compose-inreplyto-clear" title="Clear">×</button>
-          <input type="text" id="compose-inreplyto-input" placeholder="paste message id" style="flex:1;min-width:0;font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);" />
+          <a href="javascript:void(0)" id="compose-inreplyto-chip" class="cc-chip hidden" style="cursor:pointer;text-decoration:none;"></a>
+          <button type="button" class="attach-x hidden" id="compose-inreplyto-clear" title="Clear">×</button>
+          <input type="text" id="compose-inreplyto-input" placeholder="paste message id" style="flex:1;min-width:120px;font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);" />
           <button type="button" class="row-action" id="compose-inreplyto-add" style="font-size:11px;">↩ set</button>
         </div>
         <label>Subject

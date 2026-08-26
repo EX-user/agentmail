@@ -23,10 +23,23 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   function renderInReplyTo() {
     var row = document.getElementById("compose-inreplyto-row");
     var chip = document.getElementById("compose-inreplyto-chip");
+    var clear = document.getElementById("compose-inreplyto-clear");
     if (!row || !chip) return;
-    row.classList.toggle("hidden", !composeInReplyTo);
+    chip.classList.toggle("hidden", !composeInReplyTo);
+    if (clear) clear.classList.toggle("hidden", !composeInReplyTo);
     if (composeInReplyTo) chip.textContent = composeInReplyTo;
   }
+  function wireIrtToggle() {
+    var btn = document.getElementById("btn-toggle-irt");
+    var row = document.getElementById("compose-inreplyto-row");
+    if (!btn || !row) return;
+    btn.addEventListener("click", function () {
+      row.classList.toggle("hidden");
+      var input = document.getElementById("compose-inreplyto-input");
+      if (!row.classList.contains("hidden") && input) input.focus();
+    });
+  }
+  wireIrtToggle();
   function wireInReplyTo() {
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
