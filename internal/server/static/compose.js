@@ -16,6 +16,37 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     return window.I18N ? window.I18N.t(key, vars) : key;
   }
 
+  // In-reply-to chip (superior request): mirrors the Cc-chip pattern —
+  // the draft's reply anchor shows as a removable chip under the Cc row;
+  // clicking it opens the anchored letter in the thread pane (same view
+  // the Compose tab already uses for this conversation).
+  function renderInReplyTo() {
+    var row = document.getElementById("compose-inreplyto-row");
+    var chip = document.getElementById("compose-inreplyto-chip");
+    if (!row || !chip) return;
+    row.classList.toggle("hidden", !composeInReplyTo);
+    if (composeInReplyTo) chip.textContent = composeInReplyTo;
+  }
+  function wireInReplyTo() {
+    var chip = document.getElementById("compose-inreplyto-chip");
+    var clear = document.getElementById("compose-inreplyto-clear");
+    if (chip) chip.addEventListener("click", function () {
+      if (!composeInReplyTo) return;
+      loadComposeThread().then(function () {
+        var item = document.querySelector('.thread-item[data-mid="' + composeInReplyTo + '"]');
+        if (item && typeof toggleThreadItem === "function") {
+          item.scrollIntoView({ block: "center" });
+          toggleThreadItem(item);
+        }
+      });
+    });
+    if (clear) clear.addEventListener("click", function () {
+      composeInReplyTo = null;
+      renderInReplyTo();
+    });
+  }
+  wireInReplyTo();
+
   // Cross-domain navigation request: app.js owns activateTab.
   function navActivateCompose() {
     document.dispatchEvent(new CustomEvent("nav:activate", { detail: { tab: "compose" } }));
@@ -23,6 +54,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
   function composeTo(address) {
     composeInReplyTo = null;
+    renderInReplyTo();
     $("#compose-to").value = address || "";
     // Entering compose from a Compose button starts a fresh letter: clear
     // any leftover draft body (feedback). Plain tab switches keep the
@@ -36,6 +68,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // the original subject (without stacking Re: if it already starts with one).
   function composeReply(toAddress, subject, parentId) {
     composeInReplyTo = parentId || null;
+    renderInReplyTo();
     $("#compose-to").value = toAddress || "";
     var subj = (subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -246,6 +279,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // are not carried (same ruling as subordinate Q2) — noted in the body.
   function composeForward(m) {
     composeInReplyTo = null;
+    renderInReplyTo();
     $("#compose-to").value = "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^fwd:\s*/i.test(subj) ? subj : (subj ? "Fwd: " + subj : "");
@@ -339,6 +373,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
   function composeReplyAsSelf(m) {
     composeInReplyTo = (m && (m.id || m.message_id)) || null;
+    renderInReplyTo();
     $("#compose-to").value = m.from || "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -499,6 +534,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
         body: JSON.stringify(payload),
       });
       composeInReplyTo = null;
+      renderInReplyTo();
       status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
