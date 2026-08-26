@@ -214,11 +214,16 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         });
         list.appendChild(item);
       });
-      // Avoid-empty (feedback): open the newest message right after Load,
-      // mirroring the Inbox preload.
+      // List-first (superior feedback 2026-08-27): entering the browse view
+      // lands on the LIST, not inside a message — the old auto-open of the
+      // newest item hid the overview. The detail pane idles with a hint
+      // until the user clicks a row.
       {
-        const first = list.querySelector(".mail-item");
-        if (first && msgs.length) first.click();
+        const detail = $("#mail-detail");
+        if (detail && msgs.length) {
+          detail.innerHTML = '<p class="muted" style="padding:12px 4px;">' +
+            esc(t("mail.pickHint")) + "</p>";
+        }
       }
       applyMailSearch();
     } catch (e) {
