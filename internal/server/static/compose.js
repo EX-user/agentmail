@@ -29,27 +29,15 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     if (clear) clear.classList.toggle("hidden", !composeInReplyTo);
     if (composeInReplyTo) chip.textContent = composeInReplyTo;
   }
-  function wireIrtToggle() {
-    var btn = document.getElementById("btn-toggle-irt");
-    var row = document.getElementById("compose-inreplyto-row");
-    if (!btn || !row) return;
-    btn.addEventListener("click", function () {
-      row.classList.toggle("hidden");
-      var sel = document.getElementById("compose-inreplyto-pick");
-      if (!row.classList.contains("hidden")) {
-        if (sel) fillIrtPicker();
-      }
-    });
-  }
-  wireIrtToggle();
 
-  // Dropdown of recent messages (inbox + sent, newest first). Entries show
-  // subject + direction + short id so duplicates are distinguishable;
-  // selecting one puts the message id into the input.
-  function fillIrtPicker() {
-    var sel = document.getElementById("compose-inreplyto-pick");
-    if (!sel) return;
-    sel.innerHTML = '<option value="">— ' + t("compose.irtPick") + ' —</option>';
+  // Manual anchor entry, Cc-autocomplete style (superior feedback: the
+  // toggle → select → set flow was too many steps). One always-visible
+  // input: typing filters the recent inbox+sent subjects live; picking a
+  // suggestion sets the anchor immediately. Pasting a raw id still works
+  // via the same input (Enter or ↩ set).
+  var irtLabels = [];            // display strings for the dropdown
+  var irtLabelToId = {};         // display string -> message id
+  function loadIrtCandidates() {
     var cur = getSession();
     if (!cur) return;
     Promise.all([
@@ -60,14 +48,44 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "←", ts: m.received_at || 0 }); });
       (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "→", ts: m.received_at || 0 }); });
       items.sort(function (a, b) { return b.ts - a.ts; });
-      items.slice(0, 30).forEach(function (it) {
-        var opt = document.createElement("option");
-        opt.value = it.id;
-        opt.textContent = it.dir + " " + it.subj + "  [" + String(it.id).slice(-6) + "]";
-        sel.appendChild(opt);
+      items = items.slice(0, 30);
+      irtLabels = items.map(function (it) {
+        return it.dir + " " + it.subj + "  [" + String(it.id).slice(-6) + "]";
       });
+      irtLabelToId = {};
+      items.forEach(function (it, i) { irtLabelToId[irtLabels[i]] = it.id; });
     });
   }
+  function wireIrtAutocomplete() {
+    var row = document.getElementById("compose-inreplyto-row");
+    var input = document.getElementById("compose-inreplyto-input");
+    var dd = document.getElementById("irt-dropdown");
+    if (!row || !input || !dd) return;
+    row.classList.remove("hidden"); // always visible — no toggle step
+    loadIrtCandidates();
+    input.addEventListener("focus", loadIrtCandidates);
+    attachAutocomplete(input, dd, {
+      fragment: function () { return input.value; },
+      exclude: function () { return []; },
+      source: function () { return irtLabels; },
+      pick: function (label) {
+        var id = irtLabelToId[label];
+        if (id) { composeInReplyTo = id; renderInReplyTo(); }
+        input.value = "";
+        input.focus();
+      },
+    });
+    // Closed-dropdown Enter commits the typed text as a raw id (manual path).
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && dd.classList.contains("hidden")) {
+        ev.preventDefault();
+        var btn = document.getElementById("compose-inreplyto-add");
+        if (btn) btn.click();
+      }
+    });
+  }
+  wireIrtAutocomplete();
+
   function wireInReplyTo() {
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
@@ -76,11 +94,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       var input = document.getElementById("compose-inreplyto-input");
       var v = (input && input.value || "").trim();
       if (v) { composeInReplyTo = v; renderInReplyTo(); if (input) input.value = ""; }
-    });
-    var pick = document.getElementById("compose-inreplyto-pick");
-    if (pick) pick.addEventListener("change", function () {
-      var input = document.getElementById("compose-inreplyto-input");
-      if (pick.value && input) { input.value = pick.value; input.focus(); }
     });
     if (chip) chip.addEventListener("click", function () {
       if (!composeInReplyTo) return;
@@ -227,7 +240,10 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       const q = (opts.fragment() || "").trim().toLowerCase();
       if (!q) { hide(); return; }
       const ex = opts.exclude();
-      items = composeRecipientList.filter(function (a) {
+      // opts.source lets non-address fields (in-reply-to) supply their own
+      // candidate pool; the default stays the shared recipient list.
+      const pool = opts.source ? opts.source() : composeRecipientList;
+      items = pool.filter(function (a) {
         return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
       }).slice(0, 8);
       active = items.length ? 0 : -1;

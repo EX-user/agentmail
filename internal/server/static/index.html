@@ -685,16 +685,19 @@
           </div>
           <div id="cc-tags" class="cc-tags hidden"></div>
         </label>
-        <!-- In-reply-to anchor (superior request, revised): a "＋ anchor"
-             toggle (same pattern as ＋ Cc) reveals the row; the chip part
-             only renders when the draft carries an anchor. -->
-        <button type="button" id="btn-toggle-irt" class="row-action" style="font-size:12px;">＋ In-reply-to</button>
-        <div id="compose-inreplyto-row" class="hidden" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <!-- In-reply-to anchor (superior feedback: fewer steps). The row is
+             always visible — no toggle. The input autocompletes against the
+             recent inbox+sent subjects (Cc-style dropdown); picking one sets
+             the anchor instantly, pasting a raw id works too. The chip shows
+             the anchor once set. -->
+        <div id="compose-inreplyto-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="muted" style="font-size:12px;">↩</span>
           <a href="javascript:void(0)" id="compose-inreplyto-chip" class="cc-chip hidden" style="cursor:pointer;text-decoration:none;"></a>
           <button type="button" class="attach-x hidden" id="compose-inreplyto-clear" title="Clear">×</button>
-          <select id="compose-inreplyto-pick" style="flex:0 0 auto;font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);max-width:220px;"><option value="">— recent —</option></select>
-          <input type="text" id="compose-inreplyto-input" placeholder="paste message id" style="flex:1;min-width:120px;font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);" />
+          <div class="cc-input-wrap" style="flex:1;min-width:140px;">
+            <input type="text" id="compose-inreplyto-input" autocomplete="off" placeholder="reply to: type a subject or paste an id" style="width:100%;font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);" />
+            <div id="irt-dropdown" class="compose-dropdown hidden"></div>
+          </div>
           <button type="button" class="row-action" id="compose-inreplyto-add" style="font-size:11px;">↩ set</button>
         </div>
         <label>Subject
