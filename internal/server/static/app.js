@@ -114,7 +114,7 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
     $("#tab-" + name).classList.remove("hidden");
     if (name === "overview") loadOverview();
     if (name === "accounts") loadAccounts();
-    if (name === "inbox") loadInbox();
+    if (name === "inbox") document.dispatchEvent(new CustomEvent("inbox:entered"));
     if (name === "mail") document.dispatchEvent(new CustomEvent("manage:entered"));
     if (name === "overview") {
       // v0.6.9: the Overview tab hosts the Directory subview — restore the

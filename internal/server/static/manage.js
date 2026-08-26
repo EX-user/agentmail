@@ -511,27 +511,25 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   // Thread rendering (v0.6.16 ①): "in reply to <parent>" row above the
   // letter body — parent subject loads on demand; click reopens the parent
   // in this pane (same loader, so visibility rules stay identical).
+  // Reply-reference row (v0.6.16 + superior adjustment): rendered in the
+  // field zone as a normal .detail-row — same visual treatment as
+  // From/To/Subject, not a body-area exception. Parent subject is fetched
+  // async (the summary does not carry it); the row appears when the current
+  // message has in_reply_to.
   function wireReplyRef(detail, msg, reopen) {
     if (!msg || !msg.in_reply_to) return;
     var row = document.createElement("div");
     row.className = "detail-row reply-ref";
+    row.innerHTML = "<b>↩ " + esc(t("act.repliedFrom")) + ":</b> ";
     var link = document.createElement("a");
     link.href = "javascript:void(0)";
-    link.textContent = t("act.repliedFrom") + " …";
-    row.appendChild(document.createTextNode("↩ "));
+    link.textContent = "‹" + msg.in_reply_to + "›";
     row.appendChild(link);
-    // Field-zone placement (superior adjustment): the row belongs with
-    // From/To/Subject — insert before the <hr> that opens the body area.
     var host = detail.querySelector(".body");
     var mark = host ? host.previousElementSibling : null;
     if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
     else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
     else detail.appendChild(row);
-    api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
-      link.textContent = t("act.repliedFrom") + " ‹" + ((p && p.subject) || msg.in_reply_to) + "›";
-    }, function () {
-      link.textContent = t("act.repliedFrom") + " ‹" + msg.in_reply_to + "›";
-    });
     link.addEventListener("click", function () { reopen(msg.in_reply_to); });
   }
 
@@ -564,14 +562,20 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
+        '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id || m.message_id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
         '<div class="row" style="margin-top:12px;">' +
-        '<button class="row-action" id="btn-mail-forward">' + t("act.forward") + "</button></div>" +
+        '<button class="row-action" id="btn-mail-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
+        '<button class="row-action" id="btn-mail-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         attachmentCards(m));
       wireMailNav(detail, item);
+      wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      const replyBtn = $("#btn-mail-reply");
+      if (replyBtn) replyBtn.addEventListener("click", function () {
+        document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: replyBtn.dataset.replyTo, subject: replyBtn.dataset.replySubject, parentId: replyBtn.dataset.replyId } }));
+      });
       const fwdBtn = $("#btn-mail-forward");
       if (fwdBtn) fwdBtn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:forward", { detail: { m: m } })); });
     } catch (e) {
@@ -721,7 +725,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       (msg.cc && msg.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(msg.cc.join(", ")) + "</div>" : "") +
       '<div class="detail-row"><b>Subject:</b> ' + esc(msg.subject || "") + "</div>" +
       '<div class="detail-row"><b>Date:</b> ' + fmtTime(msg.received_at) + "</div>" +
-      '<div class="detail-row"><b>ID:</b> <code>' + esc(msg.id) + "</code></div>" +
+      '<div class="detail-row"><b>ID:</b> <code>' + esc(msg.id || msg.message_id) + "</code></div>" +
       (atts.length
         ? '<div class="attach-list">' + atts.map(function (a) {
             return '<div class="attach-card attach-card-file">' +
@@ -1468,6 +1472,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   }
 
   // ---- cross-domain event wiring (protocol surface of this module) ----
+  document.addEventListener("inbox:entered", function () { loadInbox(0); });
+
   document.addEventListener("manage:entered", function () {
     ensureMgmtPrefs();
     if (typeof ensureAccountOptions === "function") ensureAccountOptions();
