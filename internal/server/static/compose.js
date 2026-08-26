@@ -16,6 +16,123 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     return window.I18N ? window.I18N.t(key, vars) : key;
   }
 
+  // In-reply-to chip (superior request): mirrors the Cc-chip pattern —
+  // the draft's reply anchor shows as a removable chip under the Cc row;
+  // clicking it opens the anchored letter in the thread pane (same view
+  // the Compose tab already uses for this conversation).
+  // Visibility rules (superior feedback round 3):
+  //   - the row opens on the ＋ toggle (Cc pattern) or when a reply sets
+  //     an anchor;
+  //   - once an anchor exists the input closes (irt is single-value) —
+  //     only ×-ing the chip re-opens the input.
+  var irtOpen = false; // user expanded the row via the ＋ toggle
+  function renderInReplyTo() {
+    var row = document.getElementById("compose-inreplyto-row");
+    var chip = document.getElementById("compose-inreplyto-chip");
+    var clear = document.getElementById("compose-inreplyto-clear");
+    var wrap = document.getElementById("compose-inreplyto-input-wrap");
+    var toggle = document.getElementById("btn-toggle-irt");
+    if (!row || !chip) return;
+    row.classList.toggle("hidden", !(composeInReplyTo || irtOpen));
+    if (toggle) toggle.classList.toggle("hidden", !!(composeInReplyTo || irtOpen));
+    chip.classList.toggle("hidden", !composeInReplyTo);
+    if (clear) clear.classList.toggle("hidden", !composeInReplyTo);
+    if (composeInReplyTo) chip.textContent = composeInReplyTo;
+    // Input (and its set button) hides while an anchor is set.
+    var inp = !!(composeInReplyTo);
+    if (wrap) wrap.classList.toggle("hidden", inp);
+  }
+
+  // Manual anchor entry, Cc-autocomplete style. Typing filters the recent
+  // inbox+sent subjects live; an empty focused input shows the full list;
+  // picking a suggestion (or Enter on a pasted raw id) sets the anchor and
+  // closes the input.
+  var irtLabels = [];            // display strings for the dropdown
+  var irtLabelToId = {};         // display string -> message id
+  function loadIrtCandidates() {
+    var cur = getSession();
+    if (!cur) return Promise.resolve();
+    return Promise.all([
+      api("/api/inbox?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; }),
+      api("/api/sent?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; })
+    ]).then(function (res) {
+      var items = [];
+      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "←", ts: m.received_at || 0 }); });
+      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "→", ts: m.received_at || 0 }); });
+      items.sort(function (a, b) { return b.ts - a.ts; });
+      items = items.slice(0, 30);
+      irtLabels = items.map(function (it) {
+        return it.dir + " " + it.subj + "  [" + String(it.id).slice(-6) + "]";
+      });
+      irtLabelToId = {};
+      items.forEach(function (it, i) { irtLabelToId[irtLabels[i]] = it.id; });
+    });
+  }
+  function wireIrtAutocomplete() {
+    var row = document.getElementById("compose-inreplyto-row");
+    var input = document.getElementById("compose-inreplyto-input");
+    var dd = document.getElementById("irt-dropdown");
+    var toggle = document.getElementById("btn-toggle-irt");
+    if (!row || !input || !dd) return;
+    if (toggle) toggle.addEventListener("click", function () {
+      irtOpen = true;
+      renderInReplyTo();
+      input.focus();          // focus with empty input shows the full list
+      // First-ever open races the candidates fetch — once it lands, re-fire
+      // the focus-driven refresh so the full list is showing.
+      loadIrtCandidates().then(function () {
+        if (document.activeElement === input && !input.value) {
+          input.dispatchEvent(new FocusEvent("focus"));
+        }
+      });
+    });
+    loadIrtCandidates();
+    input.addEventListener("focus", loadIrtCandidates);
+    attachAutocomplete(input, dd, {
+      fragment: function () { return input.value; },
+      exclude: function () { return []; },
+      source: function () { return irtLabels; },
+      showAllOnEmpty: true,   // empty + focused = browse the recent list
+      pick: function (label) {
+        var id = irtLabelToId[label];
+        if (id) { composeInReplyTo = id; renderInReplyTo(); }
+        input.value = "";
+      },
+    });
+    // Closed-dropdown Enter commits the typed text as a raw id (manual path).
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && dd.classList.contains("hidden")) {
+        ev.preventDefault();
+        var v = (input.value || "").trim();
+        if (v) { composeInReplyTo = v; renderInReplyTo(); input.value = ""; }
+      }
+    });
+  }
+  wireIrtAutocomplete();
+
+  function wireInReplyTo() {
+    var chip = document.getElementById("compose-inreplyto-chip");
+    var clear = document.getElementById("compose-inreplyto-clear");
+    if (chip) chip.addEventListener("click", function () {
+      if (!composeInReplyTo) return;
+      loadComposeThread().then(function () {
+        var item = document.querySelector('.thread-item[data-mid="' + composeInReplyTo + '"]');
+        if (item && typeof toggleThreadItem === "function") {
+          item.scrollIntoView({ block: "center" });
+          toggleThreadItem(item);
+        }
+      });
+    });
+    if (clear) clear.addEventListener("click", function () {
+      composeInReplyTo = null;
+      irtOpen = true;          // ×-ing the chip re-opens the input
+      renderInReplyTo();
+      var input = document.getElementById("compose-inreplyto-input");
+      if (input) input.focus();
+    });
+  }
+  wireInReplyTo();
+
   // Cross-domain navigation request: app.js owns activateTab.
   function navActivateCompose() {
     document.dispatchEvent(new CustomEvent("nav:activate", { detail: { tab: "compose" } }));
@@ -23,6 +140,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
   function composeTo(address) {
     composeInReplyTo = null;
+    renderInReplyTo();
     $("#compose-to").value = address || "";
     // Entering compose from a Compose button starts a fresh letter: clear
     // any leftover draft body (feedback). Plain tab switches keep the
@@ -36,6 +154,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // the original subject (without stacking Re: if it already starts with one).
   function composeReply(toAddress, subject, parentId) {
     composeInReplyTo = parentId || null;
+    renderInReplyTo();
     $("#compose-to").value = toAddress || "";
     var subj = (subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -140,9 +259,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     }
     function refresh() {
       const q = (opts.fragment() || "").trim().toLowerCase();
-      if (!q) { hide(); return; }
+      // opts.source lets non-address fields (in-reply-to) supply their own
+      // candidate pool; the default stays the shared recipient list.
+      const pool = opts.source ? opts.source() : composeRecipientList;
+      if (!q && !opts.showAllOnEmpty) { hide(); return; }
       const ex = opts.exclude();
-      items = composeRecipientList.filter(function (a) {
+      items = pool.filter(function (a) {
         return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
       }).slice(0, 8);
       active = items.length ? 0 : -1;
@@ -152,6 +274,9 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       clearTimeout(timer);
       timer = setTimeout(refresh, 150); // debounce keystrokes
     });
+    // Empty + focused = browse the whole pool (in-reply-to UX); address
+    // fields opt out, so their behavior is unchanged.
+    if (opts.showAllOnEmpty) input.addEventListener("focus", refresh);
     input.addEventListener("keydown", function (ev) {
       if (panel.classList.contains("hidden") || !items.length) return;
       if (ev.key === "ArrowDown") { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
@@ -246,6 +371,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // are not carried (same ruling as subordinate Q2) — noted in the body.
   function composeForward(m) {
     composeInReplyTo = null;
+    renderInReplyTo();
     $("#compose-to").value = "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^fwd:\s*/i.test(subj) ? subj : (subj ? "Fwd: " + subj : "");
@@ -339,6 +465,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
   function composeReplyAsSelf(m) {
     composeInReplyTo = (m && (m.id || m.message_id)) || null;
+    renderInReplyTo();
     $("#compose-to").value = m.from || "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -499,6 +626,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
         body: JSON.stringify(payload),
       });
       composeInReplyTo = null;
+      renderInReplyTo();
       status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
@@ -578,7 +706,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
           ? "Re: " + subjBase
           : "Follow-up: " + subjBase;
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
-          '" data-subj="' + esc(newSubj) + '">' + actionLabel + '</span>';
+          '" data-subj="' + esc(newSubj) + '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">▾ click to expand</span> ' + actionBtn + '</div>' +
@@ -593,6 +721,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
           e.stopPropagation(); // don't trigger the item's expand toggle
           $("#compose-to").value = btn.dataset.target;
           $("#compose-subject").value = btn.dataset.subj;
+          composeInReplyTo = btn.dataset.mid || null;
+          renderInReplyTo();
           $("#compose-body").focus();
           $("#compose-status").textContent = "Replying to " + btn.dataset.target;
         });
