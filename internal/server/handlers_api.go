@@ -865,21 +865,9 @@ func (s *Server) handleRegisterTeam(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// isULID checks the 26-char Crockford Base32 form (same alphabet the store's
-// encodeULID produces).
-func isULID(s string) bool {
-	if len(s) != 26 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'H') || c == 'J' || c == 'K' ||
-			c == 'M' || (c >= 'N' && c <= 'P') || (c >= 'R' && c <= 'T') || (c >= 'V' && c <= 'Z')) {
-			return false
-		}
-	}
-	return true
-}
+// isULID delegates to the store's alphabet-derived check (single source of
+// truth — see store.IsULID).
+func isULID(s string) bool { return store.IsULID(s) }
 
 // handleThreads serves the topic index: maximal in_reply_to connected
 // components over the caller's visible mail, last_at descending, paginated,

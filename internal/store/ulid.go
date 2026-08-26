@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,23 @@ import (
 // See https://github.com/ulid/spec for the format.
 
 const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+// IsULID reports whether s is a 26-char Crockford Base32 string (the exact
+// alphabet newULID emits — single source of truth for write-side format
+// checks). A hand-rolled range check once dropped 'Q' between N-P and R-T
+// and rejected ~56% of REAL ids flakily; deriving from the constant makes
+// that class of bug impossible.
+func IsULID(s string) bool {
+	if len(s) != 26 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !strings.ContainsRune(crockford, rune(s[i])) {
+			return false
+		}
+	}
+	return true
+}
 
 // newULID returns a fresh ULID string for the current time.
 func newULID() string {
