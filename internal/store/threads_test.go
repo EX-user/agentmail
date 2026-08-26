@@ -84,9 +84,11 @@ func TestThreadComponentsHappyPath(t *testing.T) {
 		t.Fatalf("send fork: %v", err)
 	}
 	// Unrelated singleton.
-	if _, err := s.Send("a@t", "a", []string{"c@t"}, nil, "solo", "x", ""); err != nil {
+	soloRes, err := s.Send("a@t", "a", []string{"c@t"}, nil, "solo", "x", "")
+	if err != nil {
 		t.Fatalf("send solo: %v", err)
 	}
+	soloID := soloRes.MessageID
 
 	topics, total, err := s.Threads("a@t", 50, 0, 2)
 	if err != nil {
@@ -137,6 +139,25 @@ func TestThreadComponentsHappyPath(t *testing.T) {
 	}
 	if replySum == nil || replySum.InReplyTo != r1.MessageID {
 		t.Fatalf("reply summary missing/unchecked: %+v", replySum)
+	}
+
+	// Addendum-2 equivalence: mid/leaf member access == root access.
+	fromRoot, err := s.ThreadByRoot("a@t", r1.MessageID)
+	if err != nil {
+		t.Fatalf("by root: %v", err)
+	}
+	if fromRoot.Root != view.Root || fromRoot.Count != view.Count || len(fromRoot.Messages) != len(view.Messages) {
+		t.Fatalf("member access != root access: %+v vs %+v", fromRoot, view)
+	}
+	for i := range fromRoot.Messages {
+		if fromRoot.Messages[i].ID != view.Messages[i].ID {
+			t.Fatalf("member/root views diverge at %d", i)
+		}
+	}
+	// A singleton (no refs either way) is its own one-node tree.
+	solo2, err := s.ThreadByRoot("a@t", soloID)
+	if err != nil || solo2.Count != 1 || solo2.Root != soloID {
+		t.Fatalf("singleton view = %+v err=%v", solo2, err)
 	}
 
 	// Unknown / invisible id.
