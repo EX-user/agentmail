@@ -508,14 +508,14 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
   }
 
-  // Thread rendering (v0.6.16 ①): "in reply to <parent>" row above the
-  // letter body — parent subject loads on demand; click reopens the parent
-  // in this pane (same loader, so visibility rules stay identical).
-  // Reply-reference row (v0.6.16 + superior adjustment): rendered in the
+  // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row above the
+  // letter body; click reopens the parent in this pane (same loader, so
+  // visibility rules stay identical).
+  // Reply-reference row (v0.6.18 superior adjustment): rendered in the
   // field zone as a normal .detail-row — same visual treatment as
-  // From/To/Subject, not a body-area exception. Parent subject is fetched
-  // async (the summary does not carry it); the row appears when the current
-  // message has in_reply_to.
+  // From/To/Subject, not a body-area exception. Shows the raw parent id
+  // only (no async subject fetch since f3e1511); the row appears when the
+  // current message has in_reply_to.
   function wireReplyRef(detail, msg, reopen) {
     if (!msg || !msg.in_reply_to) return;
     var row = document.createElement("div");
