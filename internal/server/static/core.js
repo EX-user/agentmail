@@ -14,6 +14,26 @@ export function setUnauthorizedHandler(fn) { unauthorizedHandler = fn; }
 
 // ---- DOM helpers ----
 
+export function fmtTime(unixOrIso) {
+  if (!unixOrIso) return "\u2014";
+  let d;
+  if (typeof unixOrIso === "number") d = new Date(unixOrIso * 1000);
+  else d = new Date(unixOrIso);
+  if (isNaN(d.getTime())) return String(unixOrIso);
+  return d.toLocaleString();
+}
+
+export function fmtBytes(n) {
+  if (typeof n !== "number" || isNaN(n) || n < 0) return null;
+  if (n < 1024) return n + " B";
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n;
+  for (let i = 0; i < units.length; i++) {
+    v = v / 1024;
+    if (v < 1024 || i === units.length - 1) return (Math.round(v * 10) / 10) + " " + units[i];
+  }
+}
+
 export function $(sel, root) { return (root || document).querySelector(sel); }
 export function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
