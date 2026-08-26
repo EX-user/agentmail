@@ -567,7 +567,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id) + "</code></div>" +
+        '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id || m.message_id) + "</code></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
         '<div class="row" style="margin-top:12px;">' +
         '<button class="row-action" id="btn-mail-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
@@ -730,7 +730,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       (msg.cc && msg.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(msg.cc.join(", ")) + "</div>" : "") +
       '<div class="detail-row"><b>Subject:</b> ' + esc(msg.subject || "") + "</div>" +
       '<div class="detail-row"><b>Date:</b> ' + fmtTime(msg.received_at) + "</div>" +
-      '<div class="detail-row"><b>ID:</b> <code>' + esc(msg.id) + "</code></div>" +
+      '<div class="detail-row"><b>ID:</b> <code>' + esc(msg.id || msg.message_id) + "</code></div>" +
       (atts.length
         ? '<div class="attach-list">' + atts.map(function (a) {
             return '<div class="attach-card attach-card-file">' +
