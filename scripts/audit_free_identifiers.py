@@ -61,7 +61,7 @@ arrayBuffer headers ok url method credentials mode cache signal""".split())
 # event-detail object key; `i`/`o` = i18n placeholder-var object keys.
 NOISE_BASELINE = set("""account active add btn c card cls dir domain el f files fn idx
 k loadAudit loadInbox me msg n panel path pick prefs preview pv s sel tab ts toggle
-unread v days folder i o ATTACH_IMAGE_RE""".split())
+unread v days folder i o""".split())
 
 
 def strip_noise(src):
