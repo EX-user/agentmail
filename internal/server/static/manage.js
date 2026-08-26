@@ -520,8 +520,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     link.textContent = t("act.repliedFrom") + " …";
     row.appendChild(document.createTextNode("↩ "));
     row.appendChild(link);
+    // Field-zone placement (superior adjustment): the row belongs with
+    // From/To/Subject — insert before the <hr> that opens the body area.
     var host = detail.querySelector(".body");
-    if (host && host.parentNode) host.parentNode.insertBefore(row, host);
+    var mark = host ? host.previousElementSibling : null;
+    if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
+    else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
     else detail.appendChild(row);
     api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
       link.textContent = t("act.repliedFrom") + " ‹" + ((p && p.subject) || msg.in_reply_to) + "›";
