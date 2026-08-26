@@ -31,7 +31,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
     var wrap = document.getElementById("compose-inreplyto-input-wrap");
-    var addBtn = document.getElementById("compose-inreplyto-add");
     var toggle = document.getElementById("btn-toggle-irt");
     if (!row || !chip) return;
     row.classList.toggle("hidden", !(composeInReplyTo || irtOpen));
@@ -42,7 +41,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     // Input (and its set button) hides while an anchor is set.
     var inp = !!(composeInReplyTo);
     if (wrap) wrap.classList.toggle("hidden", inp);
-    if (addBtn) addBtn.classList.toggle("hidden", inp);
   }
 
   // Manual anchor entry, Cc-autocomplete style. Typing filters the recent
@@ -105,8 +103,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     input.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter" && dd.classList.contains("hidden")) {
         ev.preventDefault();
-        var btn = document.getElementById("compose-inreplyto-add");
-        if (btn) btn.click();
+        var v = (input.value || "").trim();
+        if (v) { composeInReplyTo = v; renderInReplyTo(); input.value = ""; }
       }
     });
   }
@@ -115,12 +113,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   function wireInReplyTo() {
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
-    var addBtn = document.getElementById("compose-inreplyto-add");
-    if (addBtn) addBtn.addEventListener("click", function () {
-      var input = document.getElementById("compose-inreplyto-input");
-      var v = (input && input.value || "").trim();
-      if (v) { composeInReplyTo = v; renderInReplyTo(); if (input) input.value = ""; }
-    });
     if (chip) chip.addEventListener("click", function () {
       if (!composeInReplyTo) return;
       loadComposeThread().then(function () {
