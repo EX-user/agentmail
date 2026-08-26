@@ -187,6 +187,26 @@ func (s *Store) ReadAllAccountsMessages(folder string, limit int) ([]MessageSumm
 	total := 0
 	err := s.db.View(func(tx *bolt.Tx) error {
 		mb := tx.Bucket(bMessages)
+		ub := tx.Bucket(bUnread)
+		ab := tx.Bucket(bAccounts)
+		uuidCache := map[string]string{} // address -> uuid, resolved lazily
+		resolve := func(addr string) string {
+			a := strings.ToLower(strings.TrimSpace(addr))
+			if u, ok := uuidCache[a]; ok {
+				return u
+			}
+			u := ""
+			if ab != nil {
+				if val := ab.Get([]byte(a)); val != nil {
+					var acc Account
+					if json.Unmarshal(val, &acc) == nil {
+						u = acc.UUID
+					}
+				}
+			}
+			uuidCache[a] = u
+			return u
+		}
 		c := mb.Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			var m Message
@@ -205,7 +225,21 @@ func (s *Store) ReadAllAccountsMessages(folder string, limit int) ([]MessageSumm
 			}
 			total++
 			if len(out) < limit {
-				out = append(out, summarize(m))
+				ms := summarize(m)
+				// Unread in the all-accounts view = ANY recipient (To+CC)
+				// still has an unread marker — the admin is not a recipient,
+				// so the meaningful signal is whether an owner has read it
+				// (superior report: fresh mail showed as read here while
+				// the owner-side state was unread).
+				if ub != nil {
+					for _, rcpt := range append(append([]string{}, m.To...), m.CC...) {
+						if u := resolve(rcpt); u != "" && ub.Get(indexKey(u, m.ID)) != nil {
+							ms.Unread = true
+							break
+						}
+					}
+				}
+				out = append(out, ms)
 			}
 		}
 		return nil
