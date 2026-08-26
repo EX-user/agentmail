@@ -547,7 +547,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       const isRegular = cur && !cur.is_admin;
       const threadRes = isRegular
         ? await api("/api/thread?with=" + encodeURIComponent(to) + "&limit=50")
-        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + systemDomain) +
+        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + composeDomain) +
             "&with=" + encodeURIComponent(to) + "&limit=50");
       const all = (threadRes.messages || []).map(function (m) {
         return m.dir === "out"
@@ -674,6 +674,262 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     }
   }
 
+
+  // Attachment rendering for the thread view (v0.6.17 P0): the helpers
+  // lived in manage.js after car2 — cross-module closure, invisible here.
+  // Module-local copy; REUSE CANDIDATE for the deferred unification train
+  // (superior ruling: splits first, reuse consolidation later).
+  function attachIsImage(a) {
+    return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
+  }
+
+  // Audio attachments (v0.5.12): inline <audio controls> preview, same
+  // authenticated-blob + MIME-rebuild pattern as images.
+  const ATTACH_AUDIO_RE = /\.(mp3|wav|ogg|m4a|webm)$/i;
+  function attachIsAudio(a) {
+    return !!(a && a.filename && ATTACH_AUDIO_RE.test(a.filename));
+  }
+
+  // attachTTLBadge renders the remaining validity under the file TTL
+  // (v0.5.3): "约 N 天后过期" / "已过期" once past. Absent expires_at
+  // (older server) shows nothing.
+  function attachTTLBadge(a) {
+    if (!a || !a.expires_at) return "";
+    const exp = new Date(typeof a.expires_at === "number" ? a.expires_at * 1000 : a.expires_at);
+    if (isNaN(exp.getTime())) return "";
+    const days = Math.floor((exp.getTime() - Date.now()) / 86400000);
+    const txt = days < 0 ? t("attach.expired") : t("attach.expiresIn", { n: days });
+    return '<span class="attach-ttl' + (days < 0 ? " attach-ttl-over" : "") + '">' + txt + "</span>";
+  }
+
+  function attachmentCards(m) {
+    const list = (m && m.attachments) || [];
+    if (!list.length) return "";
+    return '<div class="attach-list">' + list.map(function (a, i) {
+      const isImg = attachIsImage(a), isAud = attachIsAudio(a);
+      const preview = (isImg || isAud) ? '<div class="attach-preview" data-pv="' + i + '"></div>' : "";
+      return '<div class="attach-card attach-card-' + (isImg ? "img" : isAud ? "audio" : "file") + '">' +
+        '<span class="attach-clip">📎</span>' +
+        '<span class="attach-name">' + esc(a.filename) + "</span>" +
+        '<span class="attach-size">' + esc(fmtBytes(a.size)) + "</span>" +
+        attachTTLBadge(a) +
+        '<button class="row-action" data-dl="' + i + '">Download</button>' +
+        preview +
+        "</div>";
+    }).join("") + "</div>";
+  }
+
+  // openImageLightbox (feedback): full-screen view for attachment
+  // previews. Backdrop click or Esc closes. The image itself is NOT a
+  // download trigger (superior feedback: accidental downloads) — an
+  // explicit download button sits at the bottom and carries THIS image's
+  // url/filename (the old second-click hack always grabbed the first
+  // image's card button, wrong for multi-image messages).
+  function openImageLightbox(url, filename) {
+    closeImageLightbox();
+    const lb = document.createElement("div");
+    lb.className = "img-lightbox";
+    const im = document.createElement("img");
+    im.src = url;
+    im.alt = filename || "";
+    im.addEventListener("click", function (ev) {
+      // Swallow so a click on the picture doesn't close or download.
+      ev.stopPropagation();
+    });
+    lb.appendChild(im);
+    const dl = document.createElement("button");
+    dl.className = "img-lightbox-dl";
+    dl.type = "button";
+    dl.textContent = t("attach.download");
+    dl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "attachment";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    lb.appendChild(dl);
+    lb.addEventListener("click", closeImageLightbox);
+    document.addEventListener("keydown", closeImageLightbox);
+    document.body.appendChild(lb);
+  }
+  function closeImageLightbox() {
+    $$(".img-lightbox").forEach(function (el) { el.remove(); });
+    document.removeEventListener("keydown", closeImageLightbox);
+  }
+
+  // Audio players on the page form a sequential queue (feedback): starting
+  // one pauses the rest; autoplay (when enabled) walks the queue in order.
+  let audioPlayers = [];
+  // Hydration fetches resolve out of order, so players REGISTER out of
+  // order — the queue once played in fetch-completion order, i.e. random
+  // (superior bug report). Players now carry their attachment index and
+  // insert sorted; autoplay only starts once every expected player is in
+  // (or the fallback timer fires, covering failed fetches).
+  let audioExpected = 0;
+  function planAudioAutostart(expected) {
+    audioExpected = expected;
+    setTimeout(tryAudioAutostart, 1500);
+  }
+  function tryAudioAutostart() {
+    if (!(composePrefs && composePrefs.audio_autoplay === true)) return;
+    if (audioPlayers.some(function (p) { return p.autoplaying || !p.paused; })) return;
+    const first = audioPlayers[0];
+    if (!first) return;
+    first.autoplaying = true;
+    first.play().catch(function () { first.autoplaying = false; });
+  }
+  // Detached <audio> keeps playing after its detail pane re-renders —
+  // pause and drop the queue whenever a message view is (re)opened.
+  function resetAudioPlayers() {
+    audioPlayers.forEach(function (p) { try { p.pause(); } catch (_) {} });
+    audioPlayers = [];
+    audioExpected = 0;
+  }
+
+  function registerAudioPlayer(au, idx) {
+    au.dataset.pvi = String(idx);
+    if (typeof idx === "number") {
+      let i = 0;
+      while (i < audioPlayers.length && (+audioPlayers[i].dataset.pvi || 0) < idx) i++;
+      audioPlayers.splice(i, 0, au);
+    } else {
+      audioPlayers.push(au);
+    }
+    au.addEventListener("play", function () {
+      audioPlayers.forEach(function (other) {
+        if (other !== au && !other.paused) other.pause();
+      });
+    });
+    au.addEventListener("ended", function () {
+      if (!(composePrefs && composePrefs.audio_autoplay === true)) return;
+      var next = null;
+      for (var i = 0; i < audioPlayers.length; i++) {
+        if (audioPlayers[i] === au) { next = audioPlayers[i + 1] || null; break; }
+      }
+      if (next) next.play().catch(function () {});
+    });
+    // Start only when the full queue is present — guarantees attachment
+    // order even when blob fetches complete out of sequence.
+    if (audioPlayers.length >= audioExpected) tryAudioAutostart();
+  }
+
+  // hydrateAttachmentPreviews loads image blobs (authenticated) into the
+  // preview holders. Clicking a preview triggers the same download flow.
+  function hydrateAttachmentPreviews(root, m) {
+    const list = (m && m.attachments) || [];
+    // New render = new set of players; drop stale references.
+    audioPlayers = audioPlayers.filter(function (p) { return document.contains(p); });
+    // Plan ordered autoplay: only start once every audio attachment has a
+    // player (fetches resolve out of order — see registerAudioPlayer).
+    planAudioAutostart(list.filter(function (a) { return attachIsAudio(a); }).length);
+    $$(".attach-preview", root).forEach(async function (holder) {
+      const a = list[+holder.dataset.pv];
+      if (!a) return;
+      // Preferences (v0.6): image previews can be disabled; audio
+      // autoplay honors the account preference.
+      if (attachIsImage(a) && composePrefs && composePrefs.image_preview === false) { holder.remove(); return; }
+      try {
+        const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
+          headers: { Authorization: basicAuth() },
+        });
+        if (!res.ok) throw new Error(res.status);
+        // The download endpoint serves everything as octet-stream (correct
+        // for downloads); an <img> refuses that MIME even via objectURL.
+        // Rebuild the blob with the extension-mapped image type.
+        const IMG_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+        const AUDIO_MIME = { mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4", webm: "audio/webm" };
+        const ext = (/[.]([a-z0-9]+)$/i.exec(a.filename || "") || [])[1];
+        const isAudio = attachIsAudio(a);
+        const mime = (isAudio ? AUDIO_MIME : IMG_MIME)[(ext || "").toLowerCase()];
+        if (!mime) throw new Error(isAudio ? "unsupported audio" : "not an image");
+        const blob = new Blob([await res.arrayBuffer()], { type: mime });
+        const url = URL.createObjectURL(blob);
+        if (isAudio) {
+          // Inline player (v0.5.12). Autoplay is a QUEUE (feedback): multiple
+          // audios in one message play sequentially, never simultaneously;
+          // manual play pauses the others. The first one starts once ready.
+          const au = document.createElement("audio");
+          au.controls = true;
+          au.preload = "metadata";
+          au.src = url;
+          au.style.cssText = "display:block; width:100%; height:40px; margin-top:6px;";
+          holder.appendChild(au);
+          registerAudioPlayer(au, +holder.dataset.pv);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
+          return;
+        }
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = a.filename;
+        img.title = t("attach.clickFullscreen");
+        // Click = fullscreen view (feedback); download stays on the card's
+        // Download button (and on a second click inside the lightbox).
+        img.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          openImageLightbox(url, a.filename);
+        });
+        holder.appendChild(img);
+        // The detail pane re-renders on message switch; drop the URL then.
+        setTimeout(function () { URL.revokeObjectURL(url); }, 10 * 60 * 1000);
+      } catch (_) {
+        // Silent fallback: leave the card as a plain download row.
+        holder.remove();
+      }
+    });
+  }
+
+  function wireAttachmentDownloads(root, m) {
+    const list = (m && m.attachments) || [];
+    $$(".attach-card [data-dl]", root).forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        const a = list[+btn.dataset.dl];
+        if (!a) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
+            headers: { Authorization: basicAuth() },
+          });
+          if (!res.ok) throw new Error(res.status + " " + res.statusText);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = a.filename || "attachment";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+        } catch (e) {
+          toast(t("attach.dlFailed") + e.message, "error");
+        }
+        btn.disabled = false;
+      });
+    });
+  }
+
+  // mailStepNav steps through the loaded Messages list (own or subordinate
+  // view alike); boundaries toast, matching the inbox pill's behavior minus
+  // auto paging (the mail list loads in one shot per account/folder).
+
+
+  // Module-local prefs + domain (v0.6.17 P0): same self-fetch pattern as
+  // manage.js — the entry's closures are not visible across modules.
+  let composePrefs = null;
+  let composeDomain = "agentmail.local";
+  function ensureComposeMeta() {
+    var p1 = api("/api/profile/self", { keepSession: true }).then(function (p) {
+      composePrefs = (p && p.prefs) || p || {};
+    }, function () {});
+    var p2 = api("/api/status").then(function (st) {
+      if (st && st.domain) composeDomain = st.domain;
+    }, function () {});
+    return Promise.all([p1, p2]);
+  }
+  ensureComposeMeta();
+  document.addEventListener("manage:reset", function () { composePrefs = null; ensureComposeMeta(); });
 
   // ---- cross-domain event wiring (protocol surface of this module) ----
   document.addEventListener("compose:to", function (ev) {

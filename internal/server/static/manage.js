@@ -355,7 +355,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     setTimeout(tryAudioAutostart, 1500);
   }
   function tryAudioAutostart() {
-    if (!(userPrefs && userPrefs.audio_autoplay === true)) return;
+    if (!(mgmtPrefs && mgmtPrefs.audio_autoplay === true)) return;
     if (audioPlayers.some(function (p) { return p.autoplaying || !p.paused; })) return;
     const first = audioPlayers[0];
     if (!first) return;
@@ -385,7 +385,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       });
     });
     au.addEventListener("ended", function () {
-      if (!(userPrefs && userPrefs.audio_autoplay === true)) return;
+      if (!(mgmtPrefs && mgmtPrefs.audio_autoplay === true)) return;
       var next = null;
       for (var i = 0; i < audioPlayers.length; i++) {
         if (audioPlayers[i] === au) { next = audioPlayers[i + 1] || null; break; }
@@ -411,7 +411,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       if (!a) return;
       // Preferences (v0.6): image previews can be disabled; audio
       // autoplay honors the account preference.
-      if (attachIsImage(a) && userPrefs && userPrefs.image_preview === false) { holder.remove(); return; }
+      if (attachIsImage(a) && mgmtPrefs && mgmtPrefs.image_preview === false) { holder.remove(); return; }
       try {
         const res = await fetch("/api/files/" + encodeURIComponent(a.id) + "/download?code=" + encodeURIComponent(a.access_code), {
           headers: { Authorization: basicAuth() },
@@ -520,8 +520,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     link.textContent = t("act.repliedFrom") + " …";
     row.appendChild(document.createTextNode("↩ "));
     row.appendChild(link);
+    // Field-zone placement (superior adjustment): the row belongs with
+    // From/To/Subject — insert before the <hr> that opens the body area.
     var host = detail.querySelector(".body");
-    if (host && host.parentNode) host.parentNode.insertBefore(row, host);
+    var mark = host ? host.previousElementSibling : null;
+    if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
+    else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
     else detail.appendChild(row);
     api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
       link.textContent = t("act.repliedFrom") + " ‹" + ((p && p.subject) || msg.in_reply_to) + "›";
@@ -944,8 +948,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       status.textContent = msgs.length + " on this page · " + total + " total" + (unreadCount ? " · " + unreadCount + " unread" : "");
       // Direct write with sequencing: supersede any in-flight poll so a
       // stale "unread" response cannot re-light the dot after this point.
-      badgeSeq++;
-      setInboxBadge(unreadCount);
+      document.dispatchEvent(new CustomEvent("badge:refresh"));
       // Avoid the empty detail pane (feedback): preload the newest message.
       // Desktop shows it right away; mobile stays on the List tab (the
       // detail is preloaded behind it and opens on tap as usual).
@@ -1140,8 +1143,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     // GRAY = idle / never. Windows are user prefs (hours), defaults
     // strong=24, weak=48.
     var now = Date.now() / 1000;
-    var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
-    var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
+    var strongH = (mgmtPrefs && mgmtPrefs.livenessStrongHours) || 24;
+    var weakH = (mgmtPrefs && mgmtPrefs.livenessWeakHours) || 48;
     var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
     var read = s.last_read_at || 0;
     if (traffic && now - traffic <= strongH * 3600) return "strong";
@@ -1452,8 +1455,21 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   }
 
 
+  // Module-local prefs (v0.6.17 P0): car2 left reads of the entry's
+  // userPrefs closure — modules cannot see it. Self-fetch once per login
+  // (same source of truth: the account profile), reset with the session.
+  let mgmtPrefs = null;
+  function ensureMgmtPrefs() {
+    if (mgmtPrefs) return Promise.resolve(mgmtPrefs);
+    return api("/api/profile/self", { keepSession: true }).then(function (p) {
+      mgmtPrefs = (p && p.prefs) || p || {};
+      return mgmtPrefs;
+    }, function () { return null; });
+  }
+
   // ---- cross-domain event wiring (protocol surface of this module) ----
   document.addEventListener("manage:entered", function () {
+    ensureMgmtPrefs();
     if (typeof ensureAccountOptions === "function") ensureAccountOptions();
     // Re-kick: the mgmt segment may have restored "overview" at boot before
     // a session existed (original activateTab("mail") branch semantics).
@@ -1465,6 +1481,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     if (mgmtOverviewLoaded) loadMgmtOverview();
   });
   document.addEventListener("manage:reset", function () {
+    mgmtPrefs = null;
     subsCache = null;
     mgmtOverviewLoaded = false;
     var mgmtBox = $("#mgmt-overview");

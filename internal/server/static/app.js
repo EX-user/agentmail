@@ -412,12 +412,13 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
     tbody.textContent = "";
     // Subordinate management UI lives in Preferences since v0.6; Accounts
     // still needs fresh edges for the sub badges (and read-only rows).
-    await requestSubs(true).catch(function () {});
+    var subs = await requestSubs(true).catch(function () { return null; });
+    var subsList = (subs && subs.subordinates) || [];
     // Rows match the 5-column header (Address, Tags, Signature, Created,
     // Actions) so the Change-password button lands in the Actions column
     // instead of drifting under Tags.
     var subAddrs = {};
-    if (subsCache) (subsCache.subordinates || []).forEach(function (e) { subAddrs[e.address] = 1; });
+    subsList.forEach(function (e) { subAddrs[e.address] = 1; });
     // Own-row completeness (feedback: signature missing, tags thin):
     // pull the own profile for the signature and listed/visible badge.
     var ownSig = "", ownVisible = null;
@@ -453,7 +454,7 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
     // phones keep the approved container card (agentreg-row below) and hide
     // the PC rows via CSS.
     var subZone = "", pcSubRows = "";
-    (subsCache ? subsCache.subordinates || [] : []).forEach(function (e) {
+    subsList.forEach(function (e) {
       var sig = e.signature || listedSig[e.address] || "";
       var badge = '<span class="badge-sub">' + t("subs.badge") + "</span>" +
         (listedSet[e.address] ? ' <span class="badge-listed">listed</span>' : "");
