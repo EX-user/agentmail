@@ -35,11 +35,39 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     if (!btn || !row) return;
     btn.addEventListener("click", function () {
       row.classList.toggle("hidden");
-      var input = document.getElementById("compose-inreplyto-input");
-      if (!row.classList.contains("hidden") && input) input.focus();
+      var sel = document.getElementById("compose-inreplyto-pick");
+      if (!row.classList.contains("hidden")) {
+        if (sel) fillIrtPicker();
+      }
     });
   }
   wireIrtToggle();
+
+  // Dropdown of recent messages (inbox + sent, newest first). Entries show
+  // subject + direction + short id so duplicates are distinguishable;
+  // selecting one puts the message id into the input.
+  function fillIrtPicker() {
+    var sel = document.getElementById("compose-inreplyto-pick");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— ' + t("compose.irtPick") + ' —</option>';
+    var cur = getSession();
+    if (!cur) return;
+    Promise.all([
+      api("/api/inbox?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; }),
+      api("/api/sent?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; })
+    ]).then(function (res) {
+      var items = [];
+      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "←", ts: m.received_at || 0 }); });
+      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "→", ts: m.received_at || 0 }); });
+      items.sort(function (a, b) { return b.ts - a.ts; });
+      items.slice(0, 30).forEach(function (it) {
+        var opt = document.createElement("option");
+        opt.value = it.id;
+        opt.textContent = it.dir + " " + it.subj + "  [" + String(it.id).slice(-6) + "]";
+        sel.appendChild(opt);
+      });
+    });
+  }
   function wireInReplyTo() {
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
@@ -48,6 +76,11 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       var input = document.getElementById("compose-inreplyto-input");
       var v = (input && input.value || "").trim();
       if (v) { composeInReplyTo = v; renderInReplyTo(); if (input) input.value = ""; }
+    });
+    var pick = document.getElementById("compose-inreplyto-pick");
+    if (pick) pick.addEventListener("change", function () {
+      var input = document.getElementById("compose-inreplyto-input");
+      if (pick.value && input) { input.value = pick.value; input.focus(); }
     });
     if (chip) chip.addEventListener("click", function () {
       if (!composeInReplyTo) return;
