@@ -1221,9 +1221,36 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     // volume-scaled wedges, shown on BOTH desktop and mobile, inside the
     // Overview view). The container is rendered by renderMgmtGraph after
     // this HTML lands in the DOM.
+    // Floating controls (superior request): mapping linear/log, number
+    // visibility, statistics range 7d/30d/all. State persists locally.
     box += '<h4 class="mgmt-graph-title">' + t("mgmt.graphTitle") + "</h4>" +
+      '<div class="mgmt-graph-controls">' +
+      '<button type="button" class="row-action" id="gg-map"></button>' +
+      '<button type="button" class="row-action" id="gg-nums"></button>' +
+      '<button type="button" class="row-action" id="gg-days"></button>' +
+      "</div>" +
       '<div id="mgmt-graph" class="mgmt-graph"></div>';
     return box;
+  }
+
+  // Graph display preferences (superior request): persisted so a reload
+  // keeps the chosen mapping / numbers / range.
+  var graphPrefs = { map: "linear", nums: true, days: 7 };
+  try {
+    var gp = JSON.parse(localStorage.getItem("mgmtGraphPrefs") || "{}");
+    if (gp.map === "log" || gp.map === "linear") graphPrefs.map = gp.map;
+    if (typeof gp.nums === "boolean") graphPrefs.nums = gp.nums;
+    if (gp.days === 7 || gp.days === 30 || gp.days === 0) graphPrefs.days = gp.days;
+  } catch (_) {}
+  function saveGraphPrefs() {
+    try { localStorage.setItem("mgmtGraphPrefs", JSON.stringify(graphPrefs)); } catch (_) {}
+  }
+  function windowLabel(days) { return days === 0 ? "all" : days + "d"; }
+  function syncGraphControlLabels() {
+    var b1 = $("#gg-map"), b2 = $("#gg-nums"), b3 = $("#gg-days");
+    if (b1) b1.textContent = t("mgmt.gMap") + (graphPrefs.map === "log" ? t("mgmt.mapLog") : t("mgmt.mapLinear"));
+    if (b2) b2.textContent = t("mgmt.gNums") + (graphPrefs.nums ? t("mgmt.on") : t("mgmt.off"));
+    if (b3) b3.textContent = windowLabel(graphPrefs.days);
   }
 
   function shortAddr(a) {
@@ -1271,35 +1298,38 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         var bg = isMe ? "#dbeafe"
           : kind === "sub" ? (st === "strong" ? "#dcf2e4" : st === "weak" ? "#f7edd4" : "#eceff3")
           : "#f2f4f7";
+        var wl = windowLabel(graphPrefs.days);
         return {
           id: n.address, label: (isMe ? t("mgmt.meLabel") : shortAddr(n.address)) +
-            (kind !== "external" ? "\n7d " + (n.volume || 0) : ""),
+            (kind !== "external" ? "\n" + wl + " " + (n.volume || 0) : ""),
           shape: "box", borderWidth: isMe ? 2 : 1,
           color: { background: bg, border: border },
           font: { face: "ui-monospace, Consolas, monospace", size: 11, color: "#23303f" },
           value: Math.max(1, n.volume || 1), scaling: { min: 8, max: 26, label: { enabled: false } },
-          title: shortAddr(n.address) + (kind !== "external" ? " · 7d " + (n.volume || 0) : ""),
+          title: shortAddr(n.address) + (kind !== "external" ? " · " + wl + " " + (n.volume || 0) : ""),
           _kind: kind
         };
       }));
       var ve = [];
       // Data-adaptive normalization: every scale is RELATIVE to the largest
-      // count in the current graph. LINEAR mapping (superior request,
-      // preview): strength maps straight to width/alpha — the busiest pair
-      // reads full, quiet pairs thin and faint, with proportional (not
-      // log-compressed) contrast between connection strengths.
+      // count in the current graph. Mapping mode is the floating button's
+      // choice: LINEAR (default) maps strength straight to width/alpha;
+      // LOG compresses contrast so a wide range stays readable.
       var maxCount = 1;
       edges.forEach(function (e) {
         maxCount = Math.max(maxCount, e.a_to_b || 0, e.b_to_a || 0);
       });
+      var logDen = Math.log(1 + maxCount);
       function graphScale(count) {
-        return (count || 0) / maxCount;
+        var c = count || 0;
+        if (graphPrefs.map === "log") return Math.log(1 + c) / logDen;
+        return c / maxCount;
       }
       edges.forEach(function (e) {
         var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
         var last = e.last_at ? "\n" + fmtTime(e.last_at) : "";
         if (!ab && !ba) {
-          ve.push({ from: e.a, to: e.b, label: "—" + last, dashes: true,
+          ve.push({ from: e.a, to: e.b, label: (graphPrefs.nums ? "—" : "") + last, dashes: true,
             color: { color: "#c4ccd6" }, width: 0.8, font: { size: 9, face: "Consolas" },
             smooth: { type: "curvedCW", roundness: 0.16 }, _sub: pickGraphSub(e, myAddr) });
           return;
@@ -1314,15 +1344,16 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         // v0.6.6: alpha rides the same normalization as width — light
         // traffic reads thin AND faint. Label = count only; the
         // last-activity time moved to the hover tooltip (it occluded the
-        // graph at real volumes).
+        // graph at real volumes). Number color/opacity rides the SAME k
+        // as the arrow (superior request); the numbers button hides them.
         var alpha = 0.15 + 0.85 * k;
         return {
-          from: from, to: to, label: String(count),
+          from: from, to: to, label: graphPrefs.nums ? String(count) : undefined,
           title: count + " · " + last,
           arrows: { to: { enabled: true, scaleFactor: 0.3 + 0.7 * k } },
           width: 0.3 + 2.5 * k,
           color: { color: "rgba(91,107,125," + alpha.toFixed(2) + ")", highlight: "#3b82f6" },
-          font: { size: 9, face: "Consolas" },
+          font: { size: 9, face: "Consolas", color: "rgba(35,48,63," + Math.min(1, 0.35 + 0.65 * k).toFixed(2) + ")" },
           smooth: { type: "curvedCW", roundness: 0.2 },
           _sub: pickGraphSub(orig, myAddr)
         };
@@ -1383,18 +1414,44 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   }
 
   var mgmtOverviewLoaded = false;
+  var mgmtOverviewData = null; // last payload — lets the map/nums buttons
+  // re-render without a server round-trip (only the range button refetches).
   async function loadMgmtOverview() {
     var box = $("#mgmt-overview");
     if (!box) return;
     box.textContent = t("common.loading");
     try {
-      var d = await api("/api/mgmt/subs-overview", { keepSession: true });
+      var d = await api("/api/mgmt/subs-overview?days=" + graphPrefs.days, { keepSession: true });
+      mgmtOverviewData = d;
       box.innerHTML = mgmtOverviewHtml(d);
       mgmtOverviewLoaded = true;
+      syncGraphControlLabels();
+      wireGraphControls();
       renderMgmtGraph(d && d.graph, (d && d.subs) || []);
     } catch (e) {
       box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
     }
+  }
+
+  // Floating graph controls: one click cycles the value, persists, and
+  // re-renders. map/nums reuse the cached payload; days refetches.
+  function wireGraphControls() {
+    var b1 = $("#gg-map"), b2 = $("#gg-nums"), b3 = $("#gg-days");
+    if (b1) b1.addEventListener("click", function () {
+      graphPrefs.map = graphPrefs.map === "linear" ? "log" : "linear";
+      saveGraphPrefs(); syncGraphControlLabels();
+      if (mgmtOverviewData) renderMgmtGraph(mgmtOverviewData.graph, mgmtOverviewData.subs || []);
+    });
+    if (b2) b2.addEventListener("click", function () {
+      graphPrefs.nums = !graphPrefs.nums;
+      saveGraphPrefs(); syncGraphControlLabels();
+      if (mgmtOverviewData) renderMgmtGraph(mgmtOverviewData.graph, mgmtOverviewData.subs || []);
+    });
+    if (b3) b3.addEventListener("click", function () {
+      graphPrefs.days = graphPrefs.days === 7 ? 30 : (graphPrefs.days === 30 ? 0 : 7);
+      saveGraphPrefs();
+      loadMgmtOverview();
+    });
   }
 
   (function wireMgmt() {

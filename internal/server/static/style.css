@@ -1309,6 +1309,17 @@ nav .tab { flex: 0 0 auto; }
   font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--muted); margin: 18px 0 8px;
 }
+/* Floating graph controls (superior request): one row of pill buttons
+   right above the canvas; each click cycles its value. */
+.mgmt-graph-controls {
+  display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px;
+}
+.mgmt-graph-controls .row-action {
+  font-size: 11px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  cursor: pointer;
+}
+.mgmt-graph-controls .row-action:hover { border-color: var(--accent, #3b82f6); }
 .mgmt-graph {
   /* +40% vertical (superior feedback): 380 -> 532 PC, 300 -> 420 phones. */
   height: 532px; border: 1px solid var(--border); border-radius: 8px;
