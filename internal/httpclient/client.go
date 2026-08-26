@@ -68,6 +68,7 @@ type MessageSummary struct {
 	From       string   `json:"from"`
 	To         []string `json:"to"`
 	CC         []string `json:"cc"`
+	InReplyTo  string   `json:"in_reply_to"`
 	Subject    string   `json:"subject"`
 	Preview    string   `json:"preview"`
 	ReceivedAt int64    `json:"received_at"`
@@ -92,6 +93,7 @@ type MessageResponse struct {
 	From      string `json:"from"`
 	To        []string `json:"to"`
 	CC        []string `json:"cc"`
+	InReplyTo string `json:"in_reply_to"`
 	Subject   string `json:"subject"`
 	Body      string `json:"body"`
 	ReceivedAt int64 `json:"received_at"`
@@ -123,12 +125,15 @@ func (c *Client) VerifyPassword(address, password string) error {
 // to recipients. attachments references previously uploaded file IDs
 // (server validates they belong to the sender and grants recipients
 // download access).
-func (c *Client) Send(authUser, authPass string, to []string, cc []string, subject, body string, public bool, attachments []string) (*SendResponse, error) {
+func (c *Client) Send(authUser, authPass string, to []string, cc []string, subject, body string, public bool, attachments []string, inReplyTo string) (*SendResponse, error) {
 	payload := map[string]any{
 		"to":      to,
 		"subject": subject,
 		"body":    body,
 		"public":  public,
+	}
+	if inReplyTo != "" {
+		payload["in_reply_to"] = inReplyTo
 	}
 	if len(cc) > 0 {
 		payload["cc"] = cc

@@ -12,7 +12,7 @@ func TestSendWithAttachments(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 	res, err := s.SendWithAttachments("a@t", "a", []string{"b@t", "c@t"}, nil, "with file",
-		"see attachment", []string{rec.ID})
+		"see attachment", []string{rec.ID}, "")
 	if err != nil {
 		t.Fatalf("send: %v", err)
 	}
@@ -48,11 +48,11 @@ func TestSendWithAttachmentsOwnership(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 	// b tries to attach a's file.
-	if _, err := s.SendWithAttachments("b@t", "b", []string{"c@t"}, nil, "steal", "x", []string{rec.ID}); err == nil || !strings.Contains(err.Error(), "not owned") {
+	if _, err := s.SendWithAttachments("b@t", "b", []string{"c@t"}, nil, "steal", "x", []string{rec.ID}, ""); err == nil || !strings.Contains(err.Error(), "not owned") {
 		t.Errorf("attaching another account's file must fail, got %v", err)
 	}
 	// Unknown file id.
-	if _, err := s.SendWithAttachments("a@t", "a", []string{"b@t"}, nil, "x", "x", []string{"NOPE"}); err == nil || !strings.Contains(err.Error(), "not found") {
+	if _, err := s.SendWithAttachments("a@t", "a", []string{"b@t"}, nil, "x", "x", []string{"NOPE"}, ""); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("unknown attachment id must fail, got %v", err)
 	}
 	// Nothing was delivered on failure.

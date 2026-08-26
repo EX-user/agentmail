@@ -17,15 +17,22 @@ var ErrMessageNotFound = errors.New("message not found")
 
 // Message is the stored record for one piece of mail.
 type Message struct {
-	ID          string           `json:"id"`           // ULID
-	From        string           `json:"from"`         // sender address
-	To          []string         `json:"to"`           // recipient addresses
-	CC          []string         `json:"cc,omitempty"` // carbon-copy addresses (delivered like To; visible to recipients)
+	ID          string           `json:"id"`                     // ULID
+	From        string           `json:"from"`                   // sender address
+	To          []string         `json:"to"`                     // recipient addresses
+	CC          []string         `json:"cc,omitempty"`           // carbon-copy addresses (delivered like To; visible to recipients)
+	InReplyTo   string           `json:"in_reply_to,omitempty"`  // parent message ULID; empty = standalone root (threads v0.6.15)
 	Subject     string           `json:"subject"`
 	Body        string           `json:"body"`
 	Attachments []AttachmentMeta `json:"attachments,omitempty"` // metadata only; content lives in the file store
 	ReceivedAt  int64            `json:"received_at"`           // unix seconds
 }
+
+// ErrNoSuchParent is returned by the send paths when in_reply_to names a
+// message that does not exist (existence is checked in the same transaction
+// as the send; visibility deliberately is NOT — referencing a parent the
+// sender cannot see is harmless, the read side prunes it).
+var ErrNoSuchParent = errors.New("in_reply_to parent not found")
 
 // AttachmentMeta is the message-side projection of an uploaded file: what
 // the recipient needs to download it. The access code is included because
@@ -58,6 +65,7 @@ type MessageSummary struct {
 	From       string   `json:"from"`
 	To         []string `json:"to"`
 	CC         []string `json:"cc,omitempty"`
+	InReplyTo  string   `json:"in_reply_to,omitempty"` // populated so thread rails render without N+1 detail fetches
 	Subject    string   `json:"subject"`
 	Preview    string   `json:"preview"`
 	ReceivedAt int64    `json:"received_at"`
@@ -79,7 +87,7 @@ type SendResult struct {
 //
 // The whole operation is one bbolt transaction, so a crash mid-send leaves
 // nothing half-delivered.
-func (s *Store) Send(from, fromName string, to []string, cc []string, subject, body string) (*SendResult, error) {
+func (s *Store) Send(from, fromName string, to []string, cc []string, subject, body string, inReplyTo string) (*SendResult, error) {
 	msgID := newULID()
 	now := s.now().Unix()
 	msg := Message{
@@ -87,6 +95,7 @@ func (s *Store) Send(from, fromName string, to []string, cc []string, subject, b
 		From:       from,
 		To:         to,
 		CC:         cc,
+		InReplyTo:  inReplyTo,
 		Subject:    subject,
 		Body:       body,
 		ReceivedAt: now,
@@ -98,6 +107,13 @@ func (s *Store) Send(from, fromName string, to []string, cc []string, subject, b
 
 	delivered := 0
 	err = s.db.Update(func(tx *bolt.Tx) error {
+		// Parent existence is checked in the SAME transaction as the write
+		// (contract: one Get, miss -> 400, prevents fat-fingered chains).
+		// Visibility is deliberately NOT checked — referencing a parent the
+		// sender cannot see is harmless; the read side prunes it.
+		if inReplyTo != "" && tx.Bucket(bMessages).Get([]byte(inReplyTo)) == nil {
+			return ErrNoSuchParent
+		}
 		// Store the message body once.
 		mb := tx.Bucket(bMessages)
 		if existing := mb.Get([]byte(msgID)); existing != nil {
@@ -780,6 +796,7 @@ func summarize(m Message) MessageSummary {
 		From:       m.From,
 		To:         m.To,
 		CC:         m.CC,
+		InReplyTo:  m.InReplyTo,
 		Files:      len(m.Attachments),
 		Subject:    m.Subject,
 		Preview:    preview,

@@ -202,6 +202,7 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		To          []string `json:"to"`
 		CC          []string `json:"cc"`
+		InReplyTo   string   `json:"in_reply_to"`
 		Subject     string   `json:"subject"`
 		Body        string   `json:"body"`
 		Public      bool     `json:"public"`
@@ -209,6 +210,10 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
+		return
+	}
+	if body.InReplyTo != "" && !isULID(body.InReplyTo) {
+		badRequest(w, "in_reply_to must be a 26-char ULID")
 		return
 	}
 	if len(body.To) == 0 {
@@ -246,9 +251,9 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 	if len(body.Attachments) > 0 {
 		// Attachments must reference the sender's own uploaded files; the
 		// store validates ownership and grants recipients download access.
-		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.CC, body.Subject, body.Body, body.Attachments)
+		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.CC, body.Subject, body.Body, body.Attachments, body.InReplyTo)
 	} else {
-		res, err = s.store.Send(from, fromName, body.To, body.CC, body.Subject, body.Body)
+		res, err = s.store.Send(from, fromName, body.To, body.CC, body.Subject, body.Body, body.InReplyTo)
 	}
 	if err != nil {
 		badRequest(w, err.Error())
@@ -351,6 +356,9 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	if len(msg.CC) > 0 {
 		resp["cc"] = msg.CC
 	}
+	if msg.InReplyTo != "" {
+		resp["in_reply_to"] = msg.InReplyTo
+	}
 	// Attachments carry the download metadata (id/filename/size/access
 	// code + expires_at) the recipient needs. Omit the key entirely when
 	// there are none (matches the stored message shape).
@@ -374,9 +382,21 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 //     -> {"peer","messages":[{...MessageSummary, "dir":"in"|"out"}],"count"}
 func (s *Server) handleThread(w http.ResponseWriter, r *http.Request) {
 	who := accountFrom(r.Context())
+	// Two modes on one endpoint (v0.6.15): the original bilateral window
+	// (?with=, Compose depends on it) and the topic connected-component
+	// (?root=). Required params are mutually exclusive.
 	peer := strings.TrimSpace(r.URL.Query().Get("with"))
+	root := strings.TrimSpace(r.URL.Query().Get("root"))
+	if peer != "" && root != "" {
+		badRequest(w, "with and root are mutually exclusive")
+		return
+	}
+	if root != "" {
+		s.handleThreadByRoot(w, r, who, root)
+		return
+	}
 	if peer == "" {
-		badRequest(w, "with is required")
+		badRequest(w, "with or root is required")
 		return
 	}
 	limit := queryInt(r, "limit", 50)
@@ -842,4 +862,86 @@ func (s *Server) handleRegisterTeam(w http.ResponseWriter, r *http.Request) {
 		"owner":   owner,
 		"members": membersRes,
 	})
+}
+
+
+// isULID checks the 26-char Crockford Base32 form (same alphabet the store's
+// encodeULID produces).
+func isULID(s string) bool {
+	if len(s) != 26 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'H') || c == 'J' || c == 'K' ||
+			c == 'M' || (c >= 'N' && c <= 'P') || (c >= 'R' && c <= 'T') || (c >= 'V' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
+}
+
+// handleThreads serves the topic index: maximal in_reply_to connected
+// components over the caller's visible mail, last_at descending, paginated,
+// min_count filter (default 2 = singletons are not topics).
+//
+//	GET /api/threads?limit=50&offset=0&min_count=2
+func (s *Server) handleThreads(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	who := accountFrom(r.Context())
+	limit := queryInt(r, "limit", 50)
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	offset := queryInt(r, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	minCount := queryInt(r, "min_count", 2)
+	if minCount < 1 {
+		minCount = 1
+	}
+	topics, total, err := s.store.Threads(who, limit, offset, minCount)
+	if err != nil {
+		internalError(w, "threads: "+err.Error())
+		return
+	}
+	if topics == nil {
+		topics = []store.ThreadTopic{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"threads": topics,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
+// handleThreadByRoot serves the connected-component view for ?root= (any
+// member ID resolves to its block; the response root is the earliest).
+func (s *Server) handleThreadByRoot(w http.ResponseWriter, r *http.Request, who, root string) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	if !isULID(root) {
+		badRequest(w, "root must be a 26-char ULID")
+		return
+	}
+	view, err := s.store.ThreadByRoot(who, root)
+	if err != nil {
+		if errors.Is(err, store.ErrNoSuchThread) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		internalError(w, "thread by root: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }

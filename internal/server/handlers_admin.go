@@ -145,6 +145,7 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 		"id":          msg.ID,
 		"from":        msg.From,
 		"to":          msg.To,
+		"in_reply_to": msg.InReplyTo,
 		"subject":     msg.Subject,
 		"body":        msg.Body,
 		"received_at": msg.ReceivedAt,
@@ -359,10 +360,15 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 		CC          []string `json:"cc"`
 		Subject     string   `json:"subject"`
 		Body        string   `json:"body"`
+		InReplyTo   string   `json:"in_reply_to"`
 		Attachments []string `json:"attachments"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
+	if body.InReplyTo != "" && !isULID(body.InReplyTo) {
+		badRequest(w, "in_reply_to must be a 26-char ULID")
+		return
+	}
 		return
 	}
 	if len(body.To) == 0 {
@@ -398,9 +404,9 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 	if len(body.Attachments) > 0 {
 		// API parity with /api/send: attachments must be the admin's own
 		// uploads; the store validates ownership and grants recipients.
-		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.CC, body.Subject, body.Body, body.Attachments)
+		res, err = s.store.SendWithAttachments(from, fromName, body.To, body.CC, body.Subject, body.Body, body.Attachments, body.InReplyTo)
 	} else {
-		res, err = s.store.Send(from, fromName, body.To, body.CC, body.Subject, body.Body)
+		res, err = s.store.Send(from, fromName, body.To, body.CC, body.Subject, body.Body, body.InReplyTo)
 	}
 	if err != nil {
 		badRequest(w, err.Error())

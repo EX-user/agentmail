@@ -201,11 +201,15 @@ func (s *Store) CleanupExpiredFiles() (int, error) {
 // metadata into the message (what recipients need to download), extends
 // each file's allowed list with the message's valid recipients, and runs
 // the ordinary send. attachIDs may be empty (then it behaves like Send).
-func (s *Store) SendWithAttachments(from, fromName string, to []string, cc []string, subject, body string, attachIDs []string) (*SendResult, error) {
+func (s *Store) SendWithAttachments(from, fromName string, to []string, cc []string, subject, body string, attachIDs []string, inReplyTo string) (*SendResult, error) {
 	msgID := newULID()
 	now := s.now().Unix()
 	delivered := 0
 	err := s.db.Update(func(tx *bolt.Tx) error {
+		// Same in-transaction parent check as Send (one Get, miss -> fail).
+		if inReplyTo != "" && tx.Bucket(bMessages).Get([]byte(inReplyTo)) == nil {
+			return ErrNoSuchParent
+		}
 		// Resolve attachments first: all must be the sender's own files.
 		var metas []AttachmentMeta
 		fb := tx.Bucket(bFiles)
@@ -289,6 +293,7 @@ func (s *Store) SendWithAttachments(from, fromName string, to []string, cc []str
 			From:        from,
 			To:          to,
 			CC:          cc,
+			InReplyTo:   inReplyTo,
 			Subject:     subject,
 			Body:        body,
 			Attachments: metas,

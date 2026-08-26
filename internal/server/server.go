@@ -153,6 +153,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/sent", s.requireInitialized(s.requireAccount(s.handleSent)))
 	mux.HandleFunc("/api/mygrowth", s.requireInitialized(s.requireAccount(s.handleMyGrowth)))
 	mux.HandleFunc("/api/thread", s.requireInitialized(s.requireAccount(s.handleThread)))
+	mux.HandleFunc("/api/threads", s.requireInitialized(s.requireAccount(s.handleThreads)))
 	mux.HandleFunc("/api/files/upload", s.requireInitialized(s.requireAccount(s.handleFileUpload)))
 	mux.HandleFunc("/api/files/list", s.requireInitialized(s.requireAccount(s.handleFileList)))
 	mux.HandleFunc("/api/files/", s.requireInitialized(s.requireAccount(s.handleFileDownload)))
