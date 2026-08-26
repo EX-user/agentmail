@@ -37,6 +37,9 @@ func apiCall(t *testing.T, method, url, path, addr, pw, body string, out any) in
 	if out != nil {
 		_ = json.Unmarshal(raw, out)
 	}
+	if resp.StatusCode >= 400 {
+		t.Logf("%s %s -> %d: %s", method, path, resp.StatusCode, string(raw))
+	}
 	return resp.StatusCode
 }
 

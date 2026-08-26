@@ -106,6 +106,24 @@ func (s *Server) handleToolsList(req rpcRequest) rpcResponse {
 			}, []string{"access_code"}),
 		},
 		{
+			Name:        "read_threads",
+			Description: "List mail topics (thread chains) for the account bound to the access code: maximal in_reply_to connected components over the account's visible mail, most recently active first. Read-only, does not consume the call budget. limit (default 20), offset (default 0), min_count (default 2 = singletons are not listed; set 1 to include standalone messages).",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate", "string", true),
+				"limit":       prop("Max topics to return (default 20)", "number", false),
+				"offset":      prop("Pagination offset (default 0)", "number", false),
+				"min_count":   prop("Minimum messages per topic (default 2; 1 includes singletons)", "number", false),
+			}, []string{"access_code"}),
+		},
+		{
+			Name:        "read_topic",
+			Description: "Fetch one whole topic tree in a single call. Pass ANY message id belonging to the conversation — the server resolves it to its connected component and returns every visible message (root = earliest) with in_reply_to links, so an agent that just saw one inbox message can pull the full context without walking the parent chain. Read-only.",
+			InputSchema: schemaObject(map[string]any{
+				"access_code": prop("Access code from authenticate", "string", true),
+				"id":          prop("Any message id in the topic (the root works too; singletons return a one-node tree)", "string", true),
+			}, []string{"access_code", "id"}),
+		},
+		{
 			Name:        "get_message",
 			Description: "Fetch the full body of a single message by id. Messages with files include an 'attachments' array [{id, filename, size, access_code}] — download each via the download_attachment tool or HTTP GET /api/files/{id}/download?code={access_code} (Basic auth).",
 			InputSchema: schemaObject(map[string]any{
@@ -226,6 +244,10 @@ func (s *Server) handleToolsCall(ctx context.Context, req rpcRequest) rpcRespons
 		result, err = s.toolSend(ctx, args)
 	case "read_inbox":
 		result, err = s.toolReadInbox(ctx, args)
+	case "read_threads":
+		result, err = s.toolReadThreads(ctx, args)
+	case "read_topic":
+		result, err = s.toolReadTopic(ctx, args)
 	case "download_attachment":
 		result, err = s.toolDownloadAttachment(ctx, args)
 
@@ -442,6 +464,46 @@ func (s *Server) toolReadInbox(ctx context.Context, args map[string]any) (any, e
 // the access code. Valid-UTF-8 text is returned inline; binary comes back
 // base64-encoded with a byte count. Over 512KB is refused (context-blowup
 // guard — the caller is pointed at the HTTP endpoint instead).
+func (s *Server) toolReadThreads(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	if err != nil {
+		return nil, err
+	}
+	client := s.getClient(entry.ServerURL)
+	limit, offset, minCount := 20, 0, 2
+	if l, ok := args["limit"].(float64); ok && l > 0 {
+		limit = int(l)
+	}
+	if o, ok := args["offset"].(float64); ok && o > 0 {
+		offset = int(o)
+	}
+	if mc, ok := args["min_count"].(float64); ok && mc > 0 {
+		minCount = int(mc)
+	}
+	res, err := client.Threads(entry.Address, entry.Password, limit, offset, minCount)
+	if err != nil {
+		return nil, fmt.Errorf("read threads: %w", err)
+	}
+	return res, nil
+}
+
+func (s *Server) toolReadTopic(ctx context.Context, args map[string]any) (any, error) {
+	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
+	if err != nil {
+		return nil, err
+	}
+	id := strings.TrimSpace(str(args["id"]))
+	if id == "" {
+		return nil, fmt.Errorf("id is required")
+	}
+	client := s.getClient(entry.ServerURL)
+	res, err := client.Topic(entry.Address, entry.Password, id)
+	if err != nil {
+		return nil, fmt.Errorf("read topic: %w", err)
+	}
+	return res, nil
+}
+
 func (s *Server) toolDownloadAttachment(ctx context.Context, args map[string]any) (any, error) {
 	entry, err := s.consumeCodeReadOnly(str(args["access_code"]))
 	if err != nil {

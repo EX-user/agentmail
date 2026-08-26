@@ -236,6 +236,56 @@ func (c *Client) Inbox(authUser, authPass string, limit int) (*InboxResponse, er
 	return &out, err
 }
 
+// ThreadTopic is one topic-index row (mirror of the server payload).
+type ThreadTopic struct {
+	RootID       string   `json:"root_id"`
+	Subject      string   `json:"subject"`
+	Participants []string `json:"participants"`
+	Count        int      `json:"count"`
+	LastAt       int64    `json:"last_at"`
+}
+
+// ThreadsResponse mirrors GET /api/threads.
+type ThreadsResponse struct {
+	Threads []ThreadTopic `json:"threads"`
+	Total   int           `json:"total"`
+	Limit   int           `json:"limit"`
+	Offset  int           `json:"offset"`
+}
+
+// TopicResponse mirrors GET /api/thread?root= (any member id resolves).
+type TopicResponse struct {
+	Root     string           `json:"root"`
+	Messages []MessageSummary `json:"messages"`
+	Count    int              `json:"count"`
+}
+
+// Threads fetches the topic index for the authed user.
+func (c *Client) Threads(authUser, authPass string, limit, offset, minCount int) (*ThreadsResponse, error) {
+	var out ThreadsResponse
+	q := url.Values{}
+	if limit > 0 {
+		q.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if offset > 0 {
+		q.Set("offset", fmt.Sprintf("%d", offset))
+	}
+	if minCount > 0 {
+		q.Set("min_count", fmt.Sprintf("%d", minCount))
+	}
+	err := c.do("GET", "/api/threads", basicAuth(authUser, authPass), q, nil, &out)
+	return &out, err
+}
+
+// Topic fetches one topic tree; id may be ANY message in the tree (the
+// server resolves it to its connected component).
+func (c *Client) Topic(authUser, authPass, id string) (*TopicResponse, error) {
+	var out TopicResponse
+	q := url.Values{"root": []string{id}}
+	err := c.do("GET", "/api/thread", basicAuth(authUser, authPass), q, nil, &out)
+	return &out, err
+}
+
 // GetMessage fetches one message by id for the authed user.
 func (c *Client) GetMessage(authUser, authPass, id string) (*MessageResponse, error) {
 	var out MessageResponse
