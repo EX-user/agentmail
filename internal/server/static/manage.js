@@ -511,26 +511,29 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   // Thread rendering (v0.6.16 ①): "in reply to <parent>" row above the
   // letter body — parent subject loads on demand; click reopens the parent
   // in this pane (same loader, so visibility rules stay identical).
+  // Reply-reference row (v0.6.16 + superior adjustment): rendered in the
+  // field zone as a normal .detail-row — same visual treatment as
+  // From/To/Subject, not a body-area exception. Parent subject is fetched
+  // async (the summary does not carry it); the row appears when the current
+  // message has in_reply_to.
   function wireReplyRef(detail, msg, reopen) {
     if (!msg || !msg.in_reply_to) return;
     var row = document.createElement("div");
     row.className = "detail-row reply-ref";
+    row.innerHTML = "<b>↩ " + esc(t("act.repliedFrom")) + ":</b> ";
     var link = document.createElement("a");
     link.href = "javascript:void(0)";
-    link.textContent = t("act.repliedFrom") + " …";
-    row.appendChild(document.createTextNode("↩ "));
+    link.textContent = "…";
     row.appendChild(link);
-    // Field-zone placement (superior adjustment): the row belongs with
-    // From/To/Subject — insert before the <hr> that opens the body area.
     var host = detail.querySelector(".body");
     var mark = host ? host.previousElementSibling : null;
     if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
     else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
     else detail.appendChild(row);
     api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
-      link.textContent = t("act.repliedFrom") + " ‹" + ((p && p.subject) || msg.in_reply_to) + "›";
+      link.textContent = "‹" + ((p && p.subject) || msg.in_reply_to) + "›";
     }, function () {
-      link.textContent = t("act.repliedFrom") + " ‹" + msg.in_reply_to + "›";
+      link.textContent = "‹" + msg.in_reply_to + "›";
     });
     link.addEventListener("click", function () { reopen(msg.in_reply_to); });
   }
