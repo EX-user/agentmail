@@ -30,6 +30,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   function wireInReplyTo() {
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
+    var addBtn = document.getElementById("compose-inreplyto-add");
+    if (addBtn) addBtn.addEventListener("click", function () {
+      var input = document.getElementById("compose-inreplyto-input");
+      var v = (input && input.value || "").trim();
+      if (v) { composeInReplyTo = v; renderInReplyTo(); if (input) input.value = ""; }
+    });
     if (chip) chip.addEventListener("click", function () {
       if (!composeInReplyTo) return;
       loadComposeThread().then(function () {
@@ -614,7 +620,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
           ? "Re: " + subjBase
           : "Follow-up: " + subjBase;
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
-          '" data-subj="' + esc(newSubj) + '">' + actionLabel + '</span>';
+          '" data-subj="' + esc(newSubj) + '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">▾ click to expand</span> ' + actionBtn + '</div>' +
@@ -629,6 +635,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
           e.stopPropagation(); // don't trigger the item's expand toggle
           $("#compose-to").value = btn.dataset.target;
           $("#compose-subject").value = btn.dataset.subj;
+          composeInReplyTo = btn.dataset.mid || null;
+          renderInReplyTo();
           $("#compose-body").focus();
           $("#compose-status").textContent = "Replying to " + btn.dataset.target;
         });
