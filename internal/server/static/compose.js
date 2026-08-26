@@ -20,27 +20,41 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // the draft's reply anchor shows as a removable chip under the Cc row;
   // clicking it opens the anchored letter in the thread pane (same view
   // the Compose tab already uses for this conversation).
+  // Visibility rules (superior feedback round 3):
+  //   - the row opens on the ＋ toggle (Cc pattern) or when a reply sets
+  //     an anchor;
+  //   - once an anchor exists the input closes (irt is single-value) —
+  //     only ×-ing the chip re-opens the input.
+  var irtOpen = false; // user expanded the row via the ＋ toggle
   function renderInReplyTo() {
     var row = document.getElementById("compose-inreplyto-row");
     var chip = document.getElementById("compose-inreplyto-chip");
     var clear = document.getElementById("compose-inreplyto-clear");
+    var wrap = document.getElementById("compose-inreplyto-input-wrap");
+    var addBtn = document.getElementById("compose-inreplyto-add");
+    var toggle = document.getElementById("btn-toggle-irt");
     if (!row || !chip) return;
+    row.classList.toggle("hidden", !(composeInReplyTo || irtOpen));
+    if (toggle) toggle.classList.toggle("hidden", !!(composeInReplyTo || irtOpen));
     chip.classList.toggle("hidden", !composeInReplyTo);
     if (clear) clear.classList.toggle("hidden", !composeInReplyTo);
     if (composeInReplyTo) chip.textContent = composeInReplyTo;
+    // Input (and its set button) hides while an anchor is set.
+    var inp = !!(composeInReplyTo);
+    if (wrap) wrap.classList.toggle("hidden", inp);
+    if (addBtn) addBtn.classList.toggle("hidden", inp);
   }
 
-  // Manual anchor entry, Cc-autocomplete style (superior feedback: the
-  // toggle → select → set flow was too many steps). One always-visible
-  // input: typing filters the recent inbox+sent subjects live; picking a
-  // suggestion sets the anchor immediately. Pasting a raw id still works
-  // via the same input (Enter or ↩ set).
+  // Manual anchor entry, Cc-autocomplete style. Typing filters the recent
+  // inbox+sent subjects live; an empty focused input shows the full list;
+  // picking a suggestion (or Enter on a pasted raw id) sets the anchor and
+  // closes the input.
   var irtLabels = [];            // display strings for the dropdown
   var irtLabelToId = {};         // display string -> message id
   function loadIrtCandidates() {
     var cur = getSession();
-    if (!cur) return;
-    Promise.all([
+    if (!cur) return Promise.resolve();
+    return Promise.all([
       api("/api/inbox?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; }),
       api("/api/sent?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; })
     ]).then(function (res) {
@@ -60,19 +74,31 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     var row = document.getElementById("compose-inreplyto-row");
     var input = document.getElementById("compose-inreplyto-input");
     var dd = document.getElementById("irt-dropdown");
+    var toggle = document.getElementById("btn-toggle-irt");
     if (!row || !input || !dd) return;
-    row.classList.remove("hidden"); // always visible — no toggle step
+    if (toggle) toggle.addEventListener("click", function () {
+      irtOpen = true;
+      renderInReplyTo();
+      input.focus();          // focus with empty input shows the full list
+      // First-ever open races the candidates fetch — once it lands, re-fire
+      // the focus-driven refresh so the full list is showing.
+      loadIrtCandidates().then(function () {
+        if (document.activeElement === input && !input.value) {
+          input.dispatchEvent(new FocusEvent("focus"));
+        }
+      });
+    });
     loadIrtCandidates();
     input.addEventListener("focus", loadIrtCandidates);
     attachAutocomplete(input, dd, {
       fragment: function () { return input.value; },
       exclude: function () { return []; },
       source: function () { return irtLabels; },
+      showAllOnEmpty: true,   // empty + focused = browse the recent list
       pick: function (label) {
         var id = irtLabelToId[label];
         if (id) { composeInReplyTo = id; renderInReplyTo(); }
         input.value = "";
-        input.focus();
       },
     });
     // Closed-dropdown Enter commits the typed text as a raw id (manual path).
@@ -107,7 +133,10 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     });
     if (clear) clear.addEventListener("click", function () {
       composeInReplyTo = null;
+      irtOpen = true;          // ×-ing the chip re-opens the input
       renderInReplyTo();
+      var input = document.getElementById("compose-inreplyto-input");
+      if (input) input.focus();
     });
   }
   wireInReplyTo();
@@ -238,11 +267,11 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
     }
     function refresh() {
       const q = (opts.fragment() || "").trim().toLowerCase();
-      if (!q) { hide(); return; }
-      const ex = opts.exclude();
       // opts.source lets non-address fields (in-reply-to) supply their own
       // candidate pool; the default stays the shared recipient list.
       const pool = opts.source ? opts.source() : composeRecipientList;
+      if (!q && !opts.showAllOnEmpty) { hide(); return; }
+      const ex = opts.exclude();
       items = pool.filter(function (a) {
         return a.toLowerCase().indexOf(q) !== -1 && ex.indexOf(a) === -1;
       }).slice(0, 8);
@@ -253,6 +282,9 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       clearTimeout(timer);
       timer = setTimeout(refresh, 150); // debounce keystrokes
     });
+    // Empty + focused = browse the whole pool (in-reply-to UX); address
+    // fields opt out, so their behavior is unchanged.
+    if (opts.showAllOnEmpty) input.addEventListener("focus", refresh);
     input.addEventListener("keydown", function (ev) {
       if (panel.classList.contains("hidden") || !items.length) return;
       if (ev.key === "ArrowDown") { ev.preventDefault(); active = (active + 1) % items.length; paint(); }
