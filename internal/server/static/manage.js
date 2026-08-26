@@ -1477,6 +1477,9 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   document.addEventListener("manage:entered", function () {
     ensureMgmtPrefs();
     if (typeof ensureAccountOptions === "function") ensureAccountOptions();
+    // Auto-load on tab entry (superior request, mirrors inbox behavior):
+    // default filters = all visible accounts / inbox / 100.
+    loadMailList();
     // Re-kick: the mgmt segment may have restored "overview" at boot before
     // a session existed (original activateTab("mail") branch semantics).
     var seg = $("#mgmt-seg");
