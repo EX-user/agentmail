@@ -2166,18 +2166,17 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
         };
       }));
       var ve = [];
-      // Data-adaptive normalization (superior's note: a fixed saturation
-      // point is unreasonable): every scale is RELATIVE to the largest
-      // count in the current graph — the busiest pair always maps to full
-      // thickness, quiet pairs stay visibly thinner (log-ratio keeps the
-      // contrast readable across orders of magnitude).
+      // Data-adaptive normalization: every scale is RELATIVE to the largest
+      // count in the current graph. LINEAR mapping (superior request,
+      // preview): strength maps straight to width/alpha — the busiest pair
+      // reads full, quiet pairs thin and faint, with proportional (not
+      // log-compressed) contrast between connection strengths.
       var maxCount = 1;
       edges.forEach(function (e) {
         maxCount = Math.max(maxCount, e.a_to_b || 0, e.b_to_a || 0);
       });
-      var LOG_BASE = Math.log10(1 + maxCount);
       function graphScale(count) {
-        return Math.log10(1 + (count || 0)) / LOG_BASE;
+        return (count || 0) / maxCount;
       }
       edges.forEach(function (e) {
         var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
@@ -2199,12 +2198,12 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
         // traffic reads thin AND faint. Label = count only; the
         // last-activity time moved to the hover tooltip (it occluded the
         // graph at real volumes).
-        var alpha = 0.35 + 0.65 * k;
+        var alpha = 0.15 + 0.85 * k;
         return {
           from: from, to: to, label: String(count),
           title: count + " · " + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.45 + 0.65 * k } },
-          width: 0.6 + 2.2 * k,
+          arrows: { to: { enabled: true, scaleFactor: 0.3 + 0.7 * k } },
+          width: 0.3 + 2.5 * k,
           color: { color: "rgba(91,107,125," + alpha.toFixed(2) + ")", highlight: "#3b82f6" },
           font: { size: 9, face: "Consolas" },
           smooth: { type: "curvedCW", roundness: 0.2 },
