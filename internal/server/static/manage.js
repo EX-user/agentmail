@@ -523,18 +523,13 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     row.innerHTML = "<b>↩ " + esc(t("act.repliedFrom")) + ":</b> ";
     var link = document.createElement("a");
     link.href = "javascript:void(0)";
-    link.textContent = "…";
+    link.textContent = "‹" + msg.in_reply_to + "›";
     row.appendChild(link);
     var host = detail.querySelector(".body");
     var mark = host ? host.previousElementSibling : null;
     if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
     else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
     else detail.appendChild(row);
-    api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
-      link.textContent = "‹" + ((p && p.subject) || msg.in_reply_to) + "›";
-    }, function () {
-      link.textContent = "‹" + msg.in_reply_to + "›";
-    });
     link.addEventListener("click", function () { reopen(msg.in_reply_to); });
   }
 
