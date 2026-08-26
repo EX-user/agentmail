@@ -286,6 +286,11 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     mailShowPane(gridId, "detail");
   }
 
+  // Module-local (P0 fix, superior report 01M0ZJQH): this used to borrow
+  // compose.js's ATTACH_IMAGE_RE closure — invisible across ES modules, so
+  // any detail render with attachments threw ReferenceError and killed the
+  // whole pane (attachments AND body vanished).
+  const ATTACH_IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i;
   function attachIsImage(a) {
     return !!(a && a.filename && ATTACH_IMAGE_RE.test(a.filename));
   }
