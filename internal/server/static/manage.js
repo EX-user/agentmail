@@ -508,6 +508,29 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
   }
 
+  // Thread rendering (v0.6.16 ①): "in reply to <parent>" row above the
+  // letter body — parent subject loads on demand; click reopens the parent
+  // in this pane (same loader, so visibility rules stay identical).
+  function wireReplyRef(detail, msg, reopen) {
+    if (!msg || !msg.in_reply_to) return;
+    var row = document.createElement("div");
+    row.className = "detail-row reply-ref";
+    var link = document.createElement("a");
+    link.href = "javascript:void(0)";
+    link.textContent = t("act.repliedFrom") + " …";
+    row.appendChild(document.createTextNode("↩ "));
+    row.appendChild(link);
+    var host = detail.querySelector(".body");
+    if (host && host.parentNode) host.parentNode.insertBefore(row, host);
+    else detail.appendChild(row);
+    api("/api/message?id=" + encodeURIComponent(msg.in_reply_to)).then(function (p) {
+      link.textContent = t("act.repliedFrom") + " ‹" + ((p && p.subject) || msg.in_reply_to) + "›";
+    }, function () {
+      link.textContent = t("act.repliedFrom") + " ‹" + msg.in_reply_to + "›";
+    });
+    link.addEventListener("click", function () { reopen(msg.in_reply_to); });
+  }
+
   async function showDetail(id, item) {
     resetAudioPlayers();
     $$(".mail-item", $("#mail-list")).forEach(function (el) { el.classList.remove("selected"); });
@@ -712,10 +735,11 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
           "</div>"
         : ""));
     wireMailNav(detail, item);
+    wireReplyRef(detail, msg, function (pid) { showSubDetail(subAddr, { id: pid }, item); });
     const rbtn = $("#btn-reply-as-self");
     if (rbtn) rbtn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:reply-self", { detail: { m: msg } })); });
     const rbtn2 = $("#btn-reply-to-sub");
-    if (rbtn2) rbtn2.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: subAddr, subject: msg.subject || "" } })); });
+    if (rbtn2) rbtn2.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: subAddr, subject: msg.subject || "", parentId: (msg.id || msg.message_id) } })); });
   }
 
   // composeReplyAsSelf: the superior replies in their own name to the
@@ -1076,11 +1100,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '">' + t("act.reply") + "</button>" +
+        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
+      wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
       document.dispatchEvent(new CustomEvent("badge:refresh"));
       {
         const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
@@ -1089,7 +1114,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       }
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
-        document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: replyBtn.dataset.replyTo, subject: replyBtn.dataset.replySubject } }));
+        document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: replyBtn.dataset.replyTo, subject: replyBtn.dataset.replySubject, parentId: replyBtn.dataset.replyId } }));
       });
       const fwdBtn = $("#btn-inbox-forward");
       if (fwdBtn) fwdBtn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:forward", { detail: { m: m } })); });

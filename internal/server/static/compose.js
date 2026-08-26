@@ -22,6 +22,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   }
 
   function composeTo(address) {
+    composeInReplyTo = null;
     $("#compose-to").value = address || "";
     // Entering compose from a Compose button starts a fresh letter: clear
     // any leftover draft body (feedback). Plain tab switches keep the
@@ -33,7 +34,8 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
   // composeReply jumps to Compose with To = the sender and Subject = "Re: " +
   // the original subject (without stacking Re: if it already starts with one).
-  function composeReply(toAddress, subject) {
+  function composeReply(toAddress, subject, parentId) {
+    composeInReplyTo = parentId || null;
     $("#compose-to").value = toAddress || "";
     var subj = (subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -51,6 +53,10 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // the empty input removes the last chip, x removes any chip. Collapsed
   // behind "+ Cc" while empty.
   let composeCcChips = [];
+  // Thread link (v0.6.16 ②): the message id a reply anchors to, carried
+  // through compose:reply and submitted as in_reply_to. Fresh composes and
+  // forwards never carry one (forward = a new letter, not a reply).
+  let composeInReplyTo = null;
 
   // composeRecipientList backs BOTH the To and Cc autocomplete (feedback):
   // visible directory + own contacts for regular accounts, all accounts for
@@ -239,6 +245,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   // "── forwarded from ──" separator, then the original body. Attachments
   // are not carried (same ruling as subordinate Q2) — noted in the body.
   function composeForward(m) {
+    composeInReplyTo = null;
     $("#compose-to").value = "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^fwd:\s*/i.test(subj) ? subj : (subj ? "Fwd: " + subj : "");
@@ -331,6 +338,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
 
 
   function composeReplyAsSelf(m) {
+    composeInReplyTo = (m && (m.id || m.message_id)) || null;
     $("#compose-to").value = m.from || "";
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = /^re:\s*/i.test(subj) ? subj : (subj ? "Re: " + subj : "");
@@ -484,11 +492,13 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
       const pub = $("#compose-public");
       if (pub && pub.checked) payload.public = true;
       if (composeAttachmentIds.length) payload.attachments = composeAttachmentIds.slice();
+      if (composeInReplyTo) payload.in_reply_to = composeInReplyTo;
       const res = await api(sendPath, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      composeInReplyTo = null;
       status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
       // Clear subject/body but keep To (so the thread reloads for the same contact).
@@ -671,7 +681,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js
   });
   document.addEventListener("compose:reply", function (ev) {
     var d = ev.detail || {};
-    composeReply(d.to, d.subject);
+    composeReply(d.to, d.subject, d.parentId);
   });
   document.addEventListener("compose:reply-self", function (ev) {
     composeReplyAsSelf((ev.detail || {}).m);
