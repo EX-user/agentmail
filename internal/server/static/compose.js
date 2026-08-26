@@ -6,7 +6,7 @@
 //             compose:entered (tab activation hook from the entry)
 //   emits:    nav:activate {tab:"compose"} (entry owns tab switching)
 // The i18n dictionary stays a classic global (window.I18N).
-import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes } from "./core.js";
+import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from "./core.js";
 
 (function () {
   "use strict";

@@ -9,7 +9,7 @@
 //   emits:    badge:refresh, accounts:refresh, nav:activate,
 //             compose:reply / compose:reply-self (reply buttons here)
 // The i18n dictionary stays a classic global (window.I18N).
-import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from "./core.js";
+import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyText } from "./core.js";
 
 (function () {
   "use strict";
@@ -1233,10 +1233,11 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
 
   document.addEventListener("manage:entered", function () {
     ensureMgmtPrefs();
-    if (typeof ensureAccountOptions === "function") ensureAccountOptions();
-    // Auto-load on tab entry (superior request, mirrors inbox behavior):
-    // default filters = all visible accounts / inbox / 100.
-    loadMailList();
+    // Auto-load on tab entry (superior request): default filters = all
+    // visible accounts / inbox / 100. The options fetch is async — load
+    // AFTER it resolves, otherwise the select is still empty and the list
+    // bails with "no account selected" (superior report 01M0ZMAC).
+    ensureAccountOptions().catch(function () {}).then(loadMailList);
     // Re-kick: the mgmt segment may have restored "overview" at boot before
     // a session existed (original activateTab("mail") branch semantics).
     var seg = $("#mgmt-seg");

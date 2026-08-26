@@ -120,6 +120,24 @@ def main():
                 if other != base and ident in odef:
                     hits.append("%s references '%s' defined in %s (cross-module closure leak)"
                                 % (base, ident, other))
+    # Third leak class (P0 01M0ZMAC): a module CALLS a core export it never
+    # imports. The free-identifier pass can't see it (core exports are
+    # exempt), and it only blows up at runtime ("basicAuth is not defined").
+    # core.js itself is the definition site; wizard.js is a classic script
+    # with its own local copies, so locally-defined names are fine.
+    for base, (defined, _dx, used_ids) in modules.items():
+        if base == "core.js":
+            continue
+        raw = io.open(os.path.join(STATIC, base), encoding="utf-8").read()
+        m = re.search(r"import \{([^}]+)\} from [\"']./core\.js[\"']", raw)
+        if not m:
+            # Classic scripts (wizard.js) carry their own local copies of
+            # these helpers and are not part of the ESM graph.
+            continue
+        imported = set(x.strip() for x in m.group(1).split(","))
+        called = set(re.findall(r"(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(", raw))
+        for ident in sorted((called & core_exports) - imported - defined):
+            hits.append("%s calls core export '%s' without importing it" % (base, ident))
     if hits:
         print("FREE-IDENTIFIER AUDIT: FAIL")
         for h in hits:
