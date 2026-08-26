@@ -2,6 +2,8 @@ package server
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/agentmail/agentmail/internal/audit"
 )
@@ -30,7 +32,15 @@ func (s *Server) handleMgmtSubsOverview(w http.ResponseWriter, r *http.Request) 
 				"sub-read target="+e.Address+" via=mgmt-overview")
 		}
 	}
-	out, err := s.store.MgmtSubsOverview(me)
+	// Range selector (superior request): ?days=7|30|0 — 0 = all time.
+	// Anything invalid (or negative) falls back to the default 7d window.
+	days := 7
+	if v := strings.TrimSpace(r.URL.Query().Get("days")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 365 {
+			days = n
+		}
+	}
+	out, err := s.store.MgmtSubsOverviewWindow(me, days)
 	if err != nil {
 		internalError(w, "mgmt overview: "+err.Error())
 		return

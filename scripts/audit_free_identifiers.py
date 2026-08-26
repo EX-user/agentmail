@@ -55,9 +55,13 @@ arrayBuffer headers ok url method credentials mode cache signal""".split())
 # contain NO actual leaks: the v0.6.16 breakage (badgeSeq/userPrefs/
 # setInboxBadge/subsCache/systemDomain/attachment trio) all stay OUTSIDE
 # this set and are caught. Extend ONLY after human review of the new hit.
+# 2026-08-27 car3 review (Felix): +days/folder/i/o — def-extraction blind
+# spots, NOT leaks: `days` = graphPrefs object key + windowLabel(days)
+# named-fn param (params of NAMED functions aren't captured); `folder` =
+# event-detail object key; `i`/`o` = i18n placeholder-var object keys.
 NOISE_BASELINE = set("""account active add btn c card cls dir domain el f files fn idx
 k loadAudit loadInbox me msg n panel path pick prefs preview pv s sel tab ts toggle
-unread v ATTACH_IMAGE_RE""".split())
+unread v days folder i o ATTACH_IMAGE_RE""".split())
 
 
 def strip_noise(src):

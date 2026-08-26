@@ -214,11 +214,16 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         });
         list.appendChild(item);
       });
-      // Avoid-empty (feedback): open the newest message right after Load,
-      // mirroring the Inbox preload.
+      // List-first (superior feedback 2026-08-27): entering the browse view
+      // lands on the LIST, not inside a message — the old auto-open of the
+      // newest item hid the overview. The detail pane idles with a hint
+      // until the user clicks a row.
       {
-        const first = list.querySelector(".mail-item");
-        if (first && msgs.length) first.click();
+        const detail = $("#mail-detail");
+        if (detail && msgs.length) {
+          detail.innerHTML = '<p class="muted" style="padding:12px 4px;">' +
+            esc(t("mail.pickHint")) + "</p>";
+        }
       }
       applyMailSearch();
     } catch (e) {
@@ -683,7 +688,7 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
       await loadSubs(true);
       document.dispatchEvent(new CustomEvent("accounts:refresh"));
       invalidateMailAccountOptions();
-      if (typeof loadMgmtOverview === "function" && mgmtOverviewLoaded) loadMgmtOverview();
+      document.dispatchEvent(new CustomEvent("overview:refresh"));
     } catch (e) {
       toast(e.message, "error");
     }
@@ -1155,248 +1160,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     }
   }
 
-  // ---- v0.6 mail management views ----
-  // Segment capsule switches between the Messages view (the existing dual
-  // pane, preserved verbatim) and the Subs Overview aggregate. The choice
-  // persists; overview lazy-loads on first entry and re-renders on language
-  // change. Rows deep-link into Messages with the account preselected.
-
-  function mgmtIsActive(s) {
-    // Three-tier liveness (superior's rule, v0.6): GREEN = mail traffic
-    // (send or receive) within the strong window; YELLOW = inbox read
-    // activity within the weak window but no traffic (script-like);
-    // GRAY = idle / never. Windows are user prefs (hours), defaults
-    // strong=24, weak=48.
-    var now = Date.now() / 1000;
-    var strongH = (mgmtPrefs && mgmtPrefs.livenessStrongHours) || 24;
-    var weakH = (mgmtPrefs && mgmtPrefs.livenessWeakHours) || 48;
-    var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
-    var read = s.last_read_at || 0;
-    if (traffic && now - traffic <= strongH * 3600) return "strong";
-    if (read && now - read <= weakH * 3600) return "weak";
-    if (!traffic && !read) return "never";
-    return "idle";
-  }
-
-  function mgmtOverviewHtml(d) {
-    var subs = (d && d.subs) || [];
-    var box = "";
-    if (!subs.length) {
-      return '<div class="mgmt-empty"><div>' + t("mgmt.emptyTitle") + '</div><div class="sub">' +
-        t("mgmt.emptySub") + '</div><button class="row-action" data-mgmt-go="accounts">' +
-        t("mgmt.goAccounts") + "</button></div>";
-    }
-    var live = 0, in7 = 0, out7 = 0;
-    subs.forEach(function (s) {
-      var stt = mgmtIsActive(s);
-      if (stt === "strong" || stt === "weak") live++;
-      in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
-    });
-    box += '<div class="mgmt-sum">' + t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 }) +
-      ' <button class="row-action mgmt-refresh" data-mgmt-go="refresh">' + t("mgmt.refresh") + "</button></div>";
-    box += '<table class="mgmt-ovw"><thead><tr>' +
-      "<th>" + t("mgmt.colAccount") + "</th><th>" + t("mgmt.colCounts") + "</th><th>" + t("mgmt.colAvg") + "</th><th>" + t("mgmt.colTop") + "</th></tr></thead><tbody>";
-    subs.forEach(function (s) {
-      var st = mgmtIsActive(s);
-      var dotCls = st === "strong" ? "green" : (st === "weak" ? "yellow" : "idle");
-      var liveTxt = st === "strong" ? t("mgmt.liveStrong")
-        : (st === "weak" ? t("mgmt.liveWeak")
-        : (st === "never" ? t("mgmt.never") : t("mgmt.idle")));
-      var top = (s.top_contacts || []).map(function (c) {
-        return shortAddr(c.address) + "×" + c.count;
-      }).join(" · ") || "—";
-      function fmtAvg(v) { return v > 0 ? (v >= 1000 ? (v / 1000).toFixed(1) + "K" : String(v)) : "—"; }
-      // Liveness moved into the account cell (feedback: the standalone
-      // column wrapped at five characters); the dot keeps its meaning via
-      // the hover title.
-      box += '<tr data-mgmt-acct="' + esc(s.address) + '">' +
-        '<td data-label="' + esc(t("mgmt.colAccount")) + '"><span class="dot ' + dotCls + '" title="' + esc(liveTxt) + '"></span><span class="mono">' + esc(s.address) + '</span>' +
-        (s.signature ? '<br><small class="muted">' + esc(s.signature) + "</small>" : "") + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colCounts")) + '" class="mono">' + (s.count_in_7d || 0) + " / " + (s.count_out_7d || 0) + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colAvg")) + '" class="mono">' + fmtAvg(s.avg_len_in) + " / " + fmtAvg(s.avg_len_out) + "</td>" +
-        '<td data-label="' + esc(t("mgmt.colTop")) + '" class="mono">' + esc(top) + "</td></tr>";
-    });
-    box += "</tbody></table>";
-    // Connections graph (superior: force-directed, N2 label blocks + A4
-    // volume-scaled wedges, shown on BOTH desktop and mobile, inside the
-    // Overview view). The container is rendered by renderMgmtGraph after
-    // this HTML lands in the DOM.
-    box += '<h4 class="mgmt-graph-title">' + t("mgmt.graphTitle") + "</h4>" +
-      '<div id="mgmt-graph" class="mgmt-graph"></div>';
-    return box;
-  }
-
-  function shortAddr(a) {
-    return String(a || "").split("@")[0];
-  }
-
-  // Lazy-load the vendored vis-network (688KB) the first time the graph
-  // renders — the login page and other tabs never pay for it.
-  var visNetworkReady = null;
-  function loadVisNetwork() {
-    if (window.vis && window.vis.Network) return Promise.resolve();
-    if (visNetworkReady) return visNetworkReady;
-    visNetworkReady = new Promise(function (resolve, reject) {
-      var s = document.createElement("script");
-      s.src = "/static/vis-network.min.js";
-      s.onload = function () { resolve(); };
-      s.onerror = function () { visNetworkReady = null; reject(new Error("vis-network load failed")); };
-      document.head.appendChild(s);
-    });
-    return visNetworkReady;
-  }
-
-  // Live graph handle (v0.6.8): kept for re-fit on tab re-entry so the
-  // viewport stays centered on the nodes between visits.
-  var mgmtNetwork = null;
-  function renderMgmtGraph(graph, subs) {
-    var el = $("#mgmt-graph");
-    if (!el) return;
-    var nodes = (graph && graph.nodes) || [];
-    var edges = (graph && graph.edges) || [];
-    mgmtNetwork = null; // fresh render invalidates the old instance
-    if (!nodes.length) { el.textContent = ""; return; }
-    var livenessByAddr = {};
-    (subs || []).forEach(function (s) { livenessByAddr[String(s.address).toLowerCase()] = mgmtIsActive(s); });
-    el.innerHTML = '<div class="muted">' + t("common.loading") + "</div>";
-    loadVisNetwork().then(function () {
-      var myAddr = ((getSession() || {}).address || "").toLowerCase();
-      var vn = new vis.DataSet(nodes.map(function (n) {
-        var kind = n.kind || "external";
-        var isMe = kind === "self";
-        var st = livenessByAddr[String(n.address || "").toLowerCase()];
-        var border = isMe ? "#1d4ed8"
-          : kind === "sub" ? (st === "strong" ? "#2e9e5b" : st === "weak" ? "#d9a419" : "#9aa4b2")
-          : "#a7b1bd";
-        var bg = isMe ? "#dbeafe"
-          : kind === "sub" ? (st === "strong" ? "#dcf2e4" : st === "weak" ? "#f7edd4" : "#eceff3")
-          : "#f2f4f7";
-        return {
-          id: n.address, label: (isMe ? t("mgmt.meLabel") : shortAddr(n.address)) +
-            (kind !== "external" ? "\n7d " + (n.volume || 0) : ""),
-          shape: "box", borderWidth: isMe ? 2 : 1,
-          color: { background: bg, border: border },
-          font: { face: "ui-monospace, Consolas, monospace", size: 11, color: "#23303f" },
-          value: Math.max(1, n.volume || 1), scaling: { min: 8, max: 26, label: { enabled: false } },
-          title: shortAddr(n.address) + (kind !== "external" ? " · 7d " + (n.volume || 0) : ""),
-          _kind: kind
-        };
-      }));
-      var ve = [];
-      // Data-adaptive normalization: every scale is RELATIVE to the largest
-      // count in the current graph. LINEAR mapping (superior request,
-      // preview): strength maps straight to width/alpha — the busiest pair
-      // reads full, quiet pairs thin and faint, with proportional (not
-      // log-compressed) contrast between connection strengths.
-      var maxCount = 1;
-      edges.forEach(function (e) {
-        maxCount = Math.max(maxCount, e.a_to_b || 0, e.b_to_a || 0);
-      });
-      function graphScale(count) {
-        return (count || 0) / maxCount;
-      }
-      edges.forEach(function (e) {
-        var ab = e.a_to_b || 0, ba = e.b_to_a || 0;
-        var last = e.last_at ? "\n" + fmtTime(e.last_at) : "";
-        if (!ab && !ba) {
-          ve.push({ from: e.a, to: e.b, label: "—" + last, dashes: true,
-            color: { color: "#c4ccd6" }, width: 0.8, font: { size: 9, face: "Consolas" },
-            smooth: { type: "curvedCW", roundness: 0.16 }, _sub: pickGraphSub(e, myAddr) });
-          return;
-        }
-        // Two directed arcs per pair (superior: arrows in both directions,
-        // each with its own count) — A4 wedges scale with volume.
-        if (ab) ve.push(mgmtGraphEdge(e.a, e.b, ab, last, e));
-        if (ba) ve.push(mgmtGraphEdge(e.b, e.a, ba, last, e));
-      });
-      function mgmtGraphEdge(from, to, count, last, orig) {
-        var k = graphScale(count);
-        // v0.6.6: alpha rides the same normalization as width — light
-        // traffic reads thin AND faint. Label = count only; the
-        // last-activity time moved to the hover tooltip (it occluded the
-        // graph at real volumes).
-        var alpha = 0.15 + 0.85 * k;
-        return {
-          from: from, to: to, label: String(count),
-          title: count + " · " + last,
-          arrows: { to: { enabled: true, scaleFactor: 0.3 + 0.7 * k } },
-          width: 0.3 + 2.5 * k,
-          color: { color: "rgba(91,107,125," + alpha.toFixed(2) + ")", highlight: "#3b82f6" },
-          font: { size: 9, face: "Consolas" },
-          smooth: { type: "curvedCW", roundness: 0.2 },
-          _sub: pickGraphSub(orig, myAddr)
-        };
-      }
-      function pickGraphSub(e, me) {
-        // Edge click → Messages preselected on the subordinate endpoint.
-        var a = String(e.a || "").toLowerCase(), b = String(e.b || "").toLowerCase();
-        if (a !== me && (livenessByAddr[a] || b === me)) return e.a;
-        if (b !== me && (livenessByAddr[b] || a === me)) return e.b;
-        return null;
-      }
-      var data = { nodes: vn, edges: new vis.DataSet(ve) };
-      // Keep the instance: re-entering the tab re-fits the viewport so the
-      // graph never drifts off-center between visits (superior feedback).
-      mgmtNetwork = new vis.Network(el, data, {
-        // Roomier layout (feedback: nodes sat too close at real volumes):
-        // stronger repulsion + longer springs spread the pairs so the
-        // (now capped) arrows never bury the labels. Iterations trimmed
-        // 400 -> 260: visibly faster first paint, layout quality held.
-        physics: {
-          enabled: true, solver: "barnesHut",
-          barnesHut: { gravitationalConstant: -6000, springLength: 160, springConstant: 0.04, damping: 0.12 },
-          stabilization: { iterations: 260, fit: true }
-        },
-        interaction: { hover: true, dragView: true, zoomView: true },
-        edges: { selectionWidth: 2 }
-      });
-      mgmtNetwork.once("stabilizationIterationsDone", function () {
-        try { mgmtNetwork.fit({ animation: false }); } catch (_) {}
-      });
-      mgmtNetwork.on("click", function (params) {
-        // Node click: jump to Messages preselected on that sub; edge click:
-        // preselect the sub endpoint of the pair.
-        var jump = null;
-        if (params.nodes && params.nodes.length) {
-          var id = String(params.nodes[0]).toLowerCase();
-          if (id !== myAddr && livenessByAddr[id]) jump = params.nodes[0];
-        } else if (params.edges && params.edges.length) {
-          var ed = ve.filter(function (x) { return x.id === params.edges[0]; })[0];
-          if (ed && ed._sub) jump = ed._sub;
-        }
-        if (!jump) return;
-        var seg = $("#mgmt-seg");
-        if (seg) {
-          var btn = seg.querySelector('button[data-mview="browse"]');
-          if (btn) btn.click();
-        }
-        var sel = $("#mail-account");
-        if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === jump; })) {
-          sel.value = jump;
-          var loadBtn = $("#btn-load-mail");
-          if (loadBtn) loadBtn.click();
-        }
-      });
-    }).catch(function () {
-      el.innerHTML = '<p class="muted">' + esc(t("mgmt.graphLoadFail")) + "</p>";
-    });
-  }
-
-  var mgmtOverviewLoaded = false;
-  async function loadMgmtOverview() {
-    var box = $("#mgmt-overview");
-    if (!box) return;
-    box.textContent = t("common.loading");
-    try {
-      var d = await api("/api/mgmt/subs-overview", { keepSession: true });
-      box.innerHTML = mgmtOverviewHtml(d);
-      mgmtOverviewLoaded = true;
-      renderMgmtGraph(d && d.graph, (d && d.subs) || []);
-    } catch (e) {
-      box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
-    }
-  }
-
   (function wireMgmt() {
     var seg = $("#mgmt-seg");
     if (!seg) return;
@@ -1409,16 +1172,9 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
         b.classList.toggle("on", b.dataset.mview === v);
       });
       try { localStorage.setItem("mgmt-view", v); } catch (_) {}
-      // Only auto-load with a session — at boot this can run pre-login and
-      // would fail; activateTab("mail") re-kicks it afterwards.
-      if (v === "overview" && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
-      // Re-fit on every overview entry: the canvas keeps its viewport across
-      // tab switches, which made the graph drift off-center (superior report).
-      if (v === "overview" && mgmtNetwork) {
-        setTimeout(function () {
-          try { mgmtNetwork.fit({ animation: false }); } catch (_) {}
-        }, 0);
-      }
+      // The overview pane is the overview module's; entering (or re-entering
+      // — it re-fits a drifting canvas) goes through the event bus.
+      if (v === "overview") document.dispatchEvent(new CustomEvent("overview:entered"));
     }
     seg.addEventListener("click", function (ev) {
       var b = ev.target.closest("button[data-mview]");
@@ -1427,31 +1183,6 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     var start = "browse";
     try { start = localStorage.getItem("mgmt-view") || "browse"; } catch (_) {}
     setView(start);
-    // In-view actions: refresh, or deep-link to Accounts / Messages.
-    $("#mgmt-overview").addEventListener("click", function (ev) {
-      var btn = ev.target.closest("[data-mgmt-go]");
-      if (btn) {
-        if (btn.dataset.mgmtGo === "accounts") { document.dispatchEvent(new CustomEvent("nav:activate", { detail: { tab: "accounts" } })); return; }
-        if (btn.dataset.mgmtGo === "refresh") { loadMgmtOverview(); return; }
-      }
-      var row = ev.target.closest("tr[data-mgmt-acct]");
-      if (!row) return;
-      var acct = row.dataset.mgmtAcct;
-      setView("browse");
-      var sel = $("#mail-account");
-      if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === acct; })) {
-        sel.value = acct;
-        var folder = $("#mail-folder");
-        if (folder) folder.value = "inbox";
-        var loadBtn = $("#btn-load-mail");
-        if (loadBtn) loadBtn.click();
-      } else {
-        toast(t("mgmt.acctNotInList"), "error");
-      }
-    });
-    document.addEventListener("i18n:change", function () {
-      if (mgmtOverviewLoaded) loadMgmtOverview();
-    });
   })();
 
   // ---- audit ----
@@ -1504,18 +1235,17 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
     // Re-kick: the mgmt segment may have restored "overview" at boot before
     // a session existed (original activateTab("mail") branch semantics).
     var seg = $("#mgmt-seg");
-    var onOverview = seg && seg.querySelector('button[data-mview="overview"].on');
-    if (onOverview && !mgmtOverviewLoaded && getSession()) loadMgmtOverview();
+    if (seg && seg.querySelector('button[data-mview="overview"].on')) {
+      document.dispatchEvent(new CustomEvent("overview:entered"));
+    }
   });
   document.addEventListener("manage:refresh", function () {
-    if (mgmtOverviewLoaded) loadMgmtOverview();
+    document.dispatchEvent(new CustomEvent("overview:refresh"));
   });
   document.addEventListener("manage:reset", function () {
     mgmtPrefs = null;
     subsCache = null;
-    mgmtOverviewLoaded = false;
-    var mgmtBox = $("#mgmt-overview");
-    if (mgmtBox) mgmtBox.textContent = "";
+    document.dispatchEvent(new CustomEvent("overview:reset"));
     if (typeof invalidateMailAccountOptions === "function") invalidateMailAccountOptions();
   });
   document.addEventListener("subs:request", function (ev) {
@@ -1525,6 +1255,29 @@ import { $, $$, esc, api, getSession, toast, fmtTime, fmtBytes, copyText } from 
   document.addEventListener("audio:stop-all", function () {
     resetAudioPlayers();
   });
+  // The overview module (graph/rows) asks to open a mailbox in the browse
+  // pane — selection + load live here.
+  document.addEventListener("mgmt:browse-account", function (ev) {
+    var d = ev.detail || {};
+    var seg = $("#mgmt-seg");
+    if (seg) {
+      var btn = seg.querySelector('button[data-mview="browse"]');
+      if (btn) btn.click();
+    }
+    var sel = $("#mail-account");
+    if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === d.address; })) {
+      sel.value = d.address;
+      if (d.folder) {
+        var folder = $("#mail-folder");
+        if (folder) folder.value = d.folder;
+      }
+      var loadBtn = $("#btn-load-mail");
+      if (loadBtn) loadBtn.click();
+    } else {
+      toast(t("mgmt.acctNotInList"), "error");
+    }
+  });
+
   document.addEventListener("subs:remove", function (ev) {
     var d = ev.detail || {};
     removeSub(d.address, d.role);

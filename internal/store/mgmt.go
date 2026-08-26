@@ -86,10 +86,16 @@ func pairKey(a, b string) [2]string {
 // only when the pair exchanged mail within the 7d window; last_at on an
 // edge is all-time.
 func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
+	return s.MgmtSubsOverviewWindow(me, mgmtWindowDays)
+}
+
+// MgmtSubsOverviewWindow is the range-parameterized form (superior request:
+// graph range button 7d/30d/all). days 0 = all time; positive = day window.
+func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, error) {
 	me = strings.ToLower(me)
 	edgesList := s.SubordinatesOf(me) // cursor order (address asc), signatures included
 
-	out := &MgmtOverview{WindowDays: mgmtWindowDays}
+	out := &MgmtOverview{WindowDays: days}
 	if len(edgesList) == 0 {
 		out.Subs = []MgmtSubSummary{}
 		out.Graph.Nodes = []MgmtNode{}
@@ -105,7 +111,11 @@ func (s *Store) MgmtSubsOverview(me string) (*MgmtOverview, error) {
 		subs = append(subs, MgmtSubSummary{Address: addr, Signature: e.Signature})
 	}
 
-	windowStart := s.now().Unix() - mgmtWindowDays*86400
+	// 0 = all time: every message counts as in-window.
+	var windowStart int64
+	if days > 0 {
+		windowStart = s.now().Unix() - int64(days)*86400
+	}
 
 	type acc struct {
 		lastIn, lastOut   int64
