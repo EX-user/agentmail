@@ -8,6 +8,8 @@
 //   listens:  threads:entered {}  threads:refresh {}  threads:reset {}
 //             i18n:change
 //   emits:    mgmt:browse-account {address, folder?}  (full text in manage)
+//             mgmt:fallback-browse {}  (remembered-entry empty-list bounce,
+//             superior ruling 01M11ND4; manage switches back to browse)
 // The i18n dictionary stays a classic global (window.I18N).
 import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
 
@@ -118,6 +120,14 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
         box.appendChild(ctrl);
         if (!topics.length) {
           box.innerHTML = '<p class="muted">' + esc(t("threads.empty")) + "</p>";
+          // Remembered entry must not strand the user on an empty view —
+          // fall back to browse SILENTLY (superior 01M11P89: no prompt, the
+          // pane just switches itself back). User-picked filters never
+          // trigger this; the flag is one-shot.
+          if (document.__mgmtRestoreThreads) {
+            document.__mgmtRestoreThreads = false;
+            document.dispatchEvent(new CustomEvent("mgmt:fallback-browse"));
+          }
           return;
         }
         box.textContent = "";
@@ -221,6 +231,10 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           "<span>· " + fmtTime(m.received_at) + "</span>" + reply +
           (m.unread ? ' <span class="th-badge">' + t("threads.unread") + "</span>" : "") +
           "</div>" +
+          // Superior: some overview must be visible BEFORE opening — show a
+          // one-line truncated preview under the header; expand swaps it for
+          // the full body.
+          '<div class="th-peek">' + esc((m.preview || "").split("\n")[0]) + "</div>" +
           '<div class="th-full hidden" data-th-body="' + esc(m.id) + '"></div>' +
           "</div>";
         var kids = children[m.id] || [];
@@ -251,7 +265,10 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           if (!toggle || !full) return;
           toggle.addEventListener("click", async function (ev) {
             ev.stopPropagation();
+            const peek = $(".th-peek", el);
             if (full.classList.contains("hidden")) {
+              // Expand: full body replaces the one-line peek.
+              if (peek) peek.classList.add("hidden");
               if (!full.dataset.loaded) {
                 full.textContent = t("common.loading");
                 full.classList.remove("hidden");
@@ -276,6 +293,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
               }
             } else {
               full.classList.add("hidden");
+              if (peek) peek.classList.remove("hidden"); // peek returns on collapse
               toggle.textContent = "▶";
             }
           });

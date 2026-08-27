@@ -1192,8 +1192,24 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       var b = ev.target.closest("button[data-mview]");
       if (b) setView(b.dataset.mview);
     });
+    // Superior ruling refined (01M11ND4): remembering the last view is fine,
+    // but a data-dependent view must never come up empty. A remembered
+    // "threads" restores with a one-shot flag; the threads module dispatches
+    // mgmt:fallback-browse when its list is empty and we drop back to the
+    // browse view (and to browse as the remembered choice). overview renders
+    // its stats layout for any account, so it restores without a guard.
+    document.addEventListener("mgmt:fallback-browse", function () {
+      document.__mgmtRestoreThreads = false;
+      setView("browse");
+    });
     var start = "browse";
-    try { start = localStorage.getItem("mgmt-view") || "browse"; } catch (_) {}
+    try {
+      var sv = localStorage.getItem("mgmt-view");
+      if (sv === "threads" || sv === "overview") start = sv;
+    } catch (_) {}
+    // The flag only arms for a live (token) session: without it the restore
+    // is a no-op and a later manual click into threads must never bounce.
+    if (start === "threads" && getSession()) document.__mgmtRestoreThreads = true;
     setView(start);
   })();
 
