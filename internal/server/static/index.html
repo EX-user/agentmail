@@ -361,6 +361,7 @@
            aggregates subordinate activity from GET /api/mgmt/subs-overview. -->
       <div class="mgmt-seg" id="mgmt-seg">
         <button type="button" class="on" data-mview="browse" data-i18n="mgmt.tabBrowse">Messages</button>
+        <button type="button" data-mview="threads" data-i18n="mgmt.tabThreads">Threads</button>
         <button type="button" data-mview="overview" data-i18n="mgmt.tabOverview">Overview</button>
       </div>
       <div id="mgmt-browse">
@@ -398,6 +399,7 @@
           <div id="mail-detail" class="pane">Select a message to view its body.</div>
         </div>
       </div>
+      <div id="mgmt-threads" class="hidden"></div>
       <div id="mgmt-overview" class="hidden"></div>
     </section>
 
@@ -788,5 +790,6 @@
   <script type="module" src="/static/compose.js"></script>
   <script type="module" src="/static/manage.js"></script>
   <script type="module" src="/static/overview.js"></script>
+  <script type="module" src="/static/threads.js"></script>
 </body>
 </html>

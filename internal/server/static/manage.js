@@ -1169,17 +1169,19 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     var seg = $("#mgmt-seg");
     if (!seg) return;
     function setView(v) {
-      var browse = $("#mgmt-browse"), overview = $("#mgmt-overview");
-      if (v !== "overview") v = "browse";
+      var browse = $("#mgmt-browse"), overview = $("#mgmt-overview"), threads = $("#mgmt-threads");
+      if (v !== "overview" && v !== "threads") v = "browse";
       if (browse) browse.classList.toggle("hidden", v !== "browse");
       if (overview) overview.classList.toggle("hidden", v !== "overview");
+      if (threads) threads.classList.toggle("hidden", v !== "threads");
       $$("#mgmt-seg button").forEach(function (b) {
         b.classList.toggle("on", b.dataset.mview === v);
       });
       try { localStorage.setItem("mgmt-view", v); } catch (_) {}
-      // The overview pane is the overview module's; entering (or re-entering
-      // — it re-fits a drifting canvas) goes through the event bus.
+      // The overview/threads panes are their own modules'; entering (or
+      // re-entering) goes through the event bus.
       if (v === "overview") document.dispatchEvent(new CustomEvent("overview:entered"));
+      if (v === "threads") document.dispatchEvent(new CustomEvent("threads:entered"));
     }
     seg.addEventListener("click", function (ev) {
       var b = ev.target.closest("button[data-mview]");
@@ -1247,11 +1249,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
   });
   document.addEventListener("manage:refresh", function () {
     document.dispatchEvent(new CustomEvent("overview:refresh"));
+    document.dispatchEvent(new CustomEvent("threads:refresh"));
   });
   document.addEventListener("manage:reset", function () {
     mgmtPrefs = null;
     subsCache = null;
     document.dispatchEvent(new CustomEvent("overview:reset"));
+    document.dispatchEvent(new CustomEvent("threads:reset"));
     if (typeof invalidateMailAccountOptions === "function") invalidateMailAccountOptions();
   });
   document.addEventListener("subs:request", function (ev) {

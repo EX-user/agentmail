@@ -1398,3 +1398,39 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
    a letter body in the message detail panes. */
 .reply-ref a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .reply-ref a:hover { text-decoration: underline; }
+
+/* ===== Threads (topics) view — third mgmt segment ===== */
+#mgmt-threads { max-width: 640px; }
+.th-topic { background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; margin-bottom: 10px; cursor: pointer; }
+.th-topic:hover { background: #f6f9ff; }
+.th-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.th-who { font-weight: 600; }
+.th-subj { font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+.th-when { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.th-pv { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.th-arrow { text-align: center; color: var(--muted); font-size: 11px; margin: 4px 0; }
+.th-leaf { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
+.th-lone { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--muted);
+  background: #f2f4f7; border-radius: 6px; padding: 2px 8px; }
+.th-meta { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.th-more { display: block; width: 100%; padding: 8px; font-size: 12px; border: none;
+  background: #f2f4f7; color: var(--muted); cursor: pointer; }
+.th-back { display: inline-block; font-size: 12px; color: var(--accent, #3b82f6);
+  cursor: pointer; padding: 8px 10px; }
+.th-rail { background: var(--panel, #fff); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 0; }
+.th-msg { padding: 8px 10px; border-left: 2px solid transparent; }
+.th-msg:hover { background: #f6f9ff; border-left-color: var(--accent, #3b82f6); cursor: pointer; }
+.th-hd { display: flex; gap: 8px; align-items: baseline; font-size: 12px;
+  color: var(--muted); flex-wrap: wrap; }
+.th-arr { color: var(--muted); }
+.th-reply { color: var(--muted); font-size: 11px; }
+.th-badge { font-size: 10px; padding: 1px 6px; border-radius: 999px;
+  background: #eaf1fe; color: #1d4ed8; }
+.th-body { margin-top: 4px; font-size: 13px; line-height: 1.5; background: #f8fafc;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+  white-space: pre-wrap; word-break: break-word; }
+.th-gap { margin-left: 18px; padding: 6px 10px; font-size: 12px; color: #a4762a;
+  background: #fdf6e7; border-radius: 6px; }
