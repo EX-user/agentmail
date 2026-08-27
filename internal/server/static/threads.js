@@ -196,7 +196,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           var replyVars = {}; replyVars.who = esc(shortAddr(parentMsg.from));
           reply = ' <span class="th-reply">↩ ' + t("threads.replyTo", replyVars) + "</span>";
         }
-        html += '<div class="th-msg" data-th-msg="' + esc(m.id) + '" data-th-from="' + esc(m.from) + '" style="' +
+        html += '<div class="th-msg" data-th-msg="' + esc(m.id) + '" data-th-from="' + esc(m.from) + '" data-th-to="' + esc((m.to || []).join(",")) + '" style="' +
           (depth > 0 ? "margin-left:" + (18 * depth) + "px;" : "") + '">' +
           '<div class="th-hd"><span class="th-toggle">▶</span><span class="th-who">' + esc(shortAddr(m.from)) + '</span>' +
           '<span class="th-arr">→</span><span class="mono">' + esc(shortAddr((m.to || [])[0] || "")) + '</span>' +
@@ -238,8 +238,16 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
                 full.textContent = t("common.loading");
                 full.classList.remove("hidden");
                 toggle.textContent = "▼";
-                var body = await fetchBody({ id: el.getAttribute("data-th-msg") });
-                full.textContent = body || "";
+                try {
+                  var body = await fetchBody({
+                    id: el.getAttribute("data-th-msg"),
+                    from: el.getAttribute("data-th-from"),
+                    to: (el.getAttribute("data-th-to") || "").split(",").filter(Boolean)
+                  });
+                  full.textContent = body || "";
+                } catch (e) {
+                  full.textContent = t("common.error", { msg: e.message });
+                }
                 full.dataset.loaded = "1";
                 // Unread dot removal on expand
                 var badge = $(".th-badge", el);
