@@ -1533,3 +1533,25 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
 .th-filter-btn:hover:not(.on) { border-color: var(--accent, #3b82f6); }
 .th-peek { margin-top: 3px; font-size: 12px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- 话题森林视图（forest.js，v0.6.31 superior-approved v7 mock）----
+   横向=d3 tidy-tree（vendor/d3-hierarchy），纵向=信件真实时刻。 */
+.th-viewseg { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+#tf-ctl { display: inline-flex; gap: 6px; align-items: center; }
+.f-pill { font-size: 11px; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); cursor: pointer; }
+.f-pill.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+#tf-scroll { position: relative; height: 640px; overflow: auto; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px; }
+#tf-axis { position: absolute; left: 0; top: 0; width: 56px; font-size: 10px;
+  color: var(--muted); border-right: 1px solid var(--border); background: var(--panel); }
+#tf-axis .f-tl { position: absolute; right: 0; top: 14px; bottom: 14px; width: 2px; background: var(--border); }
+#tf-axis .f-tick { position: absolute; right: 6px; transform: translateY(-50%); }
+#tf-canvas { position: relative; }
+#tf-links { position: absolute; inset: 0; width: 100%; height: 100%; }
+.f-card { position: absolute; width: 186px; border-radius: 8px; padding: 5px 8px;
+  font-size: 11px; line-height: 1.4; box-shadow: 0 1px 2px rgba(20,30,60,.08); cursor: pointer; }
+.f-card:hover { outline: 2px solid var(--accent); }
+.f-head { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 10px; color: var(--muted); }
+.f-subj { font-weight: 600; }
+.f-body { color: #33404d; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

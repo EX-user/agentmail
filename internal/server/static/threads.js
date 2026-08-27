@@ -94,7 +94,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   }
 
   function loadThreadsList() {
-    var box = $("#mgmt-threads");
+    var box = $("#th-list");
     if (!box) return;
     box.textContent = t("common.loading");
     api("/api/threads?limit=" + PAGE + "&offset=" + listOffset + "&min_count=" + listMinCount, { keepSession: true })
@@ -248,7 +248,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   }
 
   function openThread(rootId) {
-    var box = $("#mgmt-threads");
+    var box = $("#th-list");
     if (!box) return;
     box.textContent = t("common.loading");
     api("/api/thread?root=" + encodeURIComponent(rootId), { keepSession: true })
@@ -304,7 +304,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   }
 
   function wireThreadsPane() {
-    var box = $("#mgmt-threads");
+    var box = $("#th-list");
     if (!box || box.dataset.wired) return;
     box.dataset.wired = "1";
     box.addEventListener("click", function (ev) {
@@ -317,7 +317,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   document.addEventListener("threads:entered", function () {
     if (!getSession()) return;
     wireThreadsPane();
-    if (!$("#mgmt-threads .th-topic") && !$("#mgmt-threads .th-rail")) loadThreadsList();
+    if (!$("#th-list .th-topic") && !$("#th-list .th-rail")) loadThreadsList();
   });
   document.addEventListener("threads:refresh", function () {
     if (getSession()) loadThreadsList();
@@ -326,11 +326,34 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
     listOffset = 0;
     listTotal = -1;
     subsCache = null;
-    var box = $("#mgmt-threads");
+    var box = $("#th-list");
     if (box) { box.textContent = ""; delete box.dataset.wired; }
   });
+
+  // ---- 森林/列表 视图切换（superior-approved v7 mock）----
+  // 胶囊在话题页头部；森林卡片点击经 threads:open 回列表视图打开详情。
+  function setTView(v) {
+    var forest = v === "forest";
+    var segBtns = $("#tf-ctl");
+    if (segBtns) segBtns.classList.toggle("hidden", !forest);
+    var list = $("#th-list");
+    if (list) list.classList.toggle("hidden", forest);
+    var fs = $("#tf-scroll");
+    if (fs) fs.classList.toggle("hidden", !forest);
+    $$("#th-viewseg [data-tview]").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.tview === v);
+    });
+    document.dispatchEvent(new CustomEvent(forest ? "tf:on" : "tf:off"));
+  }
+  $$("#th-viewseg [data-tview]").forEach(function (b) {
+    b.addEventListener("click", function () { setTView(b.dataset.tview); });
+  });
+  document.addEventListener("threads:open", function (ev) {
+    setTView("list");
+    if (ev && ev.detail && ev.detail.root) openThread(ev.detail.root);
+  });
   document.addEventListener("i18n:change", function () {
-    if (getSession() && ($("#mgmt-threads .th-topic") || $("#mgmt-threads .th-rail"))) {
+    if (getSession() && ($("#th-list .th-topic") || $("#th-list .th-rail"))) {
       // Re-render in the new language from the list start.
       listOffset = 0;
       loadThreadsList();
