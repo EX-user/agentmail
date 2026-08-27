@@ -745,15 +745,38 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
   // Theme: "light"/"dark" pin html[data-theme]; "system" removes the attr so
   // the prefers-color-scheme media query rules again. Persisted locally.
   const THEME_KEY = "theme";
+  // meta[name=theme-color] drives the browser tab bar / Android status bar in
+  // the installed PWA (manifest theme_color is static; this is dynamic). Keep
+  // it in lock-step with the picked theme so the frame matches the page.
+  const THEME_HEX = { light: "#f6f7f9", dark: "#0f1115" };
+  function currentThemePick() {
+    try { return localStorage.getItem(THEME_KEY) || "system"; } catch (_) { return "system"; }
+  }
+  function syncThemeColorMeta() {
+    const pick = currentThemePick();
+    const dark = pick === "dark" ||
+      (pick === "system" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) { meta = document.createElement("meta"); meta.name = "theme-color"; document.head.appendChild(meta); }
+    meta.content = THEME_HEX[dark ? "dark" : "light"];
+  }
+  // System-mode users still get a correct frame when the OS flips.
+  if (window.matchMedia) {
+    try {
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+        if (currentThemePick() === "system") syncThemeColorMeta();
+      });
+    } catch (_) {}
+  }
   function applyTheme(pick) {
     try { localStorage.setItem(THEME_KEY, pick); } catch (_) {}
     if (pick === "light" || pick === "dark") document.documentElement.dataset.theme = pick;
     else delete document.documentElement.dataset.theme;
+    syncThemeColorMeta();
     syncPrefThemeUI();
   }
   function syncPrefThemeUI() {
-    let cur = "system";
-    try { cur = localStorage.getItem(THEME_KEY) || "system"; } catch (_) {}
+    const cur = currentThemePick();
     $$(".pref-theme-btn").forEach(function (btn) {
       btn.classList.toggle("active", btn.dataset.themepick === cur);
     });
@@ -763,6 +786,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
     const savedTheme = localStorage.getItem(THEME_KEY);
     if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
   } catch (_) {}
+  syncThemeColorMeta();
   // Language buttons reflect the one shared setting (localStorage via
   // I18N.setLang): the current language is highlighted on load and on
   // every switch — header toggle included (feedback: must read as linked).
