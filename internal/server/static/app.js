@@ -798,8 +798,18 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
         dndEnabled.checked = !!d.enabled;
         dndStart.value = String(d.start_min || 0);
         dndEnd.value = String(d.end_min || 0);
-        dndNow.textContent = dndActiveNow(d) ? t("push.silencing") : "";
+        // active is the server's authoritative verdict (01M11RCXQ); local
+        // math is only the fallback for older servers without the field.
+        const silencing = typeof d.active === "boolean" ? d.active : dndActiveNow(d);
+        dndNow.textContent = silencing ? t("push.silencing") : "";
       } catch (_) { /* settings endpoint absent on older servers */ }
+    }
+    // Root-scope registration first (Devi route: /service-worker.js with
+    // Service-Worker-Allowed: /); falls back to /static/ while the route
+    // isn't merged - notificationclick then opens instead of focuses.
+    function registerSW() {
+      return navigator.serviceWorker.register("/service-worker.js")
+        .catch(function () { return navigator.serviceWorker.register("/static/service-worker.js"); });
     }
     async function ensureSub() {
       reg = await navigator.serviceWorker.getRegistration();
@@ -832,7 +842,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
           if (Notification.permission === "denied") throw new Error(t("push.blocked"));
           const perm = await Notification.requestPermission();
           if (perm !== "granted") throw new Error(t("push.denied"));
-          reg = reg || (await navigator.serviceWorker.register("/static/service-worker.js"));
+          reg = reg || (await registerSW());
           sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlB64ToUint8Array(vapidKey.public_key),
