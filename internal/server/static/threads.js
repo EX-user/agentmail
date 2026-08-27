@@ -31,7 +31,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   function ensureSubs() {
     if (subsCache) return Promise.resolve(subsCache);
     return api("/api/subs", { keepSession: true }).then(function (d) {
-      subsCache = ((d && d.subs) || []).map(function (s) { return s.address; });
+      subsCache = ((d && d.subordinates) || []).map(function (s) { return s.address; });
       return subsCache;
     }, function () { subsCache = []; return subsCache; });
   }
