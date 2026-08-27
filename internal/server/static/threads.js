@@ -51,7 +51,8 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   function fetchBody(m) {
     var me = ((getSession() || {}).address || "").toLowerCase();
     return ensureSubs().then(function (subs) {
-      var owner = resolveOwner(m, subs.map(String.toLowerCase), me);
+      var subsLower = subs.map(function(a){ return String(a).toLowerCase(); });
+      var owner = resolveOwner(m, subsLower, me);
       var path = owner === me
         ? "/api/message?id=" + encodeURIComponent(m.id)
         : "/api/subs/" + encodeURIComponent(owner) + "/message?id=" + encodeURIComponent(m.id);
@@ -175,12 +176,12 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
         }
         html += '<div class="th-msg" data-th-msg="' + esc(m.id) + '" data-th-from="' + esc(m.from) + '" style="' +
           (depth > 0 ? "margin-left:" + (18 * depth) + "px;" : "") + '">' +
-          '<div class="th-hd"><span class="th-who">' + esc(shortAddr(m.from)) + '</span>' +
+          '<div class="th-hd"><span class="th-toggle">▶</span><span class="th-who">' + esc(shortAddr(m.from)) + '</span>' +
           '<span class="th-arr">→</span><span class="mono">' + esc(shortAddr((m.to || [])[0] || "")) + '</span>' +
           "<span>· " + fmtTime(m.received_at) + "</span>" + reply +
           (m.unread ? ' <span class="th-badge">' + t("threads.unread") + "</span>" : "") +
           "</div>" +
-          '<div class="th-body" data-th-body="' + esc(m.id) + '">' + esc(m.preview || "") + "</div>" +
+          '<div class="th-full hidden" data-th-body="' + esc(m.id) + '"></div>' +
           "</div>";
         var kids = children[m.id] || [];
         // Forks indent one level; chains stay flat (linear fallback).
@@ -192,16 +193,6 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
     return html;
   }
 
-  function fillBodies(container) {
-    $$(".th-body", container).forEach(function (el) {
-      var id = el.getAttribute("data-th-body");
-      var m = { id: id };
-      fetchBody(m).then(function (body) {
-        if (body && body !== el.textContent) el.textContent = body;
-      }, function () { /* keep preview */ });
-    });
-  }
-
   function openThread(rootId) {
     var box = $("#mgmt-threads");
     if (!box) return;
@@ -210,18 +201,35 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
       .then(function (comp) {
         var msgs = (comp && comp.messages) || [];
         box.innerHTML = renderThreadDetail(comp && comp.root || rootId, msgs);
-        fillBodies(box);
         var back = $("#th-back");
         if (back) back.addEventListener("click", function () { loadThreadsList(); });
+        // Toggle fold/expand on each message — body fetched lazily on
+        // first expand, then cached (compose-thread pattern per superior).
         $$(".th-msg", box).forEach(function (el) {
-          el.addEventListener("click", function (ev) {
-            if (ev.target.closest("#th-back")) return;
-            // Deep-link into the browse pane preselected on the sender —
-            // the full-message pane belongs to manage (event bus).
-            var fromAddr = el.getAttribute("data-th-from");
-            if (fromAddr) document.dispatchEvent(new CustomEvent("mgmt:browse-account", {
-              detail: { address: fromAddr }
-            }));
+          var toggle = $(".th-toggle", el);
+          var full = $(".th-full", el);
+          if (!toggle || !full) return;
+          toggle.addEventListener("click", async function (ev) {
+            ev.stopPropagation();
+            if (full.classList.contains("hidden")) {
+              if (!full.dataset.loaded) {
+                full.textContent = t("common.loading");
+                full.classList.remove("hidden");
+                toggle.textContent = "▼";
+                var body = await fetchBody({ id: el.getAttribute("data-th-msg") });
+                full.textContent = body || "";
+                full.dataset.loaded = "1";
+                // Unread dot removal on expand
+                var badge = $(".th-badge", el);
+                if (badge) badge.remove();
+              } else {
+                full.classList.remove("hidden");
+                toggle.textContent = "▼";
+              }
+            } else {
+              full.classList.add("hidden");
+              toggle.textContent = "▶";
+            }
           });
         });
       }, function (e) {
