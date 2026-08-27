@@ -23,6 +23,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   var PAGE = 10;
   var listOffset = 0;
   var listTotal = -1;
+  var listMinCount = 1; // min topic length filter (1=all, 2=exclude lone, etc.)
   var subsCache = null; // [address] of declared subordinates (owner resolve)
 
   function shortAddr(a) { return String(a || "").split("@")[0]; }
@@ -30,7 +31,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   function ensureSubs() {
     if (subsCache) return Promise.resolve(subsCache);
     return api("/api/subs", { keepSession: true }).then(function (d) {
-      subsCache = ((d && d.subs) || []).map(function (s) { return s.address; });
+      subsCache = ((d && d.subordinates) || []).map(function (s) { return s.address; });
       return subsCache;
     }, function () { subsCache = []; return subsCache; });
   }
@@ -51,7 +52,8 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   function fetchBody(m) {
     var me = ((getSession() || {}).address || "").toLowerCase();
     return ensureSubs().then(function (subs) {
-      var owner = resolveOwner(m, subs.map(String.toLowerCase), me);
+      var subsLower = subs.map(function(a){ return String(a).toLowerCase(); });
+      var owner = resolveOwner(m, subsLower, me);
       var path = owner === me
         ? "/api/message?id=" + encodeURIComponent(m.id)
         : "/api/subs/" + encodeURIComponent(owner) + "/message?id=" + encodeURIComponent(m.id);
@@ -93,10 +95,27 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
     var box = $("#mgmt-threads");
     if (!box) return;
     box.textContent = t("common.loading");
-    api("/api/threads?limit=" + PAGE + "&offset=" + listOffset + "&min_count=1", { keepSession: true })
+    api("/api/threads?limit=" + PAGE + "&offset=" + listOffset + "&min_count=" + listMinCount, { keepSession: true })
       .then(function (d) {
         var topics = (d && d.threads) || [];
         listTotal = d && typeof d.total === "number" ? d.total : topics.length;
+        // Min-count filter control (superior: set lower bound for topic length)
+        var ctrl = document.createElement("div");
+        ctrl.className = "th-filter";
+        var filterOpts = [{ v: 1, l: t("threads.filterAll") }, { v: 2, l: t("threads.filter2") },
+                    { v: 3, l: t("threads.filter3") }, { v: 5, l: t("threads.filter5") }];
+        filterOpts.forEach(function (o) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "th-filter-btn" + (listMinCount === o.v ? " on" : "");
+          btn.textContent = o.l;
+          btn.addEventListener("click", function () {
+            if (listMinCount !== o.v) { listMinCount = o.v; listOffset = 0; loadThreadsList(); }
+          });
+          ctrl.appendChild(btn);
+        });
+        box.textContent = "";
+        box.appendChild(ctrl);
         if (!topics.length) {
           box.innerHTML = '<p class="muted">' + esc(t("threads.empty")) + "</p>";
           return;
@@ -118,17 +137,39 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
               box.appendChild(el.firstChild);
             });
         });
-        if (listOffset + PAGE < listTotal) {
-          var moreBtn = document.createElement("button");
-          moreBtn.type = "button";
-          moreBtn.className = "th-more";
-          var moreVars = {}; moreVars.a = listOffset + topics.length; moreVars.b = listTotal;
-          moreBtn.textContent = t("threads.more", moreVars);
-          moreBtn.addEventListener("click", function () {
-            listOffset += PAGE;
-            loadThreadsList();
-          });
-          box.appendChild(moreBtn);
+        // Pagination: prev / page indicator / next
+        if (listTotal > PAGE) {
+          var curPage = Math.floor(listOffset / PAGE) + 1;
+          var totalPages = Math.ceil(listTotal / PAGE);
+          var pag = document.createElement("div");
+          pag.className = "th-pag";
+          if (curPage > 1) {
+            var prevBtn = document.createElement("button");
+            prevBtn.type = "button";
+            prevBtn.className = "th-more";
+            prevBtn.textContent = "‹ " + t("threads.prev");
+            prevBtn.addEventListener("click", function () {
+              listOffset = Math.max(0, listOffset - PAGE);
+              loadThreadsList();
+            });
+            pag.appendChild(prevBtn);
+          }
+          var indicator = document.createElement("span");
+          indicator.className = "th-page-info";
+          indicator.textContent = t("threads.page", { a: curPage, b: totalPages });
+          pag.appendChild(indicator);
+          if (curPage < totalPages) {
+            var nextBtn = document.createElement("button");
+            nextBtn.type = "button";
+            nextBtn.className = "th-more";
+            nextBtn.textContent = t("threads.next") + " ›";
+            nextBtn.addEventListener("click", function () {
+              listOffset += PAGE;
+              loadThreadsList();
+            });
+            pag.appendChild(nextBtn);
+          }
+          box.appendChild(pag);
         }
       }, function (e) {
         box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
@@ -173,14 +214,14 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           var replyVars = {}; replyVars.who = esc(shortAddr(parentMsg.from));
           reply = ' <span class="th-reply">↩ ' + t("threads.replyTo", replyVars) + "</span>";
         }
-        html += '<div class="th-msg" data-th-msg="' + esc(m.id) + '" data-th-from="' + esc(m.from) + '" style="' +
+        html += '<div class="th-msg" data-th-msg="' + esc(m.id) + '" data-th-from="' + esc(m.from) + '" data-th-to="' + esc((m.to || []).join(",")) + '" style="' +
           (depth > 0 ? "margin-left:" + (18 * depth) + "px;" : "") + '">' +
-          '<div class="th-hd"><span class="th-who">' + esc(shortAddr(m.from)) + '</span>' +
+          '<div class="th-hd"><span class="th-toggle">▶</span><span class="th-who">' + esc(shortAddr(m.from)) + '</span>' +
           '<span class="th-arr">→</span><span class="mono">' + esc(shortAddr((m.to || [])[0] || "")) + '</span>' +
           "<span>· " + fmtTime(m.received_at) + "</span>" + reply +
           (m.unread ? ' <span class="th-badge">' + t("threads.unread") + "</span>" : "") +
           "</div>" +
-          '<div class="th-body" data-th-body="' + esc(m.id) + '">' + esc(m.preview || "") + "</div>" +
+          '<div class="th-full hidden" data-th-body="' + esc(m.id) + '"></div>' +
           "</div>";
         var kids = children[m.id] || [];
         // Forks indent one level; chains stay flat (linear fallback).
@@ -192,16 +233,6 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
     return html;
   }
 
-  function fillBodies(container) {
-    $$(".th-body", container).forEach(function (el) {
-      var id = el.getAttribute("data-th-body");
-      var m = { id: id };
-      fetchBody(m).then(function (body) {
-        if (body && body !== el.textContent) el.textContent = body;
-      }, function () { /* keep preview */ });
-    });
-  }
-
   function openThread(rootId) {
     var box = $("#mgmt-threads");
     if (!box) return;
@@ -210,18 +241,43 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
       .then(function (comp) {
         var msgs = (comp && comp.messages) || [];
         box.innerHTML = renderThreadDetail(comp && comp.root || rootId, msgs);
-        fillBodies(box);
         var back = $("#th-back");
         if (back) back.addEventListener("click", function () { loadThreadsList(); });
+        // Toggle fold/expand on each message — body fetched lazily on
+        // first expand, then cached (compose-thread pattern per superior).
         $$(".th-msg", box).forEach(function (el) {
-          el.addEventListener("click", function (ev) {
-            if (ev.target.closest("#th-back")) return;
-            // Deep-link into the browse pane preselected on the sender —
-            // the full-message pane belongs to manage (event bus).
-            var fromAddr = el.getAttribute("data-th-from");
-            if (fromAddr) document.dispatchEvent(new CustomEvent("mgmt:browse-account", {
-              detail: { address: fromAddr }
-            }));
+          var toggle = $(".th-toggle", el);
+          var full = $(".th-full", el);
+          if (!toggle || !full) return;
+          toggle.addEventListener("click", async function (ev) {
+            ev.stopPropagation();
+            if (full.classList.contains("hidden")) {
+              if (!full.dataset.loaded) {
+                full.textContent = t("common.loading");
+                full.classList.remove("hidden");
+                toggle.textContent = "▼";
+                try {
+                  var body = await fetchBody({
+                    id: el.getAttribute("data-th-msg"),
+                    from: el.getAttribute("data-th-from"),
+                    to: (el.getAttribute("data-th-to") || "").split(",").filter(Boolean)
+                  });
+                  full.textContent = body || "";
+                } catch (e) {
+                  full.textContent = t("common.error", { msg: e.message });
+                }
+                full.dataset.loaded = "1";
+                // Unread dot removal on expand
+                var badge = $(".th-badge", el);
+                if (badge) badge.remove();
+              } else {
+                full.classList.remove("hidden");
+                toggle.textContent = "▼";
+              }
+            } else {
+              full.classList.add("hidden");
+              toggle.textContent = "▶";
+            }
           });
         });
       }, function (e) {
