@@ -2130,14 +2130,23 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const diff = el.scrollWidth - el.clientWidth;
     if (diff > 8) {
-      el.style.setProperty("--wm-shift", diff + "px");
-      el.style.setProperty("--wm-dur", Math.max(4, diff / 20) + "s");
+      // Classic ticker: text enters from the right edge, travels past the
+      // left edge, brief hold, loop. Full address is on screen once per
+      // cycle (superior 01M1239C: pong felt jumpy and never showed all).
+      const dist = el.clientWidth + el.scrollWidth + 24;
+      el.style.setProperty("--wm-start", el.clientWidth + "px");
+      el.style.setProperty("--wm-end", -(el.scrollWidth + 24) + "px");
+      el.style.setProperty("--wm-dur", Math.max(8, dist / 26) + "s");
       el.classList.add("marquee");
     } else {
       el.classList.remove("marquee");
-      el.style.removeProperty("--wm-shift");
+      el.style.removeProperty("--wm-start");
+      el.style.removeProperty("--wm-end");
       el.style.removeProperty("--wm-dur");
     }
+  }
+  if (window.matchMedia && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.addEventListener("resize", maybeMarqueeWhoami);
   }
   window.addEventListener("resize", maybeMarqueeWhoami);
 
