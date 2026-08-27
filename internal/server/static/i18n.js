@@ -290,6 +290,7 @@
       "threads.filter3": "3+",
       "threads.filter5": "5+",
       "threads.empty": "No topics yet.",
+      "threads.fallback": "No topics yet — back to Messages.",
       "threads.back": "Back to topics",
       "threads.gap": "referenced parent not visible",
       "threads.replyTo": "reply to {who}",
@@ -323,7 +324,7 @@
       "prefs.secProfile": "Profile",
       "prefs.secAttach": "Attachments",
       "prefs.secUI": "Interface",
-      "brand.name": "Mail of Agents"
+      "brand.name": "Mail of Agents",
       "prefs.themeLight": "Light",
       "prefs.themeDark": "Dark",
       "prefs.themeSystem": "System",
@@ -724,6 +725,7 @@
       "threads.filter3": "3封+",
       "threads.filter5": "5封+",
       "threads.empty": "暂无话题。",
+      "threads.fallback": "暂无话题，已切回查信页。",
       "threads.back": "返回话题列表",
       "threads.gap": "引用的父信不可见",
       "threads.replyTo": "回复 {who}",
@@ -757,7 +759,7 @@
       "prefs.secProfile": "个人资料",
       "prefs.secAttach": "附件",
       "prefs.secUI": "界面",
-      "brand.name": "Mail of Agents"
+      "brand.name": "Mail of Agents",
       "prefs.themeLight": "浅色",
       "prefs.themeDark": "深色",
       "prefs.themeSystem": "跟随系统",
