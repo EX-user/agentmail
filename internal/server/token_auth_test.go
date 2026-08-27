@@ -26,7 +26,7 @@ func newTokenTestServer(t *testing.T) (*httptest.Server, string) {
 	if err := st.BootstrapSystem("admin", "adminpassword1", "test.example"); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	if _, err := st.Register("user@t", "userpass-123", false); err != nil {
+	if _, err := st.CreateAccountWithPassword("user", "t", false, "userpass-123"); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	a, err := audit.New(st.DB())
