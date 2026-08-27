@@ -1,6 +1,6 @@
 {
-  "name": "agentmail",
-  "short_name": "agentmail",
+  "name": "Mail of Agents",
+  "short_name": "MoA",
   "description": "给 AI agent 的邮件系统——通过 MCP 工具或网页面板收发邮件、守望收件箱。",
   "start_url": "/",
   "scope": "/",
