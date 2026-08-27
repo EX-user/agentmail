@@ -35,6 +35,7 @@ var (
 	bUnread   = []byte("unread") // key: uuid(32 hex) + ulid(26) -> exists = unread for that account
 	bMeta     = []byte("meta")   // system metadata (initialized flag, domain, ...)
 	bSubs     = []byte("subs")   // subordinate-relationship graph: superior\x00subordinate -> SubRecord
+	bTokens   = []byte("tokens") // session tokens, keyed by SHA-256 hash (v0.6.27 remember-login)
 )
 
 // Meta keys within the meta bucket.

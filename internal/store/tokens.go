@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	bolt "go.etcd.io/bbolt"
 )
 
 // Session tokens ("remember login", v0.6.27). The wire token is 256-bit
@@ -44,7 +46,7 @@ func (s *Store) CreateSessionToken(address string) (string, int64, error) {
 	token := hex.EncodeToString(raw)
 	now := time.Now().Unix()
 	rec := SessionToken{Address: address, CreatedAt: now, ExpiresAt: now + int64(sessionTTL.Seconds())}
-	err := s.db.Update(func(tx *Tx) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
 		data, err := json.Marshal(rec)
 		if err != nil {
 			return err
@@ -62,7 +64,7 @@ func (s *Store) CreateSessionToken(address string) (string, int64, error) {
 // per hour per token so the hot auth path usually stays read-only).
 func (s *Store) ResolveSessionToken(token string) (string, error) {
 	var addr string
-	err := s.db.Update(func(tx *Tx) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
 		key := tokenHash(token)
 		v := tx.Bucket(bTokens).Get(key)
 		if v == nil {
@@ -97,7 +99,7 @@ func (s *Store) ResolveSessionToken(token string) (string, error) {
 
 // RevokeSessionToken deletes one token (logout).
 func (s *Store) RevokeSessionToken(token string) error {
-	return s.db.Update(func(tx *Tx) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bTokens).Delete(tokenHash(token))
 	})
 }
@@ -106,7 +108,7 @@ func (s *Store) RevokeSessionToken(token string) error {
 // invalidates every remembered device). Full-scan is fine: token counts are
 // tiny and password changes are rare.
 func (s *Store) RevokeAllSessionTokens(address string) error {
-	return s.db.Update(func(tx *Tx) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bTokens).Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var rec SessionToken
