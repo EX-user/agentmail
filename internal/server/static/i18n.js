@@ -709,7 +709,7 @@
       "mgmt.mapLinear": "线性",
       "mgmt.mapLog": "对数",
       "mgmt.gNums": "数字：",
-      "mgmt.gNumsShort": "数",
+      "mgmt.gNumsShort": "数字",
       "mgmt.on": "开",
       "mgmt.off": "关",
       "mgmt.meLabel": "我",
