@@ -60,7 +60,7 @@ func newPushSendTestServer(t *testing.T) (*Server, *store.Store, *[]capturedPush
 func TestPushDeliveryAggregateAndDND(t *testing.T) {
 	srv, st, captured := newPushSendTestServer(t)
 	addr := "user@t"
-	if _, err := st.UpsertPushSub(&store.PushSubscription{Address: addr, Endpoint: "https://push/x", P256dh: "k", Auth: "a"}); err != nil {
+	if err := st.UpsertPushSub(&store.PushSubscription{Address: addr, Endpoint: "https://push/x", P256dh: "k", Auth: "a"}); err != nil {
 		t.Fatalf("sub: %v", err)
 	}
 
