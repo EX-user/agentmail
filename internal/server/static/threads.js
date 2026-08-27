@@ -119,17 +119,39 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
               box.appendChild(el.firstChild);
             });
         });
-        if (listOffset + PAGE < listTotal) {
-          var moreBtn = document.createElement("button");
-          moreBtn.type = "button";
-          moreBtn.className = "th-more";
-          var moreVars = {}; moreVars.a = listOffset + topics.length; moreVars.b = listTotal;
-          moreBtn.textContent = t("threads.more", moreVars);
-          moreBtn.addEventListener("click", function () {
-            listOffset += PAGE;
-            loadThreadsList();
-          });
-          box.appendChild(moreBtn);
+        // Pagination: prev / page indicator / next
+        if (listTotal > PAGE) {
+          var curPage = Math.floor(listOffset / PAGE) + 1;
+          var totalPages = Math.ceil(listTotal / PAGE);
+          var pag = document.createElement("div");
+          pag.className = "th-pag";
+          if (curPage > 1) {
+            var prevBtn = document.createElement("button");
+            prevBtn.type = "button";
+            prevBtn.className = "th-more";
+            prevBtn.textContent = "‹ " + t("threads.prev");
+            prevBtn.addEventListener("click", function () {
+              listOffset = Math.max(0, listOffset - PAGE);
+              loadThreadsList();
+            });
+            pag.appendChild(prevBtn);
+          }
+          var indicator = document.createElement("span");
+          indicator.className = "th-page-info";
+          indicator.textContent = t("threads.page", { a: curPage, b: totalPages });
+          pag.appendChild(indicator);
+          if (curPage < totalPages) {
+            var nextBtn = document.createElement("button");
+            nextBtn.type = "button";
+            nextBtn.className = "th-more";
+            nextBtn.textContent = t("threads.next") + " ›";
+            nextBtn.addEventListener("click", function () {
+              listOffset += PAGE;
+              loadThreadsList();
+            });
+            pag.appendChild(nextBtn);
+          }
+          box.appendChild(pag);
         }
       }, function (e) {
         box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";

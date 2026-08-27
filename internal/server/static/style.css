@@ -1445,3 +1445,7 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   border-radius: 8px; font-size: 13px; line-height: 1.5; white-space: pre-wrap;
   word-break: break-word; }
 .th-full.hidden { display: none; }
+
+.th-pag { display: flex; align-items: center; justify-content: center;
+  gap: 8px; margin-top: 10px; }
+.th-page-info { font-size: 12px; color: var(--muted); }
