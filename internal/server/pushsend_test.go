@@ -145,7 +145,7 @@ func TestPushSettingsEndpoint(t *testing.T) {
 
 	req, _ := http.NewRequest("PUT", ts.URL+"/api/push/settings",
 		bytes.NewReader([]byte(`{"enabled":true,"start_min":1320,"end_min":420}`)))
-	req.SetBasicAuth("user", "userpass-123")
+	req.SetBasicAuth("user@t", "userpass-123")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("put settings: %v %v", resp.StatusCode, err)
@@ -153,7 +153,7 @@ func TestPushSettingsEndpoint(t *testing.T) {
 	resp.Body.Close()
 
 	req2, _ := http.NewRequest("GET", ts.URL+"/api/push/settings", nil)
-	req2.SetBasicAuth("user", "userpass-123")
+	req2.SetBasicAuth("user@t", "userpass-123")
 	resp2, _ := http.DefaultClient.Do(req2)
 	var d store.PushDND
 	json.NewDecoder(resp2.Body).Decode(&d)
@@ -165,7 +165,7 @@ func TestPushSettingsEndpoint(t *testing.T) {
 	// Invalid minutes rejected.
 	req3, _ := http.NewRequest("PUT", ts.URL+"/api/push/settings",
 		bytes.NewReader([]byte(`{"enabled":true,"start_min":99999,"end_min":0}`)))
-	req3.SetBasicAuth("user", "userpass-123")
+	req3.SetBasicAuth("user@t", "userpass-123")
 	resp3, _ := http.DefaultClient.Do(req3)
 	if resp3.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid window = %d, want 400", resp3.StatusCode)
