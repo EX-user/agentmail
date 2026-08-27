@@ -23,6 +23,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
   var PAGE = 10;
   var listOffset = 0;
   var listTotal = -1;
+  var listMinCount = 1; // min topic length filter (1=all, 2=exclude lone, etc.)
   var subsCache = null; // [address] of declared subordinates (owner resolve)
 
   function shortAddr(a) { return String(a || "").split("@")[0]; }
@@ -94,10 +95,27 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
     var box = $("#mgmt-threads");
     if (!box) return;
     box.textContent = t("common.loading");
-    api("/api/threads?limit=" + PAGE + "&offset=" + listOffset + "&min_count=1", { keepSession: true })
+    api("/api/threads?limit=" + PAGE + "&offset=" + listOffset + "&min_count=" + listMinCount, { keepSession: true })
       .then(function (d) {
         var topics = (d && d.threads) || [];
         listTotal = d && typeof d.total === "number" ? d.total : topics.length;
+        // Min-count filter control (superior: set lower bound for topic length)
+        var ctrl = document.createElement("div");
+        ctrl.className = "th-filter";
+        var filterOpts = [{ v: 1, l: t("threads.filterAll") }, { v: 2, l: t("threads.filter2") },
+                    { v: 3, l: t("threads.filter3") }, { v: 5, l: t("threads.filter5") }];
+        filterOpts.forEach(function (o) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "th-filter-btn" + (listMinCount === o.v ? " on" : "");
+          btn.textContent = o.l;
+          btn.addEventListener("click", function () {
+            if (listMinCount !== o.v) { listMinCount = o.v; listOffset = 0; loadThreadsList(); }
+          });
+          ctrl.appendChild(btn);
+        });
+        box.textContent = "";
+        box.appendChild(ctrl);
         if (!topics.length) {
           box.innerHTML = '<p class="muted">' + esc(t("threads.empty")) + "</p>";
           return;

@@ -1453,3 +1453,10 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   border: 1px solid var(--border); background: var(--panel); color: var(--text);
   cursor: pointer; white-space: nowrap; }
 .th-more:hover { border-color: var(--accent, #3b82f6); color: var(--accent, #3b82f6); }
+
+.th-filter { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.th-filter-btn { font-size: 11px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  cursor: pointer; }
+.th-filter-btn.on { background: var(--accent, #3b82f6); border-color: var(--accent, #3b82f6); color: #fff; }
+.th-filter-btn:hover:not(.on) { border-color: var(--accent, #3b82f6); }
