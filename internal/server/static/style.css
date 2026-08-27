@@ -1402,11 +1402,13 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
 /* ===== Threads (topics) view — third mgmt segment ===== */
 #mgmt-threads { max-width: 640px; }
 .th-topic { background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px; margin-bottom: 10px; cursor: pointer; }
+  padding: 10px; margin-bottom: 10px; cursor: pointer; overflow: hidden; }
+#mgmt-threads .th-hd { min-width: 0; }
 .th-topic:hover { background: #f6f9ff; }
-.th-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.th-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; min-width: 0; }
 .th-who { font-weight: 600; }
-.th-subj { font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+.th-subj { font-size: 12px; font-family: ui-monospace, Consolas, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .th-when { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .th-pv { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
