@@ -53,28 +53,47 @@ export function fmtBytes(n) {
 export function $(sel, root) { return (root || document).querySelector(sel); }
 export function $$(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
-// ---- session / auth ----
+// ---- session / auth (v0.6.27: session-token support) ----
 
-const SESSION_KEY = "agentmail_creds"; // sessionStorage: {address, password, is_admin}
+const SESSION_KEY = "agentmail_creds";   // sessionStorage: {address, password, is_admin}
+const TOKEN_KEY    = "agentmail_token";  // localStorage: {address, token}
 
 export function getSession() {
+  // Token path (remember-me): localStorage has higher priority when token is valid.
+  try {
+    const t = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+    if (t && t.address && t.token) return { address: t.address, token: t.token, is_admin: undefined };
+  } catch (_) {}
+  // Password path (session-only or fallback).
   try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); }
   catch (_) { return null; }
 }
 export function setSession(s) {
-  if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  if (s && s.address && s.password) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
   else sessionStorage.removeItem(SESSION_KEY);
 }
-// basicAuth returns the Authorization header value for the cached creds, or "".
+// setToken stores/retrieves a session token in localStorage ("remember me").
+export function setToken(address, token) {
+  if (address && token) localStorage.setItem(TOKEN_KEY, JSON.stringify({ address, token }));
+  else localStorage.removeItem(TOKEN_KEY);
+}
+export function clearAuth() {
+  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+// Returns the Authorization header value for the cached creds, or "".
+// Token path: Bearer <token> ; password path: Basic base64.
 export function basicAuth() {
   const s = getSession();
   if (!s || !s.address) return "";
+  if (s.token) return "Bearer " + s.token;
   return "Basic " + btoa(unescape(encodeURIComponent(s.address + ":" + s.password)));
 }
 
 // ---- fetch wrapper ----
 
-// api wraps fetch with the cached Basic auth header. If a call comes back 401,
+// api wraps fetch with the cached auth header. If a call comes back 401,
 // the cached creds are stale/wrong: clear them and surface the login page.
 export async function api(path, opts) {
   opts = opts || {};
@@ -89,7 +108,7 @@ export async function api(path, opts) {
     // tearing down the whole session (defense per the v0.5.10.2 review —
     // one failed subrequest must not log the user out).
     if (opts.keepSession) throw new Error("401 Unauthorized");
-    setSession(null); // creds invalid — force re-login
+    clearAuth(); // token invalid — force re-login
     if (unauthorizedHandler) { try { unauthorizedHandler(); } catch (_) {} }
     throw new Error("session expired — please log in again");
   }

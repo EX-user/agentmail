@@ -8,7 +8,7 @@
 // ./core.js; this entry imports it and keeps every domain in place. i18n stays
 // a classic script (window.I18N). HARD CONSTRAINT: domain code imports only
 // core; cross-domain interaction goes through DOM events.
-import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthorizedHandler, fmtTime, fmtBytes, copyText } from "./core.js";
+import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, setUnauthorizedHandler, fmtTime, fmtBytes, copyText } from "./core.js";
 
 (function () {
   "use strict";
@@ -546,8 +546,10 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
       toast("Password changed — please log in again");
       // Credentials changed: update the cached password so the next login works
       // seamlessly, then force re-login to confirm the new password.
+      // v0.6.27: invalidate token too (password change kills old token).
       const s = getSession();
       if (s) { s.password = newPw; setSession(s); }
+      localStorage.removeItem("agentmail_token");
       setTimeout(function () { setSession(null); showLogin(); }, 1500);
     }).catch(function (e) {
       toast("Change failed: " + e.message, "error");
@@ -1988,8 +1990,11 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
     }
   }
 
-  $("#btn-logout").addEventListener("click", function () {
+  $("#btn-logout").addEventListener("click", async function () {
+    // v0.6.27: revoke server-side token before clearing local auth.
+    try { await api("/api/auth/token", { method: "DELETE" }); } catch (_) {}
     setSession(null);
+    localStorage.removeItem("agentmail_token");
     showLogin();
   });
 
@@ -1998,6 +2003,7 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
   $("#btn-login").addEventListener("click", async function () {
     const address = $("#login-address").value.trim();
     const password = $("#login-password").value;
+    const remember = $("#login-remember").checked;
     const status = $("#login-status");
     if (!address || !password) { status.textContent = "Address and password are required."; return; }
     status.textContent = "Signing in…";
@@ -2006,6 +2012,15 @@ import { $, $$, esc, api, getSession, setSession, basicAuth, toast, setUnauthori
     try {
       const me = await api("/api/account/info?query=self");
       const s = getSession(); s.is_admin = !!me.is_admin; setSession(s);
+      // v0.6.27 token: acquire after login, store per "remember me" pref.
+      // Password is NEVER stored in localStorage (alice red line).
+      try {
+        const tok = await api("/api/auth/token", { method: "POST" });
+        if (tok && tok.token) {
+          if (remember) setToken(address, tok.token);
+          // else: password stays in sessionStorage (session-only mode).
+        }
+      } catch (_) { /* token endpoint optional; basic auth still works */ }
       status.textContent = "";
       showApp();
       activateTab("overview");
