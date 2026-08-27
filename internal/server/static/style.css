@@ -459,6 +459,18 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 }
 .toast.error { border-color: var(--error); }
 .toast.success { border-color: var(--success); }
+/* Mobile (superior): center the feedback toast across the width instead of
+   hugging the right edge where it clipped on narrow screens. */
+@media (max-width: 600px) {
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    max-width: none;
+    text-align: center;
+    padding: 10px 12px;
+  }
+}
 
 .hidden { display: none !important; }
 
@@ -757,6 +769,20 @@ nav .tab { flex: 0 0 auto; }
    natural table layout. */
 @media (max-width: 800px) {
   .tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Superior (v0.6.28): five nav cards align to BOTH screen edges on
+     mobile instead of clustering left — equal-width stretch, tighter
+     padding so zh/en labels (邮件管理 / Manage) fit without scrolling. */
+  nav { gap: 5px; }
+  nav .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    padding-left: 4px;
+    padding-right: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* Stats row wraps instead of overflowing. */
