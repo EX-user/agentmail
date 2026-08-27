@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"sync"
 	"time"
@@ -183,6 +184,28 @@ func maskEndpoint(ep string) string {
 	return ep
 }
 
+// handleServiceWorkerJS serves the SW at ROOT scope so notificationclick can
+// focus the already-open app window (a /static/ scope cannot reach "/").
+// The file itself is frontend-owned inside the embedded static FS.
+//   GET /service-worker.js
+func (s *Server) handleServiceWorkerJS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		methodNotAllowed(w)
+		return
+	}
+	data, err := fs.ReadFile(staticSubFS, "service-worker.js")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	// Advertise the widened scope; harmless for same-file registration.
+	w.Header().Set("Service-Worker-Allowed", "/")
+	// SW files must not be cached aggressively — a stale worker blocks updates.
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
+}
+
 // --- DND settings API ---
 
 // handlePushSettings reads or updates the caller's do-not-disturb window.
@@ -197,7 +220,15 @@ func (s *Server) handlePushSettings(w http.ResponseWriter, r *http.Request) {
 			internalError(w, "read dnd: "+err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, d)
+		// active is the server's authoritative "silenced right now" verdict —
+		// the UI's status chip reads this instead of recomputing clocks.
+		now := time.Now()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"enabled":   d.Enabled,
+			"start_min": d.StartMin,
+			"end_min":   d.EndMin,
+			"active":    d.ActiveAt(now.Hour()*60 + now.Minute()),
+		})
 	case http.MethodPut:
 		var d store.PushDND
 		if err := decodeJSON(r, &d); err != nil {

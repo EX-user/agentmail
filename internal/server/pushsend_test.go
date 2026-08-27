@@ -159,11 +159,24 @@ func TestPushSettingsEndpoint(t *testing.T) {
 	req2, _ := http.NewRequest("GET", ts.URL+"/api/push/settings", nil)
 	req2.SetBasicAuth("user@t", "userpass-123")
 	resp2, _ := http.DefaultClient.Do(req2)
-	var d store.PushDND
+	var d struct {
+		Enabled  bool `json:"enabled"`
+		StartMin int  `json:"start_min"`
+		EndMin   int  `json:"end_min"`
+		Active   bool `json:"active"`
+	}
 	json.NewDecoder(resp2.Body).Decode(&d)
 	resp2.Body.Close()
 	if !d.Enabled || d.StartMin != 1320 || d.EndMin != 420 {
 		t.Fatalf("settings roundtrip mismatch: %+v", d)
+	}
+	// active is authoritative and must match the window math server-side
+	// (22:00-07:00 window: whatever the local hour is, the verdict must be
+	// consistent with PushDND.ActiveAt).
+	now := time.Now()
+	want := store.PushDND{Enabled: true, StartMin: 1320, EndMin: 420}.ActiveAt(now.Hour()*60 + now.Minute())
+	if d.Active != want {
+		t.Fatalf("active=%v, want %v", d.Active, want)
 	}
 
 	// Invalid minutes rejected.
@@ -182,6 +195,31 @@ func TestPushSettingsEndpoint(t *testing.T) {
 		t.Fatalf("anon settings = %d, want 401", resp4.StatusCode)
 	}
 	resp4.Body.Close()
+}
+
+// TestServiceWorkerJSRoute verifies the root-scope SW endpoint: 404 while
+// the frontend hasn't shipped the file, correct headers when present.
+func TestServiceWorkerJSRoute(t *testing.T) {
+	srv, _, _ := newPushSendTestServer(t)
+	ts := httptest.NewServer(srv.Handler())
+
+	resp, err := http.Get(ts.URL + "/service-worker.js")
+	if err != nil {
+		t.Fatalf("sw fetch: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return // file not yet embedded on this branch (frontend M3 lands it)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("sw route = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "javascript") {
+		t.Fatalf("sw content-type = %q", ct)
+	}
+	if swa := resp.Header.Get("Service-Worker-Allowed"); swa != "/" {
+		t.Fatalf("Service-Worker-Allowed = %q, want /", swa)
+	}
 }
 
 // TestPushDNDWindowSemantics pins the wrap-midnight behavior.
