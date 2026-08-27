@@ -539,14 +539,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
   }
 
-  // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row above the
-  // letter body; click reopens the parent in this pane (same loader, so
-  // visibility rules stay identical).
-  // Reply-reference row (v0.6.18 superior adjustment): rendered in the
-  // field zone as a normal .detail-row — same visual treatment as
-  // From/To/Subject, not a body-area exception. Shows the raw parent id
-  // only (no async subject fetch since f3e1511); the row appears when the
-  // current message has in_reply_to.
+  // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row in the
+  // field zone; click reopens the parent (same loader, visibility rules
+  // identical). Superior ruling (v0.6.25): the row is a header field —
+  // same visual treatment as From/To/Subject — placed BEFORE the
+  // reply/forward action row, so the header zone reads:
+  //   From / To / Subject / Date / ↩ in-reply-to / [Reply] [Forward]
+  //   <hr>  body  attachments
   function wireReplyRef(detail, msg, reopen) {
     if (!msg || !msg.in_reply_to) return;
     var row = document.createElement("div");
@@ -556,11 +555,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     link.href = "javascript:void(0)";
     link.textContent = "‹" + msg.in_reply_to + "›";
     row.appendChild(link);
-    var host = detail.querySelector(".body");
-    var mark = host ? host.previousElementSibling : null;
-    if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
-    else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
-    else detail.appendChild(row);
+    // Insert before the .row action container that holds the reply/forward
+    // buttons (identified by containing btn-inbox-reply or btn-mail-reply).
+    var btnRow = detail.querySelector("#btn-inbox-reply, #btn-mail-reply");
+    if (btnRow) {
+      var actionBox = btnRow.closest(".row");
+      if (actionBox && actionBox.parentNode) actionBox.parentNode.insertBefore(row, actionBox);
+      else btnRow.parentNode.insertBefore(row, btnRow);
+    } else {
+      var hr = detail.querySelector("hr");
+      if (hr && hr.parentNode) hr.parentNode.insertBefore(row, hr);
+    }
     link.addEventListener("click", function () { reopen(msg.in_reply_to); });
   }
 
