@@ -539,14 +539,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
   }
 
-  // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row above the
-  // letter body; click reopens the parent in this pane (same loader, so
-  // visibility rules stay identical).
-  // Reply-reference row (v0.6.18 superior adjustment): rendered in the
-  // field zone as a normal .detail-row — same visual treatment as
-  // From/To/Subject, not a body-area exception. Shows the raw parent id
-  // only (no async subject fetch since f3e1511); the row appears when the
-  // current message has in_reply_to.
+  // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row in the
+  // field zone; click reopens the parent (same loader, visibility rules
+  // identical). Superior ruling (v0.6.25): the row is a header field —
+  // same visual treatment as From/To/Subject — placed BEFORE the
+  // reply/forward action row, so the header zone reads:
+  //   From / To / Subject / Date / ↩ in-reply-to / [Reply] [Forward]
+  //   <hr>  body  attachments
   function wireReplyRef(detail, msg, reopen) {
     if (!msg || !msg.in_reply_to) return;
     var row = document.createElement("div");
@@ -556,11 +555,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     link.href = "javascript:void(0)";
     link.textContent = "‹" + msg.in_reply_to + "›";
     row.appendChild(link);
-    var host = detail.querySelector(".body");
-    var mark = host ? host.previousElementSibling : null;
-    if (mark && mark.tagName === "HR" && mark.parentNode) mark.parentNode.insertBefore(row, mark);
-    else if (host && host.parentNode) host.parentNode.insertBefore(row, host);
-    else detail.appendChild(row);
+    // Insert before the .row action container that holds the reply/forward
+    // buttons (identified by containing btn-inbox-reply or btn-mail-reply).
+    var btnRow = detail.querySelector("#btn-inbox-reply, #btn-mail-reply");
+    if (btnRow) {
+      var actionBox = btnRow.closest(".row");
+      if (actionBox && actionBox.parentNode) actionBox.parentNode.insertBefore(row, actionBox);
+      else btnRow.parentNode.insertBefore(row, btnRow);
+    } else {
+      var hr = detail.querySelector("hr");
+      if (hr && hr.parentNode) hr.parentNode.insertBefore(row, hr);
+    }
     link.addEventListener("click", function () { reopen(msg.in_reply_to); });
   }
 
@@ -594,11 +599,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id || m.message_id) + "</code></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
-        '<div class="row" style="margin-top:12px;">' +
+        '<div class="row" style="margin:8px 0;">' +
         '<button class="row-action" id="btn-mail-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-mail-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
-        attachmentCards(m));
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireMailNav(detail, item);
       wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
       wireAttachmentDownloads(detail, m);
@@ -1138,7 +1142,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        '<div class="detail-row"><button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
+        '<div class="row" style="margin:8px 0;">' +
+        '<button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
         "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireAttachmentDownloads(detail, m);
@@ -1169,17 +1174,19 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     var seg = $("#mgmt-seg");
     if (!seg) return;
     function setView(v) {
-      var browse = $("#mgmt-browse"), overview = $("#mgmt-overview");
-      if (v !== "overview") v = "browse";
+      var browse = $("#mgmt-browse"), overview = $("#mgmt-overview"), threads = $("#mgmt-threads");
+      if (v !== "overview" && v !== "threads") v = "browse";
       if (browse) browse.classList.toggle("hidden", v !== "browse");
       if (overview) overview.classList.toggle("hidden", v !== "overview");
+      if (threads) threads.classList.toggle("hidden", v !== "threads");
       $$("#mgmt-seg button").forEach(function (b) {
         b.classList.toggle("on", b.dataset.mview === v);
       });
       try { localStorage.setItem("mgmt-view", v); } catch (_) {}
-      // The overview pane is the overview module's; entering (or re-entering
-      // — it re-fits a drifting canvas) goes through the event bus.
+      // The overview/threads panes are their own modules'; entering (or
+      // re-entering) goes through the event bus.
       if (v === "overview") document.dispatchEvent(new CustomEvent("overview:entered"));
+      if (v === "threads") document.dispatchEvent(new CustomEvent("threads:entered"));
     }
     seg.addEventListener("click", function (ev) {
       var b = ev.target.closest("button[data-mview]");
@@ -1247,11 +1254,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
   });
   document.addEventListener("manage:refresh", function () {
     document.dispatchEvent(new CustomEvent("overview:refresh"));
+    document.dispatchEvent(new CustomEvent("threads:refresh"));
   });
   document.addEventListener("manage:reset", function () {
     mgmtPrefs = null;
     subsCache = null;
     document.dispatchEvent(new CustomEvent("overview:reset"));
+    document.dispatchEvent(new CustomEvent("threads:reset"));
     if (typeof invalidateMailAccountOptions === "function") invalidateMailAccountOptions();
   });
   document.addEventListener("subs:request", function (ev) {
