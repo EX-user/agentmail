@@ -61,6 +61,10 @@ type Server struct {
 	// regLimit throttles registration attempts per client IP (the threshold
 	// itself lives in the store so admins can tune it live).
 	regLimit *regLimiter
+	// pushSubsRate limits push subscription mutations per account;
+	// pushIPLimit throttles the same per client IP (v0.6.30 abuse guard).
+	pushRates    map[string]*rateWindow
+	pushIPLimit  *regLimiter
 }
 
 // New builds a server with the given dependencies.
@@ -71,6 +75,8 @@ func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 		recvRates:    make(map[string]*rateWindow),
 		declareRates: make(map[string]*rateWindow),
 		fileRates:    make(map[string]*rateWindow),
+		pushRates:    make(map[string]*rateWindow),
+		pushIPLimit:  newRegLimiter(time.Hour),
 		regLimit:     newRegLimiter(time.Hour),
 	}
 }
@@ -167,6 +173,17 @@ func (s *Server) Handler() http.Handler {
 			s.handleAuthTokenIssue(w, r)
 		case http.MethodDelete:
 			s.handleAuthTokenRevoke(w, r)
+		default:
+			methodNotAllowed(w)
+		}
+	})))
+	mux.HandleFunc("/api/push/vapid-key", s.requireInitialized(s.handleVAPIDKey))
+	mux.HandleFunc("/api/push/subscribe", s.requireInitialized(s.requireAccount(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			s.handlePushSubscribe(w, r)
+		case http.MethodDelete:
+			s.handlePushRevoke(w, r)
 		default:
 			methodNotAllowed(w)
 		}

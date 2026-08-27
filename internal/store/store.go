@@ -35,7 +35,8 @@ var (
 	bUnread   = []byte("unread") // key: uuid(32 hex) + ulid(26) -> exists = unread for that account
 	bMeta     = []byte("meta")   // system metadata (initialized flag, domain, ...)
 	bSubs     = []byte("subs")   // subordinate-relationship graph: superior\x00subordinate -> SubRecord
-	bTokens   = []byte("tokens") // session tokens, keyed by SHA-256 hash (v0.6.27 remember-login)
+	bTokens   = []byte("tokens")   // session tokens, keyed by SHA-256 hash (v0.6.27 remember-login)
+	bPushSubs = []byte("pushsubs") // web push subscriptions: account\x00sha256(endpoint) -> PushSubscription (v0.6.30)
 )
 
 // Meta keys within the meta bucket.
@@ -76,7 +77,7 @@ func Open(path string) (*Store, error) {
 	}
 	s := &Store{db: db, now: time.Now}
 	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread, bMeta, bShowcase, bFiles, bFileData, bSubs, bTokens} {
+		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread, bMeta, bShowcase, bFiles, bFileData, bSubs, bTokens, bPushSubs} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return fmt.Errorf("create bucket %q: %w", b, err)
 			}

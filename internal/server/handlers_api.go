@@ -747,7 +747,7 @@ func (s *Server) handleAuthTokenIssue(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "mint token: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token issued")
+	_ = s.audit.Record(r.Context(), audit.ActionAuthTokenIssue, who, "session token issued")
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_at": expiresAt})
 }
 
@@ -768,7 +768,7 @@ func (s *Server) handleAuthTokenRevoke(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "revoke token: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token revoked")
+	_ = s.audit.Record(r.Context(), audit.ActionAuthTokenRevoke, who, "session token revoked")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": true})
 }
 
