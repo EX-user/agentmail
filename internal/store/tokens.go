@@ -64,6 +64,7 @@ func (s *Store) CreateSessionToken(address string) (string, int64, error) {
 // per hour per token so the hot auth path usually stays read-only).
 func (s *Store) ResolveSessionToken(token string) (string, error) {
 	var addr string
+	var expired bool
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		key := tokenHash(token)
 		v := tx.Bucket(bTokens).Get(key)
@@ -76,8 +77,10 @@ func (s *Store) ResolveSessionToken(token string) (string, error) {
 		}
 		now := time.Now().Unix()
 		if now >= rec.ExpiresAt {
-			_ = tx.Bucket(bTokens).Delete(key)
-			return ErrTokenExpired
+			// Return nil so the delete COMMITS — a non-nil return would roll
+			// the whole transaction back and resurrect the dead token.
+			expired = true
+			return tx.Bucket(bTokens).Delete(key)
 		}
 		// Rolling renewal: only rewrite when a meaningful slice of the TTL
 		// has elapsed, otherwise this resolves as a plain read.
@@ -94,7 +97,13 @@ func (s *Store) ResolveSessionToken(token string) (string, error) {
 		addr = rec.Address
 		return nil
 	})
-	return addr, err
+	if err != nil {
+		return "", err
+	}
+	if expired {
+		return "", ErrTokenExpired
+	}
+	return addr, nil
 }
 
 // RevokeSessionToken deletes one token (logout).
