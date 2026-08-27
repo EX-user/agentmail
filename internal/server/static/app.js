@@ -735,7 +735,34 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
     const zh = $("#pref-lang-zh"), en = $("#pref-lang-en");
     if (zh) zh.addEventListener("click", function () { window.I18N.setLang("zh"); });
     if (en) en.addEventListener("click", function () { window.I18N.setLang("en"); });
+    // v0.6.27 three-way theme switch (preferences page only, superior ruling).
+    $$(".pref-theme-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        applyTheme(btn.dataset.themepick);
+      });
+    });
   })();
+  // Theme: "light"/"dark" pin html[data-theme]; "system" removes the attr so
+  // the prefers-color-scheme media query rules again. Persisted locally.
+  const THEME_KEY = "theme";
+  function applyTheme(pick) {
+    try { localStorage.setItem(THEME_KEY, pick); } catch (_) {}
+    if (pick === "light" || pick === "dark") document.documentElement.dataset.theme = pick;
+    else delete document.documentElement.dataset.theme;
+    syncPrefThemeUI();
+  }
+  function syncPrefThemeUI() {
+    let cur = "system";
+    try { cur = localStorage.getItem(THEME_KEY) || "system"; } catch (_) {}
+    $$(".pref-theme-btn").forEach(function (btn) {
+      btn.classList.toggle("active", btn.dataset.themepick === cur);
+    });
+  }
+  // Apply saved theme before first paint of the app shell.
+  try {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+  } catch (_) {}
   // Language buttons reflect the one shared setting (localStorage via
   // I18N.setLang): the current language is highlighted on load and on
   // every switch — header toggle included (feedback: must read as linked).
@@ -776,6 +803,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
       if (lvS) lvS.value = userPrefs.livenessStrongHours;
       if (lvW) lvW.value = userPrefs.livenessWeakHours;
       syncPrefLangUI();
+      syncPrefThemeUI();
       // Subordinate settings section (moved in from Accounts): regular
       // accounts only.
       const s = getSession();

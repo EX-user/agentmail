@@ -32,6 +32,37 @@
   }
 }
 
+/* ---- Manual theme overrides (v0.6.27 three-way switch) ----
+   html[data-theme] beats both :root blocks by specificity, so a user-picked
+   theme wins over prefers-color-scheme; no data-theme = system-follow. */
+html[data-theme="dark"] {
+  --bg: #0f1115;
+  --panel: #1a1d24;
+  --panel-2: #22262f;
+  --text: #e6e6e6;
+  --muted: #9aa0aa;
+  --accent: #4a9eff;
+  --accent-2: #2f6fc0;
+  --border: #2c313a;
+  --success: #3fb950;
+  --error: #f85149;
+  --sub-card-bg: var(--bg);
+  --sub-card-border: var(--border);
+}
+html[data-theme="light"] {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #eef1f5;
+  --text: #1f2328;
+  --muted: #57606a;
+  --accent: #2f6fc0;
+  --border: #d8dee6;
+  --success: #1a7f37;
+  --error: #cf222e;
+  --sub-card-bg: #ffffff;
+  --sub-card-border: #c4ccd6;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
