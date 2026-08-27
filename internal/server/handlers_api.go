@@ -278,6 +278,9 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
+	// Local delivery succeeded: fan out notification pushes (v0.6.30).
+	// Best-effort and async — notifyDelivery never fails the send.
+	s.notifyDelivery(fromName, validRecipients)
 	// Showcase tee: explicit sender opt-in. Best-effort — a tee failure must
 	// not fail the (successful) send. (showcase_enabled only hides the
 	// Compose checkbox UI; API public sends are not gated by it.)

@@ -121,6 +121,54 @@ func (s *Store) DeleteAllPushSubs(address string) error {
 				return err
 			}
 		}
-		return nil
+		return tx.Bucket(bPushDND).Delete([]byte(address)) // cascade the DND preference too
+	})
+}
+
+// PushDND is an account's do-not-disturb window for notifications. Ruling
+// (alice 01M11J45M): the SERVER decides silence — client clocks are
+// untrusted. Default off; the preference page turns it on.
+type PushDND struct {
+	Enabled  bool `json:"enabled"`
+	StartMin int  `json:"start_min"` // minutes since local midnight, inclusive
+	EndMin   int  `json:"end_min"`   // exclusive; Start==End means never silent
+}
+
+func (d PushDND) ActiveAt(minOfDay int) bool {
+	if !d.Enabled || d.StartMin == d.EndMin {
+		return false
+	}
+	if d.StartMin < d.EndMin {
+		return minOfDay >= d.StartMin && minOfDay < d.EndMin
+	}
+	// Window wraps midnight (e.g. 22:00–07:00).
+	return minOfDay >= d.StartMin || minOfDay < d.EndMin
+}
+
+// GetPushDND returns the account's DND window (zero value = disabled).
+func (s *Store) GetPushDND(address string) (PushDND, error) {
+	var d PushDND
+	err := s.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(bPushDND).Get([]byte(address))
+		if v == nil {
+			return nil
+		}
+		return json.Unmarshal(v, &d)
+	})
+	return d, err
+}
+
+// SetPushDND persists the DND window.
+func (s *Store) SetPushDND(address string, d PushDND) error {
+	valid := func(n int) bool { return n >= 0 && n < 24*60 }
+	if !valid(d.StartMin) || !valid(d.EndMin) {
+		return ErrPushSubInvalid
+	}
+	data, err := json.Marshal(d)
+	if err != nil {
+		return err
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bPushDND).Put([]byte(address), data)
 	})
 }

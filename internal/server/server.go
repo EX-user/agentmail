@@ -63,8 +63,14 @@ type Server struct {
 	regLimit *regLimiter
 	// pushSubsRate limits push subscription mutations per account;
 	// pushIPLimit throttles the same per client IP (v0.6.30 abuse guard).
-	pushRates    map[string]*rateWindow
-	pushIPLimit  *regLimiter
+	pushRates   map[string]*rateWindow
+	pushIPLimit *regLimiter
+
+	// Push delivery state (v0.6.30 M2): aggregation windows, DND queues and
+	// the test seam for actually sending a notification.
+	pd        *pushDelivery
+	sendPush  sendPushFunc // nil = real webpush sender
+	vapidSubject string
 }
 
 // New builds a server with the given dependencies.
@@ -77,6 +83,7 @@ func New(s *store.Store, a *audit.Store, cfg *config.Config) *Server {
 		fileRates:    make(map[string]*rateWindow),
 		pushRates:    make(map[string]*rateWindow),
 		pushIPLimit:  newRegLimiter(time.Hour),
+		pd:           newPushDelivery(),
 		regLimit:     newRegLimiter(time.Hour),
 	}
 }
@@ -188,6 +195,7 @@ func (s *Server) Handler() http.Handler {
 			methodNotAllowed(w)
 		}
 	})))
+	mux.HandleFunc("/api/push/settings", s.requireInitialized(s.requireAccount(s.handlePushSettings)))
 	mux.HandleFunc("/api/subs", s.requireInitialized(s.requireAccount(s.handleSubs)))
 	mux.HandleFunc("/api/subs/remove", s.requireInitialized(s.requireAccount(s.handleSubsRemove)))
 	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
