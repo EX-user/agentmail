@@ -1491,3 +1491,5 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   cursor: pointer; }
 .th-filter-btn.on { background: var(--accent, #3b82f6); border-color: var(--accent, #3b82f6); color: #fff; }
 .th-filter-btn:hover:not(.on) { border-color: var(--accent, #3b82f6); }
+.th-peek { margin-top: 3px; font-size: 12px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

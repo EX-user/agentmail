@@ -221,6 +221,10 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           "<span>· " + fmtTime(m.received_at) + "</span>" + reply +
           (m.unread ? ' <span class="th-badge">' + t("threads.unread") + "</span>" : "") +
           "</div>" +
+          // Superior: some overview must be visible BEFORE opening — show a
+          // one-line truncated preview under the header; expand swaps it for
+          // the full body.
+          '<div class="th-peek">' + esc((m.preview || "").split("\n")[0]) + "</div>" +
           '<div class="th-full hidden" data-th-body="' + esc(m.id) + '"></div>' +
           "</div>";
         var kids = children[m.id] || [];
@@ -251,7 +255,10 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
           if (!toggle || !full) return;
           toggle.addEventListener("click", async function (ev) {
             ev.stopPropagation();
+            const peek = $(".th-peek", el);
             if (full.classList.contains("hidden")) {
+              // Expand: full body replaces the one-line peek.
+              if (peek) peek.classList.add("hidden");
               if (!full.dataset.loaded) {
                 full.textContent = t("common.loading");
                 full.classList.remove("hidden");
@@ -276,6 +283,7 @@ import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
               }
             } else {
               full.classList.add("hidden");
+              if (peek) peek.classList.remove("hidden"); // peek returns on collapse
               toggle.textContent = "▶";
             }
           });
