@@ -11,7 +11,7 @@
 //             mgmt:fallback-browse {}  (remembered-entry empty-list bounce,
 //             superior ruling 01M11ND4; manage switches back to browse)
 // The i18n dictionary stays a classic global (window.I18N).
-import { $, $$, esc, api, getSession, fmtTime, toast } from "./core.js";
+import { $, $$, esc, api, getSession, fmtTime } from "./core.js";
 
 (function () {
   "use strict";
@@ -121,10 +121,11 @@ import { $, $$, esc, api, getSession, fmtTime, toast } from "./core.js";
         if (!topics.length) {
           box.innerHTML = '<p class="muted">' + esc(t("threads.empty")) + "</p>";
           // Remembered entry must not strand the user on an empty view —
-          // bounce back to browse once (user-picked filters never bounce).
+          // fall back to browse SILENTLY (superior 01M11P89: no prompt, the
+          // pane just switches itself back). User-picked filters never
+          // trigger this; the flag is one-shot.
           if (document.__mgmtRestoreThreads) {
             document.__mgmtRestoreThreads = false;
-            toast(t("threads.fallback"));
             document.dispatchEvent(new CustomEvent("mgmt:fallback-browse"));
           }
           return;
