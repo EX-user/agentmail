@@ -733,6 +733,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
 
 // handleAuthTokenIssue mints a session token for the authenticated account
 // (remember-login, v0.6.27). The client authenticated via Basic (the token

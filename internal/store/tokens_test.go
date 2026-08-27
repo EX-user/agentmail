@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func newTokensStore(t *testing.T) *Store {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { s.DB().Close() })
-	if _, err := s.Register("alice@t", "pw-one-2-3", false); err != nil {
+	if _, err := s.CreateAccountWithPassword("alice", "t", false, "pw-one-2-3"); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	return s
@@ -99,7 +100,7 @@ func TestSessionTokenExpiryAndRenewal(t *testing.T) {
 // account and only that account.
 func TestRevokeAllSessionTokens(t *testing.T) {
 	s := newTokensStore(t)
-	if _, err := s.Register("bob@t", "pw-456-789", false); err != nil {
+	if _, err := s.CreateAccountWithPassword("bob", "t", false, "pw-456-789"); err != nil {
 		t.Fatalf("register bob: %v", err)
 	}
 	at1, _, _ := s.CreateSessionToken("alice@t")
