@@ -769,23 +769,24 @@ nav .tab { flex: 0 0 auto; }
    natural table layout. */
 @media (max-width: 800px) {
   .tab-panel table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  /* Superior (01M11PFEV): every nav label stays fully readable and every
-     line still spans BOTH screen edges — the earlier shrink-to-ellipsis
-     equal-flex take clipped all seven labels and is gone. Tabs keep their
-     natural width, rows wrap when labels don't fit, grow stretches each
-     finished line edge-to-edge, and a wrapped-away last tab nudges to the
-     right edge instead of hugging left. */
+  /* Superior (01M11QH8): mobile nav adapts by sizing, not clipping —
+     font drops a notch and paddings tighten so zh fits all seven tabs on
+     one line and English five-card accounts stay on a single row at 390px
+     (360px small phones verified safe). Longer sets (admin English) wrap
+     into balanced rows, every finished line stretched edge-to-edge via
+     grow; labels are never truncated. */
   nav { flex-wrap: wrap; gap: 5px; }
   nav .tab {
     flex: 1 0 auto;
     min-width: max-content;
-    max-width: 42%;
     text-align: center;
-    padding-left: 10px;
-    padding-right: 10px;
+    font-size: 12px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: 6px;
+    padding-right: 6px;
     white-space: nowrap;
   }
-  nav .tab:last-child { margin-inline-start: auto; }
 }
 
 /* Stats row wraps instead of overflowing. */
