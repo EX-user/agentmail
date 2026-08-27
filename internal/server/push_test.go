@@ -90,7 +90,7 @@ func TestPushSubscribeLifecycle(t *testing.T) {
 	if code := doSub("https://push.example/dev2"); code != http.StatusOK {
 		t.Fatalf("subscribe dev2 = %d", code)
 	}
-	subs, err := st.PushSubsByAddress(user + "@test.example")
+	subs, err := st.PushSubsByAddress(user + "@t")
 	if err != nil || len(subs) != 2 {
 		t.Fatalf("want 2 subs, got %d (%v)", len(subs), err)
 	}
@@ -113,7 +113,7 @@ func TestPushSubscribeLifecycle(t *testing.T) {
 		t.Fatalf("revoke = %d", r3.StatusCode)
 	}
 	r3.Body.Close()
-	subs, _ = st.PushSubsByAddress(user + "@test.example")
+	subs, _ = st.PushSubsByAddress(user + "@t")
 	if len(subs) != 1 || subs[0].Endpoint != "https://push.example/dev1" {
 		t.Fatalf("after revoke want [dev1], got %+v", subs)
 	}

@@ -36,7 +36,7 @@ var (
 	bMeta     = []byte("meta")   // system metadata (initialized flag, domain, ...)
 	bSubs     = []byte("subs")   // subordinate-relationship graph: superior\x00subordinate -> SubRecord
 	bTokens   = []byte("tokens")   // session tokens, keyed by SHA-256 hash (v0.6.27 remember-login)
-	bPushSubs = []byte("pushsubs") // web push subscriptions: account\x00sha256(endpoint) -> PushSubscription (v0.6.30)
+	bPushSubs = []byte("pushsubs") // web push subscriptions: sha256(endpoint) -> PushSubscription (v0.6.30)
 )
 
 // Meta keys within the meta bucket.

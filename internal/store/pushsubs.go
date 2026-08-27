@@ -37,26 +37,25 @@ func subHash(endpoint string) []byte {
 	return []byte(hex.EncodeToString(h[:]))
 }
 
-func pushSubKey(address, endpoint string) []byte {
-	key := append([]byte(address), 0)
-	return append(key, subHash(endpoint)...)
+func pushSubKey(endpoint string) []byte {
+	return subHash(endpoint)
 }
 
-// UpsertPushSub stores (or idempotently re-stores) a subscription. The same
-// endpoint re-registering for the same account overwrites in place — devices
-// refresh keys freely; an endpoint owned by another account is rejected so
-// one account cannot hijack another's registration.
+// UpsertPushSub stores (or idempotently re-stores) a subscription. The push
+// endpoint is the global identity: a refresh from its owning account
+// overwrites in place, while the SAME endpoint arriving under a DIFFERENT
+// account is rejected — one account cannot hijack another's registration.
 func (s *Store) UpsertPushSub(rec *PushSubscription) error {
 	if rec.Address == "" || rec.Endpoint == "" {
 		return ErrPushSubInvalid
 	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bPushSubs)
-		key := pushSubKey(rec.Address, rec.Endpoint)
+		key := pushSubKey(rec.Endpoint)
 		if old := b.Get(key); old != nil {
 			var prev PushSubscription
 			if json.Unmarshal(old, &prev) == nil && prev.Address != rec.Address {
-				return ErrPushSubInvalid // endpoint claimed by someone else
+				return ErrPushSubInvalid // endpoint owned by another account
 			}
 		}
 		data, err := json.Marshal(rec)
@@ -67,23 +66,35 @@ func (s *Store) UpsertPushSub(rec *PushSubscription) error {
 	})
 }
 
-// RemovePushSub deletes one subscription; safe when absent.
+// RemovePushSub deletes one subscription; safe when absent or foreign.
 func (s *Store) RemovePushSub(address, endpoint string) error {
+	if address == "" || endpoint == "" {
+		return ErrPushSubInvalid
+	}
 	return s.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bPushSubs).Delete(pushSubKey(address, endpoint))
+		b := tx.Bucket(bPushSubs)
+		key := pushSubKey(endpoint)
+		v := b.Get(key)
+		if v == nil {
+			return nil
+		}
+		var rec PushSubscription
+		if json.Unmarshal(v, &rec) == nil && rec.Address != address {
+			return ErrPushSubInvalid // not ours to remove
+		}
+		return b.Delete(key)
 	})
 }
 
-// PushSubsByAddress lists every live subscription of the account (M2's send
-// fan-out will iterate this set on successful local delivery).
+// PushSubsByAddress lists every live subscription of the account. A full-scan
+// filter is fine here: subscription counts are tiny (devices, not messages).
 func (s *Store) PushSubsByAddress(address string) ([]*PushSubscription, error) {
 	var out []*PushSubscription
 	err := s.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bPushSubs).Cursor()
-		prefix := append([]byte(address), 0)
-		for k, v := c.Seek(prefix); k != nil && string(k[:len(prefix)]) == string(prefix); k, v = c.Next() {
+		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var rec PushSubscription
-			if json.Unmarshal(v, &rec) == nil {
+			if json.Unmarshal(v, &rec) == nil && rec.Address == address {
 				out = append(out, &rec)
 			}
 		}
@@ -96,14 +107,17 @@ func (s *Store) PushSubsByAddress(address string) ([]*PushSubscription, error) {
 // cascade must not leave orphaned endpoints behind).
 func (s *Store) DeleteAllPushSubs(address string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bPushSubs).Cursor()
-		prefix := append([]byte(address), 0)
+		b := tx.Bucket(bPushSubs)
+		c := b.Cursor()
 		var doomed [][]byte
-		for k, _ := c.Seek(prefix); k != nil && string(k[:len(prefix)]) == string(prefix); k, _ = c.Next() {
-			doomed = append(doomed, append([]byte(nil), k...))
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var rec PushSubscription
+			if json.Unmarshal(v, &rec) == nil && rec.Address == address {
+				doomed = append(doomed, append([]byte(nil), k...))
+			}
 		}
 		for _, k := range doomed {
-			if err := tx.Bucket(bPushSubs).Delete(k); err != nil {
+			if err := b.Delete(k); err != nil {
 				return err
 			}
 		}
