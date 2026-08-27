@@ -93,15 +93,18 @@ import { $, $$, esc, api, getSession, toast, fmtTime } from "./core.js";
     // volume-scaled wedges, shown on BOTH desktop and mobile, inside the
     // Overview view). The container is rendered by renderMgmtGraph after
     // this HTML lands in the DOM.
-    // Floating controls (superior request): mapping linear/log, number
-    // visibility, statistics range 7d/30d/all. State persists locally.
+    // Floating circular controls (superior request): the buttons sit ON the
+    // canvas, overlaid above the graph, outside the pan/zoom transform —
+    // a DOM layer on top of the vis-network canvas.
     box += '<h4 class="mgmt-graph-title">' + t("mgmt.graphTitle") + "</h4>" +
-      '<div class="mgmt-graph-controls">' +
-      '<button type="button" class="row-action" id="gg-map"></button>' +
-      '<button type="button" class="row-action" id="gg-nums"></button>' +
-      '<button type="button" class="row-action" id="gg-days"></button>' +
+      '<div id="mgmt-graph-wrap" class="mgmt-graph-wrap">' +
+      '<div class="mgmt-graph-controls overlay">' +
+      '<button type="button" class="gg-btn" id="gg-map" title="' + esc(t("mgmt.gMap")) + '"></button>' +
+      '<button type="button" class="gg-btn" id="gg-nums" title="' + esc(t("mgmt.gNums")) + '"></button>' +
+      '<button type="button" class="gg-btn gg-btn-days" id="gg-days"></button>' +
       "</div>" +
-      '<div id="mgmt-graph" class="mgmt-graph"></div>';
+      '<div id="mgmt-graph" class="mgmt-graph"></div>' +
+      "</div>";
     return box;
   }
 
@@ -119,10 +122,12 @@ import { $, $$, esc, api, getSession, toast, fmtTime } from "./core.js";
   }
   function windowLabel(days) { return days === 0 ? "all" : days + "d"; }
   function syncGraphControlLabels() {
+    // Circular on-canvas buttons stay terse (superior request): map shows
+    // the active mode, numbers a filled/hollow dot, range the window.
     var b1 = $("#gg-map"), b2 = $("#gg-nums"), b3 = $("#gg-days");
-    if (b1) b1.textContent = t("mgmt.gMap") + (graphPrefs.map === "log" ? t("mgmt.mapLog") : t("mgmt.mapLinear"));
-    if (b2) b2.textContent = t("mgmt.gNums") + (graphPrefs.nums ? t("mgmt.on") : t("mgmt.off"));
-    if (b3) b3.textContent = windowLabel(graphPrefs.days);
+    if (b1) b1.textContent = graphPrefs.map === "log" ? t("mgmt.mapLog") : t("mgmt.mapLinear");
+    if (b2) { b2.textContent = t("mgmt.gNumsShort"); b2.classList.toggle("off", !graphPrefs.nums); }
+    if (b3) b3.textContent = graphPrefs.days === 0 ? "∞" : String(graphPrefs.days) + "d";
   }
 
   function shortAddr(a) {
