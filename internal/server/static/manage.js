@@ -594,11 +594,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
         '<div class="detail-row"><b>ID:</b> <code>' + esc(m.id || m.message_id) + "</code></div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
-        '<div class="row" style="margin-top:12px;">' +
+        '<div class="row" style="margin:8px 0;">' +
         '<button class="row-action" id="btn-mail-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-mail-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
-        attachmentCards(m));
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireMailNav(detail, item);
       wireReplyRef(detail, m, function (pid) { showDetail(pid, item); });
       wireAttachmentDownloads(detail, m);
@@ -1138,11 +1137,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         (m.cc && m.cc.length ? '<div class="detail-row"><b>Cc:</b> ' + esc(m.cc.join(", ")) + "</div>" : "") +
         '<div class="detail-row"><b>Subject:</b> ' + esc(m.subject || "") + "</div>" +
         '<div class="detail-row"><b>Date:</b> ' + fmtTime(m.received_at) + "</div>" +
-        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" +
-        '<div class="row" style="margin-top:12px;">' +
+        '<div class="row" style="margin:8px 0;">' +
         '<button class="row-action" id="btn-inbox-reply" data-reply-to="' + esc(m.from) + '" data-reply-subject="' + esc(m.subject || "") + '" data-reply-id="' + esc(m.id || m.message_id || "") + '">' + t("act.reply") + "</button>" +
         '<button class="row-action" id="btn-inbox-forward" style="margin-left:8px;">' + t("act.forward") + "</button></div>" +
-        attachmentCards(m));
+        "<hr><pre class=\"body\">" + esc(m.body || "") + "</pre>" + attachmentCards(m));
       wireAttachmentDownloads(detail, m);
       hydrateAttachmentPreviews(detail, m);
       wireReplyRef(detail, m, function (pid) { showInboxDetail(pid, null, false); });
