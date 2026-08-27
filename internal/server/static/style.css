@@ -20,9 +20,9 @@
     --panel: #ffffff;
     --panel-2: #eef1f5;
     --text: #1f2328;
-    --muted: #57606a;
+    --muted: #52606d;
     --accent: #2f6fc0;
-    --border: #d8dee6;
+    --border: #ccd4de;
     --success: #1a7f37;
     --error: #cf222e;
     /* Superior pick (variant B): pure white cards inside the white
@@ -54,9 +54,9 @@ html[data-theme="light"] {
   --panel: #ffffff;
   --panel-2: #eef1f5;
   --text: #1f2328;
-  --muted: #57606a;
+  --muted: #52606d;
   --accent: #2f6fc0;
-  --border: #d8dee6;
+  --border: #ccd4de;
   --success: #1a7f37;
   --error: #cf222e;
   --sub-card-bg: #ffffff;

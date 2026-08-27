@@ -750,7 +750,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
   // it in lock-step with the picked theme so the frame matches the page.
   const THEME_HEX = { light: "#f6f7f9", dark: "#0f1115" };
   function currentThemePick() {
-    try { return localStorage.getItem(THEME_KEY) || "system"; } catch (_) { return "system"; }
+    // Superior hard rule: default = LIGHT (not system) — light is the
+    // polished path; system-follow would drop dark-OS users into it.
+    try { return localStorage.getItem(THEME_KEY) || "light"; } catch (_) { return "light"; }
   }
   function syncThemeColorMeta() {
     const pick = currentThemePick();
@@ -781,11 +783,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
       btn.classList.toggle("active", btn.dataset.themepick === cur);
     });
   }
-  // Apply saved theme before first paint of the app shell.
+  // Apply saved theme before first paint of the app shell. Default=LIGHT:
+  // set the attribute explicitly so first paint is light even on dark-OS.
   try {
     const savedTheme = localStorage.getItem(THEME_KEY);
-    if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
-  } catch (_) {}
+    document.documentElement.dataset.theme =
+      (savedTheme === "dark") ? "dark" : "light";   // light default; system/dark still selectable
+  } catch (_) { document.documentElement.dataset.theme = "light"; }
   syncThemeColorMeta();
   // Language buttons reflect the one shared setting (localStorage via
   // I18N.setLang): the current language is highlighted on load and on
