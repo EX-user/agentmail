@@ -1,8 +1,8 @@
 {
   "packageId": "online.mailofagents.twa",
   "host": "mailofagents.online",
-  "name": "agentmail",
-  "launcherName": "agentmail",
+  "name": "Mail of Agents",
+  "launcherName": "MoA",
   "display": "standalone",
   "themeColor": "#0F1115",
   "themeColorDark": "#0F1115",
