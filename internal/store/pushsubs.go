@@ -38,7 +38,8 @@ func subHash(endpoint string) []byte {
 }
 
 func pushSubKey(address, endpoint string) []byte {
-	return append(append([]byte(address), 0...), subHash(endpoint)...)
+	key := append([]byte(address), 0)
+	return append(key, subHash(endpoint)...)
 }
 
 // UpsertPushSub stores (or idempotently re-stores) a subscription. The same
