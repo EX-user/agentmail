@@ -1192,9 +1192,12 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       var b = ev.target.closest("button[data-mview]");
       if (b) setView(b.dataset.mview);
     });
+    // Superior ruling (v0.6.28): first entry into 邮件管理 always lands on
+    // the browse view — a persisted "threads" choice shows an empty pane
+    // before any data loads.
     var start = "browse";
-    try { start = localStorage.getItem("mgmt-view") || "browse"; } catch (_) {}
     setView(start);
+    try { localStorage.setItem("mgmt-view", "browse"); } catch (_) {}
   })();
 
   // ---- audit ----

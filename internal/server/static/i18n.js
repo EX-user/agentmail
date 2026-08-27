@@ -323,6 +323,7 @@
       "prefs.secProfile": "Profile",
       "prefs.secAttach": "Attachments",
       "prefs.secUI": "Interface",
+      "brand.name": "Mail of Agents"
       "prefs.themeLight": "Light",
       "prefs.themeDark": "Dark",
       "prefs.themeSystem": "System",
@@ -756,6 +757,7 @@
       "prefs.secProfile": "个人资料",
       "prefs.secAttach": "附件",
       "prefs.secUI": "界面",
+      "brand.name": "Mail of Agents"
       "prefs.themeLight": "浅色",
       "prefs.themeDark": "深色",
       "prefs.themeSystem": "跟随系统",

@@ -665,6 +665,8 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   .btn-accent { color: #2f6fc0; background: rgba(47, 111, 192, 0.10); }
   .btn-accent:hover { color: #2f6fc0; }
 }
+html[data-theme="light"] .btn-accent { color: #2f6fc0; background: rgba(47, 111, 192, 0.10); }
+html[data-theme="dark"] .btn-accent { color: #4a9eff; background: transparent; }
 
 /* Section titles */
 .portal-section-title { display: flex; align-items: baseline; gap: 10px; margin: 48px 0 18px; }
@@ -682,6 +684,8 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
 @media (prefers-color-scheme: light) {
   .portal-card { background: rgba(255,255,255,.75); }
 }
+html[data-theme="light"] .portal-card { background: rgba(255,255,255,.75); }
+html[data-theme="dark"]  .portal-card { background: rgba(22, 27, 41, 0.72); }
 
 /* Stats column: wraps instead of overflowing on narrow screens (fixes the
    v0.4.0 horizontal-overflow bug admin reported). */
@@ -714,6 +718,8 @@ td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 
   padding: 16px 18px; backdrop-filter: blur(10px);
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
 @media (prefers-color-scheme: light) { .dir-card { background: rgba(255,255,255,.75); } }
+html[data-theme="light"] .dir-card { background: rgba(255,255,255,.75); }
+html[data-theme="dark"]  .dir-card { background: rgba(22, 27, 41, 0.72); }
 .dir-card:hover { transform: translateY(-3px); border-color: var(--accent);
   box-shadow: 0 10px 30px rgba(94,162,255,.18); }
 .avatar { width: 44px; height: 44px; border-radius: 12px; flex: 0 0 auto;
@@ -1010,6 +1016,8 @@ nav .tab { flex: 0 0 auto; }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 520px) { .danmaku { height: 260px; } .danmaku .dm { width: 280px; } }
 @media (prefers-color-scheme: light) { .danmaku .dm { background: rgba(255,255,255,.65); } }
+html[data-theme="light"] .danmaku .dm { background: rgba(255,255,255,.78); }
+html[data-theme="dark"]  .danmaku .dm { background: rgba(22,27,41,.6); }
 @keyframes dm-fly { from { transform: translateX(0); } to { transform: translateX(calc(-100vw - 100%)); } }
 
 /* Danmaku mode B (v0.4.10): the band becomes a full-viewport backdrop —
@@ -1054,6 +1062,8 @@ nav .tab { flex: 0 0 auto; }
   max-height: 300px; overflow-y: auto;
 }
 @media (prefers-color-scheme: light) { .sc-item { background: rgba(255,255,255,.75); } }
+html[data-theme="light"] .sc-item { background: rgba(255,255,255,.75); }
+html[data-theme="dark"]  .sc-item { background: rgba(22,27,41,.72); }
 
 /* Compose public-showcase toggle (v0.4.4). Must stay horizontal: the bare
    label selector under .compose-form is column (field rows), so scope with
