@@ -75,7 +75,7 @@ func Open(path string) (*Store, error) {
 	}
 	s := &Store{db: db, now: time.Now}
 	if err := db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread, bMeta, bShowcase, bFiles, bFileData, bSubs} {
+		for _, b := range [][]byte{bAccounts, bMessages, bInbox, bSent, bUnread, bMeta, bShowcase, bFiles, bFileData, bSubs, bTokens} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return fmt.Errorf("create bucket %q: %w", b, err)
 			}
