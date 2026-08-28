@@ -61,9 +61,35 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
       const d = await api("/api/inbox?limit=1");
       if (seq !== badgeSeq) return; // a newer refresh superseded this one
       setInboxBadge(d.unread_count || 0);
+      // v0.6.32 push-fallback layer (DESIGN.md layer 2): the WebView shell
+      // and push-less browsers get an in-app banner instead of Web Push —
+      // the badge poll is already here, so ride it.
+      const now = d.unread_count || 0;
+      if (now > (refreshInboxBadge.last || 0) && now > 0) {
+        showNewLetterBanner(now, d.letters && d.letters[0]);
+      }
+      refreshInboxBadge.last = now;
     } catch (_) { /* badge is best-effort */ }
   }
   setInterval(refreshInboxBadge, 5000);
+
+  // v0.6.32 push-fallback banner: transient in-app notice on new mail.
+  // Click goes to the inbox; auto-dismisses in 6s; one instance at a time.
+  function showNewLetterBanner(n, letter) {
+    const prev = document.getElementById("new-mail-banner");
+    if (prev) prev.remove();
+    const from = letter && letter.from ? letter.from.split("@")[0] : "";
+    const b = document.createElement("button");
+    b.id = "new-mail-banner";
+    b.textContent = t("push.bannerNew", { n: n }) + (from ? " · " + from : "");
+    b.addEventListener("click", function () {
+      b.remove();
+      const tab = document.querySelector('.tab[data-tab=inbox]');
+      if (tab) tab.click();
+    });
+    document.body.appendChild(b);
+    setTimeout(function () { b.remove(); }, 6000);
+  }
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") refreshInboxBadge();
   });
