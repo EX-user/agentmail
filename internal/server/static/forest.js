@@ -41,17 +41,26 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     return fDepth;
   }
 
+  // P0#3 (Felix round 3): the svg lives INSIDE #tf-canvas - wiping the box
+  // with textContent destroyed it and fLayout silently bailed. Clear only
+  // cards and status notes; the svg stays put.
+  function fClear() {
+    $$("#tf-canvas .f-card, #tf-canvas .f-note").forEach(function (el) { el.remove(); });
+  }
+
   // 取最近 treeCount 棵（屏蔽孤立信时仅 count>1），并行拉全量成员后绘制
   function fLoad() {
     if (!fVisible) return;
     var box = $("#tf-canvas");
     if (!box) return;
-    box.textContent = t("common.loading");
+    fClear();
+    box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("common.loading")) + "</p>");
     api("/api/threads?limit=200", { keepSession: true }).then(function (d) {
       fCache = (d && d.threads) || [];
       fDraw();
     }, function (e) {
-      box.innerHTML = '<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>";
+      fClear();
+      box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
     });
   }
 
@@ -61,9 +70,9 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     var pool = fHideOrphans ? fCache.filter(function (tp) { return tp.count > 1; }) : fCache.slice();
     pool.sort(function (a, b) { return (b.last_at || 0) - (a.last_at || 0); });
     var vis = pool.slice(0, fTreeCount);
-    box.textContent = "";
+    fClear();
     if (!vis.length) {
-      box.innerHTML = '<p class="muted">' + esc(t("threads.empty")) + "</p>";
+      box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("threads.empty")) + "</p>");
       return;
     }
     // 并行取成员（≤20 棵，与列表视图每页 10 棵同量级）
@@ -79,7 +88,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     var box = $("#tf-canvas");
     var svg = $("#tf-links");
     if (!box || !svg) return;
-    box.textContent = "";
+    fClear();
     svg.innerHTML = "";
 
     // 全局时间范围（跨所有渲染的信件）
