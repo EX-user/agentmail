@@ -278,6 +278,9 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, err.Error())
 		return
 	}
+	// Local delivery succeeded: fan out notification pushes (v0.6.30).
+	// Best-effort and async — notifyDelivery never fails the send.
+	s.notifyDelivery(fromName, validRecipients)
 	// Showcase tee: explicit sender opt-in. Best-effort — a tee failure must
 	// not fail the (successful) send. (showcase_enabled only hides the
 	// Compose checkbox UI; API public sends are not gated by it.)
@@ -747,7 +750,7 @@ func (s *Server) handleAuthTokenIssue(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "mint token: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token issued")
+	_ = s.audit.Record(r.Context(), audit.ActionAuthTokenIssue, who, "session token issued")
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_at": expiresAt})
 }
 
@@ -768,7 +771,7 @@ func (s *Server) handleAuthTokenRevoke(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "revoke token: "+err.Error())
 		return
 	}
-	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token revoked")
+	_ = s.audit.Record(r.Context(), audit.ActionAuthTokenRevoke, who, "session token revoked")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": true})
 }
 

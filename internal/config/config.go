@@ -19,6 +19,17 @@ type Config struct {
 	Server  ServerConfig  `toml:"server"`
 	Admin   AdminConfig   `toml:"admin"`
 	Storage StorageConfig `toml:"storage"`
+	Push    PushConfig    `toml:"push"`
+}
+
+// PushConfig carries the Web Push VAPID key pair (v0.6.30 app notifications).
+// The private key lives ONLY in the deployment config — never in bbolt, never
+// in the repo (generate with `pushkeygen`). An empty public key means push is
+// disabled and the public endpoint reports as such.
+type PushConfig struct {
+	VAPIDPublicKey  string `toml:"vapid_public_key"`
+	VAPIDPrivateKey string `toml:"vapid_private_key"`
+	Subject         string `toml:"subject"` // mailto: or https: contact for the push service
 }
 
 // ServerConfig describes the HTTP listener and (for init only) the mail domain.
