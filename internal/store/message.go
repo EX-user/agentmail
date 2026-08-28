@@ -92,7 +92,7 @@ func (s *Store) Send(from, fromName string, to []string, cc []string, subject, b
 	now := s.now().Unix()
 	msg := Message{
 		ID:         msgID,
-		From:       from,
+		From:       strings.ToLower(from), // mail faces all-lowercase (ruling 5)
 		To:         to,
 		CC:         cc,
 		InReplyTo:  inReplyTo,
@@ -806,9 +806,14 @@ func (s *Store) MyGrowthStats(address string, now time.Time) (MyGrowth, error) {
 // getAccountInTx reads an account inside an existing transaction.
 // Case-insensitive like GetAccount (275d0ba fixed the public lookup but
 // missed this transactional twin — sends to uppercase address variants
-// silently found no recipients). Account keys are always lowercase.
+// silently found no recipients). Account keys are always lowercase on new
+// writes; legacy mixed-case rows (pre-normalize) are still resolved via a
+// raw-key fallback until /admin/normalize-account-case has been run.
 func getAccountInTx(tx *bolt.Tx, address string) (*Account, error) {
 	val := tx.Bucket(bAccounts).Get([]byte(strings.ToLower(address)))
+	if val == nil {
+		val = tx.Bucket(bAccounts).Get([]byte(address)) // legacy mixed-case key
+	}
 	if val == nil {
 		return nil, ErrAccountNotFound
 	}

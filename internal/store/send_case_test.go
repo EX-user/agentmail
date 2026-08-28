@@ -19,3 +19,35 @@ func TestSendToUppercaseRecipient(t *testing.T) {
 		t.Fatalf("uppercase recipient delivery missing: %d msgs (%v)", len(msgs), err)
 	}
 }
+
+// TestSendFromHeaderNormalized: the stored From must be the lowercase key
+// even when the authenticated address arrives in uppercase (ruling 5).
+func TestSendFromHeaderNormalized(t *testing.T) {
+	s := newTokensStore(t)
+	if _, err := s.Send("ALICE@t", "A", []string{"alice@t"}, nil, "f", "b", ""); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	msgs, _ := s.ReadInboxPaged("alice@t", 10, 0)
+	if len(msgs) != 1 || msgs[0].From != "alice@t" {
+		t.Fatalf("From not normalized: %+v", msgs)
+	}
+}
+
+// TestLegacyMixedCaseKeyResolvable: rows created before normalization (keys
+// stored mixed-case) must still resolve for sends, until the cleanup runs.
+func TestLegacyMixedCaseKeyResolvable(t *testing.T) {
+	s := newTokensStore(t)
+	// Simulate a legacy row by writing a mixed-case key directly through the
+	// same bucket (no public API creates these anymore).
+	si, _ := s.CreateAccountWithPassword("legacy", "t", false, "pw-one-2-3")
+	_ = si
+	s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("accounts"))
+		v := b.Get([]byte("legacy@t"))
+		b.Delete([]byte("legacy@t"))
+		return b.Put([]byte("LEGACY@t"), v)
+	})
+	if _, err := s.Send("alice@t", "A", []string{"LEGACY@T"}, nil, "f", "b", ""); err != nil {
+		t.Fatalf("legacy mixed-case recipient must resolve: %v", err)
+	}
+}
