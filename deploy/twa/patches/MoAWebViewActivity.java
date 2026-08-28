@@ -56,6 +56,16 @@ public class MoAWebViewActivity extends Activity {
             throw new IllegalArgumentException("launchUrl scheme must be https");
         }
 
+        // Notification permission: re-check on EVERY launch — uninstall/
+        // reinstall wipes it, and users can also revoke it later. If still
+        // ungranted after the system dialog, PollService simply never
+        // starts polling visibly, so also guide the user to settings via
+        // onRequestPermissionsResult below.
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 1);
+        }
         mWebView = new WebView(this);
         mWebView.setWebViewClient(new WebViewClient() {
             @Override
@@ -241,6 +251,22 @@ public class MoAWebViewActivity extends Activity {
                         android.widget.Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                           int[] grantResults) {
+        if (requestCode == 1) {
+            boolean granted = grantResults.length > 0
+                    && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (!granted) {
+                Log.w(TAG, "notification permission denied — background alerts off");
+                android.widget.Toast.makeText(this,
+                        "通知权限未开启：后台新信提醒不可用",
+                        android.widget.Toast.LENGTH_LONG).show();
+            }
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
     @Override
