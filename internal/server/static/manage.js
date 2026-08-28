@@ -35,6 +35,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       const subs = await loadSubs().catch(function () { return null; });
       const subsList = (subs && subs.subordinates) || [];
       const add = function (addr) {
+        // v0.6.33: normalize display-case — subs/contact entries inherit the
+        // sender's letter-header case while accounts are stored lowercase.
+        addr = String(addr || "").toLowerCase();
         const o = document.createElement("option");
         o.value = addr; o.textContent = addr;
         sel.appendChild(o);
