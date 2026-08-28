@@ -742,6 +742,60 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
       });
     });
   })();
+  // v0.6.34 display address (design 01M13ZZ5A §4): the settings page is the
+  // ONLY slot allowed to show the mixed-case display form; the mail face
+  // (lists, headers, threads, forest) stays lowercase key everywhere.
+  (function wireDispAddr() {
+    const dVal = $("#dispaddr-value"), dEdit = $("#btn-dispaddr-edit");
+    if (!dVal || !dEdit) return;
+    const dRow = $("#dispaddr-edit-row"), dInput = $("#dispaddr-input");
+    const dSave = $("#btn-dispaddr-save"), dCancel = $("#btn-dispaddr-cancel");
+    const dHint = $("#dispaddr-hint");
+    let curLocal = "";
+    function baseAddr() {
+      const sess = getSession();
+      return sess ? String(sess.address || "").toLowerCase() : "";
+    }
+    function render(local) {
+      curLocal = local;
+      const base = baseAddr();
+      dVal.textContent = local ? base.replace(/^[^@]+/, local) : base;
+    }
+    function fRefresh() {
+      api("/api/account/display-local", { keepSession: true }).then(function (d) {
+        render((d && d.display_local) || "");
+      }, function () { /* endpoint absent on older servers: keep key form */ });
+    }
+    dEdit.addEventListener("click", function () {
+      dInput.value = curLocal;
+      dRow.hidden = false;
+      dInput.focus();
+    });
+    dCancel.addEventListener("click", function () {
+      dRow.hidden = true;
+      dInput.value = "";
+    });
+    dSave.addEventListener("click", async function () {
+      const v = dInput.value.trim();
+      dSave.disabled = true;
+      try {
+        await api("/api/account/display-local", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ display_local: v }),
+        });
+        render(v);
+        dRow.hidden = true;
+      } catch (e) {
+        dHint.textContent = t("common.error", { msg: e.message });
+      }
+      dSave.disabled = false;
+    });
+    const prefsBtn = $("#btn-prefs");
+    if (prefsBtn) prefsBtn.addEventListener("click", function () { setTimeout(fRefresh, 250); });
+    if (getSession()) fRefresh();
+  })();
+
   // Theme: "light"/"dark" pin html[data-theme]; "system" removes the attr so
   // the prefers-color-scheme media query rules again. Persisted locally.
   const THEME_KEY = "theme";

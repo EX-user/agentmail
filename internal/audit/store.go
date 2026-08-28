@@ -50,6 +50,7 @@ const (
 	ActionAuthTokenIssue  Action = "auth_token_issue"   // v0.6.27 remember-login mint (alice's enum-precision note)
 	ActionAuthTokenRevoke Action = "auth_token_revoke"  // logout / password-change revocation
 	ActionPushSubscribe   Action = "push_subscribe"     // v0.6.30 web push registration
+	ActionDisplayLocalChange Action = "display_local_change" // v0.6.34 display local-part update
 	ActionPushRevoke      Action = "push_revoke"        // subscription removal
 )
 

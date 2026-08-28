@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"testing"
 
 	bolt "go.etcd.io/bbolt"
@@ -48,6 +49,24 @@ func TestAllRegistrationPathsStoreLowercaseKeys(t *testing.T) {
 	for _, addr := range []string{"mixedcase@t", "teamboss@t", "membera@t", "memberb@t", "admin@t"} {
 		if _, err := s.GetAccount(addr); err != nil {
 			t.Fatalf("account %s not resolvable: %v", addr, err)
+		}
+	}
+}
+
+// TestNoMixedCaseViaListPaths guards the return-layer merge: every creation
+// path plus ListAccounts must present only lowercase addresses.
+func TestNoMixedCaseViaListPaths(t *testing.T) {
+	s := newTokensStore(t)
+	if _, err := s.CreateAccountWithPassword("PoP", "t", false, "pw-one-2-3"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	accs, err := s.ListAccounts()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, a := range accs {
+		if a.Address != strings.ToLower(a.Address) {
+			t.Fatalf("ListAccounts exposed mixed-case address: %s", a.Address)
 		}
 	}
 }

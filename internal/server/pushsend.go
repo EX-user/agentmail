@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
+	"github.com/agentmail/agentmail/internal/audit"
 	"github.com/agentmail/agentmail/internal/store"
 )
 
@@ -216,6 +218,42 @@ func (s *Server) handlePushSettings(w http.ResponseWriter, r *http.Request) {
 			badRequest(w, "store dnd: "+err.Error())
 			return
 		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	default:
+		methodNotAllowed(w)
+	}
+}
+
+// --- display local-part (V06_DISPLAY_ADDRESS) ---
+
+// handleDisplayLocal reads or updates the caller's case-preserved local
+// part. Sole display surface: the settings page / self-query — mail faces
+// stay all-lowercase (superior ruling 01M13ZXK).
+//   GET /api/account/display-local             -> {"display_local": "..."} ("" = unset)
+//   PUT /api/account/display-local {"display_local": "PoP"} -> validated+persisted
+func (s *Server) handleDisplayLocal(w http.ResponseWriter, r *http.Request) {
+	who := accountFrom(r.Context())
+	switch r.Method {
+	case http.MethodGet:
+		d, err := s.store.GetDisplayLocal(who)
+		if err != nil {
+			internalError(w, "read display: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"display_local": d})
+	case http.MethodPut:
+		var req struct {
+			DisplayLocal string `json:"display_local"`
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			badRequest(w, "decode body: "+err.Error())
+			return
+		}
+		if err := s.store.SetDisplayLocal(who, strings.TrimSpace(req.DisplayLocal)); err != nil {
+			badRequest(w, "display local: "+err.Error())
+			return
+		}
+		_ = s.audit.Record(r.Context(), audit.ActionDisplayLocalChange, who, "display local updated")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	default:
 		methodNotAllowed(w)

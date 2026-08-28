@@ -545,6 +545,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // lowercase — normalize here so contacts/directory/subordinates surface
     // as one identity, never two variants of the same box.
     items = items.map(function (a) { return String(a || "").toLowerCase(); });
+    // v0.6.34 (alice 01M14D3VK): lowercasing can collapse two source entries
+    // (pop + PoP) into duplicates — dedupe after normalization.
+    items = Array.from(new Set(items));
     input.dataset.recipients = JSON.stringify(items);
     input.dataset.listLoaded = "1";
     // Shared by the To and Cc autocomplete (feedback: match-as-you-type

@@ -47,9 +47,18 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         all.value = "__vis__"; all.textContent = t("mail.allVisible");
         sel.appendChild(all);
       }
-      add(s.address);
+      // v0.6.34: lowercase-normalized entries can collide (pop + PoP) —
+      // dedupe by the normalized form so the selector shows one option.
+      const addedAddrs = {};
+      const addUnique = function (addr) {
+        addr = String(addr || "").toLowerCase();
+        if (addedAddrs[addr]) return;
+        addedAddrs[addr] = 1;
+        add(addr);
+      };
+      addUnique(s.address);
       subsList.forEach(function (e) {
-        if (e.address !== s.address) add(e.address);
+        addUnique(e.address);
       });
       // More than the own account visible: the selector switches between
       // them; single-account users get it locked to self.

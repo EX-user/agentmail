@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,14 +15,14 @@ import (
 // without requiring gateway changes — the gateway's server_info tool is a
 // thin pass-through that forwards the query string here.
 //
-//   GET /api/info?query=status     -> version, domain, initialized (public)
-//   GET /api/info?query=stats      -> account/message counts (public)
-//   GET /api/info?query=settings   -> registration + rate limits (public)
-//   GET /api/info?query=directory  -> public address book of opt-in accounts (public)
-//   GET /api/info?query=growth     -> message counts by age bucket (public)
-//   GET /api/info?query=accounts   -> account list (admin only)
-//   GET /api/info?query=audit      -> recent audit log (admin only)
-//   GET /api/info?query=help       -> list of available queries (public)
+//	GET /api/info?query=status     -> version, domain, initialized (public)
+//	GET /api/info?query=stats      -> account/message counts (public)
+//	GET /api/info?query=settings   -> registration + rate limits (public)
+//	GET /api/info?query=directory  -> public address book of opt-in accounts (public)
+//	GET /api/info?query=growth     -> message counts by age bucket (public)
+//	GET /api/info?query=accounts   -> account list (admin only)
+//	GET /api/info?query=audit      -> recent audit log (admin only)
+//	GET /api/info?query=help       -> list of available queries (public)
 //
 // Auth rules:
 //   - "accounts" requires admin Basic auth.
@@ -97,20 +98,20 @@ func (s *Server) infoStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) infoSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"query":                      "settings",
-		"registration_enabled":       s.store.IsRegistrationEnabled(),
-		"directory_listed_enabled":   s.store.IsDirectoryListedEnabled(),
-		"oneclick_register_enabled":  s.store.IsOneclickRegisterEnabled(),
-		"random_register_enabled":    s.store.IsRandomRegisterEnabled(),
-		"showcase_enabled":           s.store.IsShowcaseEnabled(),
-		"danmaku_default_mode":       s.store.GetDanmakuDefaultMode(),
-		"danmaku_default_speed":      s.store.GetDanmakuDefaultSpeed(),
-		"danmaku_default_count":      s.store.GetDanmakuDefaultCount(),
-		"send_rate_limit":            s.store.GetSendRateLimit(),
-		"byte_rate_limit":            s.store.GetByteRateLimit(),
-		"register_rate_limit":        s.store.GetRegisterIPRateLimit(),
-		"files_total_limit":          s.store.GetFilesTotalLimit(),
-		"file_quota_per_acct":        s.store.GetFileQuotaPerAcct(),
+		"query":                     "settings",
+		"registration_enabled":      s.store.IsRegistrationEnabled(),
+		"directory_listed_enabled":  s.store.IsDirectoryListedEnabled(),
+		"oneclick_register_enabled": s.store.IsOneclickRegisterEnabled(),
+		"random_register_enabled":   s.store.IsRandomRegisterEnabled(),
+		"showcase_enabled":          s.store.IsShowcaseEnabled(),
+		"danmaku_default_mode":      s.store.GetDanmakuDefaultMode(),
+		"danmaku_default_speed":     s.store.GetDanmakuDefaultSpeed(),
+		"danmaku_default_count":     s.store.GetDanmakuDefaultCount(),
+		"send_rate_limit":           s.store.GetSendRateLimit(),
+		"byte_rate_limit":           s.store.GetByteRateLimit(),
+		"register_rate_limit":       s.store.GetRegisterIPRateLimit(),
+		"files_total_limit":         s.store.GetFilesTotalLimit(),
+		"file_quota_per_acct":       s.store.GetFileQuotaPerAcct(),
 	})
 }
 
@@ -198,8 +199,11 @@ func (s *Server) infoDirectory(w http.ResponseWriter, r *http.Request) {
 		Address   string `json:"address"`
 		Signature string `json:"signature"`
 	}
-	entries := make([]dirEntry, 0, len(visible))
-	for _, a := range visible {
+	rows := dedupeAccountsByLowerKey(visible,
+		func(a store.Account) string { return a.Address },
+		func(a *store.Account) { a.Address = strings.ToLower(a.Address) })
+	entries := make([]dirEntry, 0, len(rows))
+	for _, a := range rows {
 		entries = append(entries, dirEntry{Address: a.Address, Signature: a.Signature})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

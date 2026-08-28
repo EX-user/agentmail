@@ -23,8 +23,9 @@ type accountView struct {
 }
 
 // handleAdminMessages lets the admin read any account's inbox.
-//   GET /admin/messages?account=<addr>&limit=50
-//   -> {"account": "...", "messages": [...], "count": N}
+//
+//	GET /admin/messages?account=<addr>&limit=50
+//	-> {"account": "...", "messages": [...], "count": N}
 func (s *Server) handleAdminMessages(w http.ResponseWriter, r *http.Request) {
 	account := strings.TrimSpace(r.URL.Query().Get("account"))
 	if account == "" {
@@ -52,7 +53,8 @@ func (s *Server) handleAdminMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminAudit returns recent audit entries.
-//   GET /admin/audit?limit=100  -> {"entries": [...], "count": N}
+//
+//	GET /admin/audit?limit=100  -> {"entries": [...], "count": N}
 func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 100)
 	entries, err := s.audit.List(r.Context(), limit)
@@ -65,14 +67,43 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminAccounts lists every account WITHOUT password hashes.
 //   GET /admin/accounts  -> {"accounts": [...], "count": N}
+
+// dedupeAccountsByLowerKey merges physical rows that differ only by key
+// casing (legacy mixed-case rows, superior ruling: data stays, the RETURN
+// layer merges). The canonical lowercase-keyed row wins; otherwise the
+// first-seen row is kept with its address shown lowercased.
+func dedupeAccountsByLowerKey[T any](rows []T, addr func(T) string, setAddr func(*T)) []T {
+	byLower := map[string]int{}
+	out := make([]T, 0, len(rows))
+	for _, r := range rows {
+		l := strings.ToLower(addr(r))
+		if i, ok := byLower[l]; ok {
+			if addr(rows[i]) != l && addr(r) == l {
+				rows[i] = r // prefer the true lowercase-keyed row
+			}
+			continue
+		}
+		byLower[l] = len(out)
+		setAddr(&r)
+		out = append(out, r)
+	}
+	return out
+}
+
 func (s *Server) handleAdminAccounts(w http.ResponseWriter, r *http.Request) {
 	accs, err := s.store.ListAccounts()
 	if err != nil {
 		internalError(w, "list accounts: "+err.Error())
 		return
 	}
-	out := make([]accountView, 0, len(accs))
-	for _, a := range accs {
+	// Return-layer merge: legacy mixed-case twin rows collapse into their
+	// lowercase twin (data untouched — superior ruling).
+	type row = store.Account
+	rows := dedupeAccountsByLowerKey(accs,
+		func(a row) string { return a.Address },
+		func(a *row) { a.Address = strings.ToLower(a.Address) })
+	out := make([]accountView, 0, len(rows))
+	for _, a := range rows {
 		out = append(out, accountView{
 			UUID:      a.UUID,
 			Address:   a.Address,
@@ -87,8 +118,9 @@ func (s *Server) handleAdminAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminSent lets the admin read any account's sent folder.
-//   GET /admin/sent?account=<addr>&limit=50
-//   -> {"account": "...", "messages": [...], "count": N}
+//
+//	GET /admin/sent?account=<addr>&limit=50
+//	-> {"account": "...", "messages": [...], "count": N}
 func (s *Server) handleAdminSent(w http.ResponseWriter, r *http.Request) {
 	account := strings.TrimSpace(r.URL.Query().Get("account"))
 	if account == "" {
@@ -114,7 +146,8 @@ func (s *Server) handleAdminSent(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminMessage returns the full body of any message by ID, bypassing the
 // per-account visibility check (the admin can read anything).
-//   GET /admin/message?id=...  -> {"id","from","to","subject","body","received_at"}
+//
+//	GET /admin/message?id=...  -> {"id","from","to","subject","body","received_at"}
 func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
@@ -169,7 +202,8 @@ func (s *Server) handleAdminMessage(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminThread returns the bilateral conversation between an arbitrary
 // account and a peer (admin view).
-//   GET /admin/thread?account=X&with=Y&limit=50&offset=0
+//
+//	GET /admin/thread?account=X&with=Y&limit=50&offset=0
 func (s *Server) handleAdminThread(w http.ResponseWriter, r *http.Request) {
 	account := strings.TrimSpace(r.URL.Query().Get("account"))
 	peer := strings.TrimSpace(r.URL.Query().Get("with"))
@@ -199,8 +233,9 @@ func (s *Server) handleAdminThread(w http.ResponseWriter, r *http.Request) {
 // handleAdminMessagesAll returns the newest messages across all accounts
 // in ONE request (replaces the per-account fan-out that saturated the
 // server on the admin Mail page's "All accounts" view).
-//   GET /admin/messages-all?limit=50&folder=all|inbox|sent
-//     -> {"messages": [...MessageSummary], "count": N, "total_count": T}
+//
+//	GET /admin/messages-all?limit=50&folder=all|inbox|sent
+//	  -> {"messages": [...MessageSummary], "count": N, "total_count": T}
 func (s *Server) handleAdminMessagesAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w)
@@ -221,7 +256,8 @@ func (s *Server) handleAdminMessagesAll(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleAdminStats returns overall counts for the overview page.
-//   GET /admin/stats  -> {"accounts": N, "messages": N}
+//
+//	GET /admin/stats  -> {"accounts": N, "messages": N}
 func (s *Server) handleAdminStats(w http.ResponseWriter, r *http.Request) {
 	accN, err := s.store.CountAccounts()
 	if err != nil {
@@ -252,7 +288,7 @@ func (s *Server) handleAdminResetPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var body struct {
-		Account    string `json:"account"`
+		Account     string `json:"account"`
 		NewPassword string `json:"new_password"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
@@ -312,7 +348,7 @@ func (s *Server) handleAdminSetDisabled(w http.ResponseWriter, r *http.Request) 
 		Disabled bool   `json:"disabled"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
-		badRequest(w, "invalid body: " + err.Error())
+		badRequest(w, "invalid body: "+err.Error())
 		return
 	}
 	account := strings.TrimSpace(body.Account)
@@ -330,7 +366,7 @@ func (s *Server) handleAdminSetDisabled(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "account not found", http.StatusNotFound)
 			return
 		}
-		internalError(w, "set disabled: " + err.Error())
+		internalError(w, "set disabled: "+err.Error())
 		return
 	}
 	state := "enable"
@@ -365,10 +401,10 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
-	if body.InReplyTo != "" && !isULID(body.InReplyTo) {
-		badRequest(w, "in_reply_to must be a 26-char ULID")
-		return
-	}
+		if body.InReplyTo != "" && !isULID(body.InReplyTo) {
+			badRequest(w, "in_reply_to must be a 26-char ULID")
+			return
+		}
 		return
 	}
 	if len(body.To) == 0 {
@@ -421,7 +457,8 @@ func (s *Server) handleAdminSend(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminSettings returns the current system settings.
-//   GET /admin/settings -> {registration_enabled, directory_listed_enabled, send_rate, byte_rate}
+//
+//	GET /admin/settings -> {registration_enabled, directory_listed_enabled, send_rate, byte_rate}
 func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"registration_enabled":      s.store.IsRegistrationEnabled(),
@@ -441,13 +478,16 @@ func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAdminSetRegistration toggles public registration.
-//   POST /admin/set-registration {"enabled": bool}
+//
+//	POST /admin/set-registration {"enabled": bool}
 func (s *Server) handleAdminSetRegistration(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	var body struct{ Enabled bool `json:"enabled"` }
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
@@ -465,13 +505,16 @@ func (s *Server) handleAdminSetRegistration(w http.ResponseWriter, r *http.Reque
 }
 
 // handleAdminSetOneclickRegister toggles the portal's one-click register UX.
-//   POST /admin/set-oneclick-register {"enabled": bool}
+//
+//	POST /admin/set-oneclick-register {"enabled": bool}
 func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	var body struct{ Enabled bool `json:"enabled"` }
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
@@ -490,13 +533,16 @@ func (s *Server) handleAdminSetOneclickRegister(w http.ResponseWriter, r *http.R
 
 // handleAdminSetRandomRegister toggles the retired passwordless register
 // path (debug only — the public one-click entry is gone from the UI).
-//   POST /admin/set-random-register {"enabled": bool}
+//
+//	POST /admin/set-random-register {"enabled": bool}
 func (s *Server) handleAdminSetRandomRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	var body struct{ Enabled bool `json:"enabled"` }
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
@@ -516,7 +562,8 @@ func (s *Server) handleAdminSetRandomRegister(w http.ResponseWriter, r *http.Req
 // handleAdminNormalizeAccountCase repairs pre-fix account keys stored with
 // uppercase letters (the double-listing an outside user reported). Safe to
 // run repeatedly — a clean store is a no-op. Back up the db first.
-//   POST /admin/normalize-account-case  -> {already_lower, renamed, deleted_duplicates}
+//
+//	POST /admin/normalize-account-case  -> {already_lower, renamed, deleted_duplicates}
 func (s *Server) handleAdminNormalizeAccountCase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -534,7 +581,8 @@ func (s *Server) handleAdminNormalizeAccountCase(w http.ResponseWriter, r *http.
 
 // handleAdminClearShowcase empties the showcase bucket (e.g. after bad data
 // such as encoding-mangled entries landed). Real mail is untouched.
-//   POST /admin/clear-showcase
+//
+//	POST /admin/clear-showcase
 func (s *Server) handleAdminClearShowcase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -552,8 +600,9 @@ func (s *Server) handleAdminClearShowcase(w http.ResponseWriter, r *http.Request
 
 // handleAdminSetDanmaku sets the portal danmaku defaults (server-side
 // defaults; browsers may still override locally).
-//   POST /admin/set-danmaku {"mode":"A"|"B","speed":"slow|medium|fast","count":"few|normal|more"}
-//   All fields optional; only provided fields are updated.
+//
+//	POST /admin/set-danmaku {"mode":"A"|"B","speed":"slow|medium|fast","count":"few|normal|more"}
+//	All fields optional; only provided fields are updated.
 func (s *Server) handleAdminSetDanmaku(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -583,7 +632,9 @@ func (s *Server) handleAdminSetDanmaku(w http.ResponseWriter, r *http.Request) {
 
 // handleAdminGetShowcaseItem fetches one showcase entry by id (the admin's
 // search-then-delete flow).
-//   GET /admin/showcase-item?id=... -> {id, from, subject, received_at}; 404 if absent.
+//
+//	GET /admin/showcase-item?id=... -> {id, from, subject, received_at}; 404 if absent.
+//
 // Body is deliberately omitted — the delete flow does not need it.
 func (s *Server) handleAdminGetShowcaseItem(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -605,15 +656,16 @@ func (s *Server) handleAdminGetShowcaseItem(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":           e.ID,
-		"from":         e.From,
-		"subject":      e.Subject,
-		"received_at":  e.ReceivedAt,
+		"id":          e.ID,
+		"from":        e.From,
+		"subject":     e.Subject,
+		"received_at": e.ReceivedAt,
 	})
 }
 
 // handleAdminDeleteShowcaseItem removes one showcase entry by id.
-//   POST /admin/delete-showcase-item {"id": "..."} -> {ok: true}; 404 if absent.
+//
+//	POST /admin/delete-showcase-item {"id": "..."} -> {ok: true}; 404 if absent.
 func (s *Server) handleAdminDeleteShowcaseItem(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -646,13 +698,16 @@ func (s *Server) handleAdminDeleteShowcaseItem(w http.ResponseWriter, r *http.Re
 // handleAdminSetShowcase toggles the Compose "public showcase" checkbox UI.
 // Per admin's clarification it does NOT gate the tee or the showcase
 // endpoint — the portal keeps serving public mail regardless.
-//   POST /admin/set-showcase {"enabled": bool}
+//
+//	POST /admin/set-showcase {"enabled": bool}
 func (s *Server) handleAdminSetShowcase(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	var body struct{ Enabled bool `json:"enabled"` }
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
@@ -672,13 +727,16 @@ func (s *Server) handleAdminSetShowcase(w http.ResponseWriter, r *http.Request) 
 // handleAdminSetDirectoryListed toggles whether accounts may opt themselves
 // into the public directory. When disabled, existing listed accounts stay
 // listed, but no new false→true transitions are allowed.
-//   POST /admin/set-directory-listed {"enabled": bool}
+//
+//	POST /admin/set-directory-listed {"enabled": bool}
 func (s *Server) handleAdminSetDirectoryListed(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
 		return
 	}
-	var body struct{ Enabled bool `json:"enabled"` }
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
 	if err := decodeJSON(r, &body); err != nil {
 		badRequest(w, "invalid body: "+err.Error())
 		return
@@ -696,9 +754,10 @@ func (s *Server) handleAdminSetDirectoryListed(w http.ResponseWriter, r *http.Re
 }
 
 // handleAdminSetLimits adjusts the rate limits.
-//   POST /admin/set-limits {"send_rate": 500, "byte_rate": 1048576, "register_rate": 5}
-//   All fields optional; only provided fields are updated. register_rate is
-//   the per-IP registration attempt limit per hour (0 disables).
+//
+//	POST /admin/set-limits {"send_rate": 500, "byte_rate": 1048576, "register_rate": 5}
+//	All fields optional; only provided fields are updated. register_rate is
+//	the per-IP registration attempt limit per hour (0 disables).
 func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w)
@@ -766,10 +825,10 @@ func (s *Server) handleAdminSetLimits(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"send_rate":          s.store.GetSendRateLimit(),
-		"byte_rate":          s.store.GetByteRateLimit(),
-		"register_rate":      s.store.GetRegisterIPRateLimit(),
-		"files_total_limit":  s.store.GetFilesTotalLimit(),
+		"send_rate":           s.store.GetSendRateLimit(),
+		"byte_rate":           s.store.GetByteRateLimit(),
+		"register_rate":       s.store.GetRegisterIPRateLimit(),
+		"files_total_limit":   s.store.GetFilesTotalLimit(),
 		"file_quota_per_acct": s.store.GetFileQuotaPerAcct(),
 	})
 }

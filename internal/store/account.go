@@ -44,6 +44,11 @@ type Account struct {
 	// validated at the API edge; the store accepts whatever map it is
 	// given (it never interprets the contents).
 	Prefs map[string]any `json:"prefs,omitempty"`
+	// DisplayLocal is the account's optional case-preserved spelling of its
+	// own local part, shown ONLY on the settings page / self-query (V06
+	// ruling: mail surfaces stay all-lowercase). Empty = unset. Invariant:
+	// strings.ToLower(DisplayLocal) == local part of Address.
+	DisplayLocal string `json:"display_local,omitempty"`
 }
 
 // CreateAccountResult is returned by CreateAccount.
@@ -75,6 +80,9 @@ func (s *Store) createAccountWithPassword(name, domain string, isAdmin bool, pas
 	// points funnel through here, so this is the single fix point.
 	address := strings.ToLower(name + "@" + domain)
 
+	// Preserve the caller's original casing as the display local-part (V06
+	// ruling): key stays lowercase, the user sees their own spelling on the
+	// settings page. Only set when the caller actually used uppercase.
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -87,6 +95,9 @@ func (s *Store) createAccountWithPassword(name, domain string, isAdmin bool, pas
 		PasswordHash: hash,
 		IsAdmin:      isAdmin,
 		CreatedAt:    s.now().Unix(),
+	}
+	if display := strings.TrimSpace(name); display != "" && display != strings.ToLower(display) {
+		acc.DisplayLocal = display
 	}
 	val, err := json.Marshal(acc)
 	if err != nil {
@@ -556,6 +567,9 @@ func (s *Store) RegisterTeam(username, domain, password string, teamSize int, me
 			return ErrAccountExists
 		}
 		acc := Account{UUID: hexID(), Address: ownerAddr, PasswordHash: ownerHash, CreatedAt: now}
+		if u := strings.TrimSpace(username); u != "" && u != strings.ToLower(u) {
+			acc.DisplayLocal = u // preserve the owner's own casing (V06)
+		}
 		val, err := json.Marshal(acc)
 		if err != nil {
 			return err
@@ -625,6 +639,11 @@ func (s *Store) RegisterTeam(username, domain, password string, teamSize int, me
 			}
 			mAddr := name + "@" + domain
 			mAcc := Account{UUID: hexID(), Address: mAddr, PasswordHash: hash, CreatedAt: now}
+			if i < len(memberNames) {
+				if orig := strings.TrimSpace(memberNames[i]); orig != "" && orig != strings.ToLower(orig) && name == strings.ToLower(orig) {
+					mAcc.DisplayLocal = orig // un-collided member keeps own casing (V06)
+				}
+			}
 			mVal, err := json.Marshal(mAcc)
 			if err != nil {
 				return err

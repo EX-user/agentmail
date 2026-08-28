@@ -151,6 +151,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     box.style.height = Math.ceil(H) + "px";
     svg.setAttribute("viewBox", "0 0 " + Math.ceil(maxRight + 40) + " " + Math.ceil(H));
     $("#tf-axis").style.height = Math.ceil(H) + "px";
+    fFitWidth();
 
     // 连线：父卡底 → 子卡顶（时间序保证父在上）
     vis.forEach(function (tp, i) {
@@ -171,6 +172,34 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     });
   }
 
+
+  // ---- 缩放/平移（上级 01M143796：必须允许缩放，初始缩放到适当大小）----
+  // 滚轮/双指捏合缩放（以指针为中心），单指/鼠标拖拽平移，双击复位到适配宽度。
+  var fZoom = 1, fPanX = 0, fPanY = 0;
+  var fScroller = $("#tf-scroll");
+  function fApplyView() {
+    var c = $("#tf-canvas");
+    c.style.transformOrigin = "0 0";
+    c.style.transform = "translate(" + fPanX + "px," + fPanY + "px) scale(" + fZoom + ")";
+  }
+  function fFitWidth() {
+    var c = $("#tf-canvas");
+    var w = parseFloat(c.style.width) || c.scrollWidth;
+    fZoom = Math.min(1.15, Math.max(0.25, (fScroller.clientWidth - 24) / w));
+    fPanX = 8; fPanY = 0;
+    fApplyView();
+  }
+  function fZoomAt(cx, cy, factor) {
+    var ns = Math.min(4, Math.max(0.25, fZoom * factor));
+    var k = ns / fZoom;
+    var r = $("#tf-canvas").getBoundingClientRect();
+    var mx = cx - r.left, my = cy - r.top;
+    fPanX = mx - k * (mx - fPanX);
+    fPanY = my - k * (my - fPanY);
+    fZoom = ns;
+    fApplyView();
+  }
+
   $("#tf-axis").innerHTML = '<div class="f-tl"></div><span class="f-status">时间 ↓ 新</span>';
 
   // ---- event surface ----
@@ -179,6 +208,54 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
   document.addEventListener("threads:ref" + "resh", function () { if (fVisible) fLoad(); else fCache = null; });
   document.addEventListener("threads:reset", function () { fVisible = false; fCache = null; });
   document.addEventListener("i18n:change", function () { if (fVisible) fDraw(); });
+
+  // 指针/触摸交互：滚轮缩放、拖拽平移、双指捏合、双击复位
+  (function fWireView() {
+    if (!fScroller) return;
+    fScroller.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      fZoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+    var drag = null;
+    fScroller.addEventListener("mousedown", function (e) {
+      drag = { x: e.clientX, y: e.clientY, px: fPanX, py: fPanY, moved: false };
+    });
+    window.addEventListener("mousemove", function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+      fPanX = drag.px + dx; fPanY = drag.py + dy;
+      fApplyView();
+    });
+    window.addEventListener("mouseup", function () { drag = null; });
+    fScroller.addEventListener("dblclick", function () { fFitWidth(); });
+    var pinch = null;
+    fScroller.addEventListener("touchstart", function (e) {
+      if (e.touches.length === 2) {
+        var a = e.touches[0], b = e.touches[1];
+        pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: fZoom };
+        drag = null;
+      } else if (e.touches.length === 1) {
+        drag = { x: e.touches[0].clientX, y: e.touches[0].clientY, px: fPanX, py: fPanY };
+      }
+    }, { passive: true });
+    fScroller.addEventListener("touchmove", function (e) {
+      if (pinch && e.touches.length === 2) {
+        e.preventDefault();
+        var a = e.touches[0], b = e.touches[1];
+        var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        var r = fScroller.getBoundingClientRect();
+        fZoomAt((a.clientX + b.clientX) / 2 - r.left, (a.clientY + b.clientY) / 2 - r.top, d / pinch.d);
+        pinch.d = d;
+      } else if (drag && e.touches.length === 1) {
+        e.preventDefault();
+        fPanX = drag.px + (e.touches[0].clientX - drag.x);
+        fPanY = drag.py + (e.touches[0].clientY - drag.y);
+        fApplyView();
+      }
+    }, { passive: false });
+    fScroller.addEventListener("touchend", function () { pinch = null; drag = null; });
+  })();
 
   (function fWire() {
     var orph = $("#tf-orphans");
