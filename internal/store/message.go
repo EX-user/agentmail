@@ -804,8 +804,11 @@ func (s *Store) MyGrowthStats(address string, now time.Time) (MyGrowth, error) {
 }
 
 // getAccountInTx reads an account inside an existing transaction.
+// Case-insensitive like GetAccount (275d0ba fixed the public lookup but
+// missed this transactional twin — sends to uppercase address variants
+// silently found no recipients). Account keys are always lowercase.
 func getAccountInTx(tx *bolt.Tx, address string) (*Account, error) {
-	val := tx.Bucket(bAccounts).Get([]byte(address))
+	val := tx.Bucket(bAccounts).Get([]byte(strings.ToLower(address)))
 	if val == nil {
 		return nil, ErrAccountNotFound
 	}
