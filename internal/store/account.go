@@ -445,6 +445,9 @@ func GeneratePassword(n int) string { return generatePassword(n) }
 // EnsureAdmin creates the admin account if it does not already exist. Called
 // at server startup from config.
 func (s *Store) EnsureAdmin(address, password string) error {
+	// The config file's casing is the caller's choice, not a contract: keys
+	// are always lowercase (the last non-normalizing bucket write path).
+	address = strings.ToLower(address)
 	if _, err := s.GetAccount(address); err == nil {
 		return nil // already exists
 	} else if !errors.Is(err, ErrAccountNotFound) {
