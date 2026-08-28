@@ -17,11 +17,11 @@ var ErrMessageNotFound = errors.New("message not found")
 
 // Message is the stored record for one piece of mail.
 type Message struct {
-	ID          string           `json:"id"`                     // ULID
-	From        string           `json:"from"`                   // sender address
-	To          []string         `json:"to"`                     // recipient addresses
-	CC          []string         `json:"cc,omitempty"`           // carbon-copy addresses (delivered like To; visible to recipients)
-	InReplyTo   string           `json:"in_reply_to,omitempty"`  // parent message ULID; empty = standalone root (threads v0.6.15)
+	ID          string           `json:"id"`                    // ULID
+	From        string           `json:"from"`                  // sender address
+	To          []string         `json:"to"`                    // recipient addresses
+	CC          []string         `json:"cc,omitempty"`          // carbon-copy addresses (delivered like To; visible to recipients)
+	InReplyTo   string           `json:"in_reply_to,omitempty"` // parent message ULID; empty = standalone root (threads v0.6.15)
 	Subject     string           `json:"subject"`
 	Body        string           `json:"body"`
 	Attachments []AttachmentMeta `json:"attachments,omitempty"` // metadata only; content lives in the file store
@@ -835,12 +835,6 @@ func legacyDomainLower(address string) string {
 		return ""
 	}
 	return address[:at] + strings.ToLower(address[at:])
-}
-	var acc Account
-	if err := json.Unmarshal(val, &acc); err != nil {
-		return nil, err
-	}
-	return &acc, nil
 }
 
 // summarize projects a Message to a MessageSummary with a short body preview.
