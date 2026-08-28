@@ -20,7 +20,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
   function shortAddr(a) { return String(a || "").split("@")[0]; }
 
   var fVisible = false, fHideOrphans = true, fTreeCount = 5, fCache = null;
-  var fPalette = ["#8ab4f8", "#34a853", "#a142f4", "#ea4335", "#ff8f00",
+  var fTreeColors = ["#8ab4f8", "#34a853", "#a142f4", "#ea4335", "#ff8f00",
                   "#00acc1", "#7cb342", "#5c6bc0", "#d81b60", "#00897b"];
 
   function fPalette(role) {
@@ -98,7 +98,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     var TOP = 26;
 
     vis.forEach(function (tp, i) {
-      var edge = fPalette[i % fPalette.length];
+      var edge = fTreeColors[i % fTreeColors.length];
       var fDepth = fDepthMap(tp);
       var byId = {};
       var rootMsg = tp._msgs.filter(function (m) { return m.id === tp.root_id; })[0] || tp._msgs[0];
