@@ -55,7 +55,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     if (!box) return;
     fClear();
     box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("common.loading")) + "</p>");
-    api("/api/threads?limit=200", { keepSession: true }).then(function (d) {
+    api("/api/threads?limit=200&min_count=1", { keepSession: true }).then(function (d) {
       fCache = (d && d.threads) || [];
       fDraw();
     }, function (e) {
@@ -197,7 +197,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     if (orph) orph.addEventListener("click", function () {
       orph.classList.toggle("on");
       fHideOrphans = orph.classList.contains("on");
-      fDraw();
+      fLoad();
     });
     $$("#tf-ctl .f-pill[data-fn]").forEach(function (b) {
       b.addEventListener("click", function () {
