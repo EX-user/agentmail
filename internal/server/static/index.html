@@ -541,26 +541,7 @@
         </div>
       </div>
 
-      <!-- v0.6.30 M3 push notifications (Iris): master toggle + server-decided
-           quiet hours. Degradation lives in JS — push off server-side
-           (vapid-key 404) or a browser without SW/Push greys the card out
-           with a hint instead of surfacing an error. -->
-      <div class="settings-section pref-card" id="push-card">
-        <h4 class="pref-title" data-i18n="push.title">Push notifications</h4>
-        <div class="row" style="margin-top:8px; align-items:center;">
-          <button type="button" class="row-action" id="push-toggle" data-i18n="push.enable">Enable push notifications</button>
-          <span id="push-state" class="muted"></span>
-        </div>
-        <div class="row" id="push-dnd-row" style="margin-top:8px; align-items:center;" hidden>
-          <span data-i18n="push.dnd">Quiet hours</span>
-          <input type="checkbox" id="push-dnd-enabled" />
-          <select id="push-dnd-start"></select>
-          <span data-i18n="push.to">–</span>
-          <select id="push-dnd-end"></select>
-          <span id="push-dnd-now" class="muted"></span>
-        </div>
-        <div id="push-hint" class="muted" style="margin-top:6px;"></div>
-      </div>
+
 
       <!-- (4) Subordinate settings (moved from Accounts) -->
       <div class="settings-section pref-card" id="subs-section-wrap">
