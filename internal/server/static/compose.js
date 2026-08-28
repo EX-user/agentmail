@@ -540,6 +540,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     } catch (e) {
       // Non-fatal: the user can still type addresses manually.
     }
+    // v0.6.33 (superior report 01M13X9W): letter headers carry addresses in
+    // whatever case the sender used ("PoP@"), while accounts are stored
+    // lowercase — normalize here so contacts/directory/subordinates surface
+    // as one identity, never two variants of the same box.
+    items = items.map(function (a) { return String(a || "").toLowerCase(); });
     input.dataset.recipients = JSON.stringify(items);
     input.dataset.listLoaded = "1";
     // Shared by the To and Cc autocomplete (feedback: match-as-you-type
