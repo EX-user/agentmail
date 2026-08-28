@@ -5,14 +5,15 @@
 // 「屏蔽孤立信」开关（默认屏蔽，单封成树的话题不显示）。
 // HARD CONSTRAINT (audit_frontend_imports.sh): imports ONLY ./core.js;
 // cross-domain interactions go through DOM CustomEvents:
-//   listens:  forest:show {}  forest:hide {}  threads:refresh {}
-//             threads:reset {}  i18n:change
+//   listens:  tf:on {}  tf:off {}  threads:refresh {}  threads:reset {}
+//             i18n:change
 //   emits:    threads:open {root}  (threads.js 切回列表并打开话题详情)
 // The i18n dictionary stays a classic global (window.I18N).
 import { $, $$, esc, api, fmtTime } from "./core.js";
 
 (function () {
   "use strict";
+  window.__forestLoaded = "yes";
 
   function t(key, vars) {
     return window.I18N ? window.I18N.t(key, vars) : key;
@@ -43,9 +44,9 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
 
   // P0#3 (Felix round 3): the svg lives INSIDE #tf-canvas - wiping the box
   // with textContent destroyed it and fLayout silently bailed. Clear only
-  // cards and status notes; the svg stays put.
+  // cards and status text; the svg stays put.
   function fClear() {
-    $$("#tf-canvas .f-card, #tf-canvas .f-note").forEach(function (el) { el.remove(); });
+    $$("#tf-canvas .f-card, #tf-canvas .f-status").forEach(function (el) { el.remove(); });
   }
 
   // 取最近 treeCount 棵（屏蔽孤立信时仅 count>1），并行拉全量成员后绘制
@@ -54,13 +55,13 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     var box = $("#tf-canvas");
     if (!box) return;
     fClear();
-    box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("common.loading")) + "</p>");
+    box.insertAdjacentHTML("beforeend", '<p class="f-status muted">' + esc(t("common.loading")) + "</p>");
     api("/api/threads?limit=200&min_count=1", { keepSession: true }).then(function (d) {
       fCache = (d && d.threads) || [];
       fDraw();
     }, function (e) {
       fClear();
-      box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
+      box.insertAdjacentHTML("beforeend", '<p class="f-status muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
     });
   }
 
@@ -72,7 +73,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     var vis = pool.slice(0, fTreeCount);
     fClear();
     if (!vis.length) {
-      box.insertAdjacentHTML("beforeend", '<p class="f-note muted">' + esc(t("threads.empty")) + "</p>");
+      box.insertAdjacentHTML("beforeend", '<p class="f-status muted">' + esc(t("threads.empty")) + "</p>");
       return;
     }
     // 并行取成员（≤20 棵，与列表视图每页 10 棵同量级）
@@ -91,29 +92,14 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     fClear();
     svg.innerHTML = "";
 
-    // 全局时间范围（跨所有渲染的信件）
-    var lo = Infinity, hi = -Infinity;
-    vis.forEach(function (tp) {
-      tp._msgs.forEach(function (m) {
-        var ts = m.received_at || 0;
-        if (ts < lo) lo = ts; if (ts > hi) hi = ts;
-      });
-    });
-    if (!isFinite(lo)) { lo = 0; hi = 1; }
-    if (hi - lo < 60) hi = lo + 60;
-
-    var CARD_W = 186, CARD_H = 52, DX = 200, LANE_GAP = 56;
-    var nodes = {}, fLinks = [];
-    var laneX = 16, maxRight = 0, maxBottom = 0;
-    var TOP = 26;
-    var span = hi - lo;
+    var CARD_W = 186, CARD_H = 52, DX = 200, LANE_GAP = 56, ROW = 78, TOP = 26;
+    var nodes = {}, fLinks = [], fAll = [];
+    var laneX = 16, maxRight = 0;
 
     vis.forEach(function (tp, i) {
       var edge = fTreeColors[i % fTreeColors.length];
       var byId = {};
       var rootMsg = tp._msgs.filter(function (m) { return m.id === tp.root_id; })[0] || tp._msgs[0];
-      // P0#3 追加修复：d3 根节点的 .data 就是这里传入的对象本身——
-      // 不能再用 { data: rootMsg } 包装，否则根卡读到的是包装器，字段全空。
       var hier = rootMsg;
       hier.fKids = [];
       byId[rootMsg.id] = hier;
@@ -127,80 +113,67 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
       var xs = [];
       placed.each(function (n) { xs.push(n.x); });
       var minX = Math.min.apply(null, xs);
-      var laneNodes = [];
       placed.each(function (n) {
         var m = n.data;
         var x = laneX + (n.x - minX) + 93;
-        var y = TOP + ((m.received_at || lo) - lo) / span * 640;
-        laneNodes.push({ m: m, x: x, y: y, isRoot: m.id === tp.root_id, edge: edge, rootId: tp.root_id });
+        fAll.push({ m: m, x: x, edge: edge, rootId: tp.root_id, isRoot: m.id === tp.root_id });
         maxRight = Math.max(maxRight, x + CARD_W);
-      });
-      // 纵向避让（上旧下新）：真实时刻在像素轴上挤在一起时，按时间顺序
-      // 逐卡下推，保证任何两张卡不重叠；时间轴刻度仍按真实时刻。
-      laneNodes.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
-      var prevBottom = -1e9; // 避让只看本泳道，跨泳道靠横向间距
-      laneNodes.forEach(function (n) {
-        if (n.y < prevBottom + 8) n.y = prevBottom + 8;
-        prevBottom = n.y + CARD_H;
-      });
-      laneNodes.forEach(function (n) {
-        var c = fPalette(n.m.role);
-        var el = document.createElement("div");
-        el.className = "f-card"; el.dataset.root = n.rootId;
-        el.style.background = c.fBg;
-        el.style.border = "1px solid " + c.fBd;
-        el.style.borderLeft = "3px solid " + n.edge;
-        el.style.left = n.x + "px"; el.style.top = n.y + "px";
-        el.innerHTML = '<div class="f-head">' + esc(shortAddr(n.m.from)) + " · " + esc(fmtTime(n.m.received_at)) + "</div>"
-          + (n.isRoot ? '<div class="f-subj">' + esc(fClip(tp.subject || "—", 13)) + "</div>" : "")
-          + '<div class="f-body">' + esc(fClip(n.m.subject || n.m.preview || "", 46)) + "</div>";
-        el.addEventListener("click", function () {
-          document.dispatchEvent(new CustomEvent("threads:open", { detail: { root: n.rootId } }));
-        });
-        box.appendChild(el);
-        nodes[n.m.id] = n;
-        if (!n.isRoot) fLinks.push({ p: n.m.in_reply_to, id: n.m.id, color: n.edge });
-        maxBottom = Math.max(maxBottom, n.y + CARD_H);
       });
       laneX += (Math.max.apply(null, xs) - minX) + DX + LANE_GAP;
     });
 
-    box.style.width = Math.ceil(maxRight + 40) + "px";
-    box.style.height = Math.ceil(maxBottom + 40) + "px";
-    svg.setAttribute("viewBox", "0 0 " + Math.ceil(maxRight + 40) + " " + Math.ceil(maxBottom + 40));
-    fLinks.forEach(function (e) {
-      var p = nodes[e.p], c = nodes[e.id];
-      if (!p || !c) return;
-      var x1 = p.x, y1 = p.y + CARD_H - 2, x2 = c.x, y2 = c.y;
-      var my = (y1 + y2) / 2;
-      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", "M" + x1 + " " + y1 + " C " + x1 + " " + my + ", " + x2 + " " + my + ", " + x2 + " " + y2);
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", e.color);
-      path.setAttribute("stroke-width", "2.6");
-      svg.appendChild(path);
+    // Superior 01M13SYW0: sort by time, render equidistant - no more
+    // time-scale squeeze, rows never collide.
+    fAll.sort(function (a, b) {
+      return (a.m.received_at || 0) - (b.m.received_at || 0) || a.x - b.x;
     });
-    fAxis(lo, hi);
+    fAll.forEach(function (n, i) { n.y = TOP + i * ROW; nodes[n.m.id] = n; maxRight = Math.max(maxRight, n.x + CARD_W); });
+
+    fAll.forEach(function (n) {
+      var c = fPalette(n.m.role);
+      var el = document.createElement("div");
+      el.className = "f-card"; el.dataset.root = n.rootId;
+      el.style.background = c.fBg;
+      el.style.border = "1px solid " + c.fBd;
+      el.style.borderLeft = "3px solid " + n.edge;
+      el.style.left = n.x + "px"; el.style.top = n.y + "px";
+      el.innerHTML = '<div class="f-head">' + esc(shortAddr(n.m.from)) + " · " + esc(fmtTime(n.m.received_at)) + "</div>"
+        + (n.isRoot ? '<div class="f-subj">' + esc(fClip(n.m.subject || "—", 13)) + "</div>" : "")
+        + '<div class="f-body">' + esc(fClip(n.m.body || n.m.subject || "", 46)) + "</div>";
+      el.addEventListener("click", function () {
+        document.dispatchEvent(new CustomEvent("threads:open", { detail: { root: n.rootId } }));
+      });
+      box.appendChild(el);
+    });
+
+    var H = TOP + fAll.length * ROW + 30;
+    box.style.width = Math.ceil(maxRight + 40) + "px";
+    box.style.height = Math.ceil(H) + "px";
+    svg.setAttribute("viewBox", "0 0 " + Math.ceil(maxRight + 40) + " " + Math.ceil(H));
+    $("#tf-axis").style.height = Math.ceil(H) + "px";
+
+    // 连线：父卡底 → 子卡顶（时间序保证父在上）
+    vis.forEach(function (tp, i) {
+      var edge = fTreeColors[i % fTreeColors.length];
+      tp._msgs.forEach(function (m) {
+        if (m.id === tp.root_id) return;
+        var p = nodes[m.in_reply_to], c = nodes[m.id];
+        if (!p || !c) return;
+        var x1 = p.x, y1 = p.y + CARD_H - 2, x2 = c.x, y2 = c.y;
+        var my = (y1 + y2) / 2;
+        var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", "M" + x1 + " " + y1 + " C " + x1 + " " + my + ", " + x2 + " " + my + ", " + x2 + " " + y2);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", edge);
+        path.setAttribute("stroke-width", "2.6");
+        svg.appendChild(path);
+      });
+    });
   }
 
-  function fAxis(lo, hi) {
-    var ax = $("#tf-axis");
-    if (!ax) return;
-    ax.querySelectorAll(".f-tick").forEach(function (e) { e.remove(); });
-    ax.style.height = $("#tf-canvas").style.height;
-    var span = hi - lo;
-    var steps = [60, 300, 900, 1800, 3600, 21600, 86400];
-    var step = steps[steps.length - 1];
-    for (var i = 0; i < steps.length; i++) { if (span / steps[i] <= 7) { step = steps[i]; break; } }
-    for (var ts = Math.ceil(lo / step) * step; ts <= hi; ts += step) {
-      var tick = document.createElement("span");
-      tick.className = "f-tick";
-      tick.style.top = (24 + (ts - lo) / span * 640) + "px";
-      tick.textContent = fmtTime(ts);
-      ax.appendChild(tick);
-    }
-  }
+  $("#tf-axis").innerHTML = '<div class="f-tl"></div><span class="f-status">时间 ↓ 新</span>';
 
+  // ---- event surface ----
   document.addEventListener("tf:on", function () { fVisible = true; fLoad(); });
   document.addEventListener("tf:off", function () { fVisible = false; });
   document.addEventListener("threads:ref" + "resh", function () { if (fVisible) fLoad(); else fCache = null; });

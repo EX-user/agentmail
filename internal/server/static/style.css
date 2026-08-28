@@ -1567,3 +1567,9 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   88%  { transform: translateX(var(--wm-end, -100%)); }
   100% { transform: translateX(var(--wm-end, -100%)); }
 }
+
+#tf-axis .f-cap { position: absolute; left: 6px; bottom: 6px; writing-mode: vertical-rl; letter-spacing: 2px; }
+
+#tf-axis .f-status { position: absolute; left: 6px; bottom: 6px; writing-mode: vertical-rl; letter-spacing: 2px; color: var(--muted); }
+
+#tf-axis .f-status { position: absolute; left: 6px; bottom: 6px; writing-mode: vertical-rl; letter-spacing: 2px; color: var(--muted); }
