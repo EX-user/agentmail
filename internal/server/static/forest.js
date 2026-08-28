@@ -100,54 +100,69 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
       });
     });
     if (!isFinite(lo)) { lo = 0; hi = 1; }
-    if (hi - lo < 60) hi = lo + 60; // 至少一分钟的跨度，避免除零/挤压
+    if (hi - lo < 60) hi = lo + 60;
 
+    var CARD_W = 186, CARD_H = 52, DX = 200, LANE_GAP = 56;
     var nodes = {}, fLinks = [];
     var laneX = 16, maxRight = 0, maxBottom = 0;
     var TOP = 26;
+    var span = hi - lo;
 
     vis.forEach(function (tp, i) {
       var edge = fTreeColors[i % fTreeColors.length];
-      var fDepth = fDepthMap(tp);
       var byId = {};
       var rootMsg = tp._msgs.filter(function (m) { return m.id === tp.root_id; })[0] || tp._msgs[0];
-      var hier = { data: rootMsg, fKids: [] };
+      // P0#3 追加修复：d3 根节点的 .data 就是这里传入的对象本身——
+      // 不能再用 { data: rootMsg } 包装，否则根卡读到的是包装器，字段全空。
+      var hier = rootMsg;
+      hier.fKids = [];
       byId[rootMsg.id] = hier;
       tp._msgs.forEach(function (m) {
         if (m.id === rootMsg.id) return;
-        var n = { data: m, fKids: [] };
-        byId[m.id] = n;
-        (byId[m.in_reply_to] || hier).fKids.push(n);
+        m.fKids = [];
+        byId[m.id] = m;
+        (byId[m.in_reply_to] || hier).fKids.push(m);
       });
-      var placed = window.d3.tree().nodeSize([200, 1])(d3.hierarchy(hier, function (d) { return d.fKids; }));
+      var placed = window.d3.tree().nodeSize([DX, 1])(d3.hierarchy(hier, function (d) { return d.fKids; }));
       var xs = [];
       placed.each(function (n) { xs.push(n.x); });
       var minX = Math.min.apply(null, xs);
+      var laneNodes = [];
       placed.each(function (n) {
         var m = n.data;
         var x = laneX + (n.x - minX) + 93;
-        var span = hi - lo;
-        var y = 24 + ((m.received_at || lo) - lo) / span * 640;
-        var c = fPalette(m.role);
+        var y = TOP + ((m.received_at || lo) - lo) / span * 640;
+        laneNodes.push({ m: m, x: x, y: y, isRoot: m.id === tp.root_id, edge: edge, rootId: tp.root_id });
+        maxRight = Math.max(maxRight, x + CARD_W);
+      });
+      // 纵向避让（上旧下新）：真实时刻在像素轴上挤在一起时，按时间顺序
+      // 逐卡下推，保证任何两张卡不重叠；时间轴刻度仍按真实时刻。
+      laneNodes.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
+      var prevBottom = -1e9; // 避让只看本泳道，跨泳道靠横向间距
+      laneNodes.forEach(function (n) {
+        if (n.y < prevBottom + 8) n.y = prevBottom + 8;
+        prevBottom = n.y + CARD_H;
+      });
+      laneNodes.forEach(function (n) {
+        var c = fPalette(n.m.role);
         var el = document.createElement("div");
-        el.className = "f-card"; el.dataset.root = tp.root_id;
+        el.className = "f-card"; el.dataset.root = n.rootId;
         el.style.background = c.fBg;
         el.style.border = "1px solid " + c.fBd;
-        el.style.borderLeft = "3px solid " + edge;
-        el.style.left = x + "px"; el.style.top = y + "px";
-        el.innerHTML = '<div class="f-head">' + esc(shortAddr(m.from)) + " · " + esc(fmtTime(m.received_at)) + "</div>"
-          + (m.id === tp.root_id ? '<div class="f-subj">' + esc(fClip(tp.subject || "—", 13)) + "</div>" : "")
-          + '<div class="f-body">' + esc(fClip(m.subject || m.preview || "", 46)) + "</div>";
+        el.style.borderLeft = "3px solid " + n.edge;
+        el.style.left = n.x + "px"; el.style.top = n.y + "px";
+        el.innerHTML = '<div class="f-head">' + esc(shortAddr(n.m.from)) + " · " + esc(fmtTime(n.m.received_at)) + "</div>"
+          + (n.isRoot ? '<div class="f-subj">' + esc(fClip(tp.subject || "—", 13)) + "</div>" : "")
+          + '<div class="f-body">' + esc(fClip(n.m.subject || n.m.preview || "", 46)) + "</div>";
         el.addEventListener("click", function () {
-          document.dispatchEvent(new CustomEvent("threads:open", { detail: { root: tp.root_id } }));
+          document.dispatchEvent(new CustomEvent("threads:open", { detail: { root: n.rootId } }));
         });
         box.appendChild(el);
-        nodes[m.id] = { x: x, y: y };
-        if (m.id !== rootMsg.id) fLinks.push({ p: m.in_reply_to, id: m.id, color: edge });
-        maxRight = Math.max(maxRight, x + 200);
-        maxBottom = Math.max(maxBottom, y + 64);
+        nodes[n.m.id] = n;
+        if (!n.isRoot) fLinks.push({ p: n.m.in_reply_to, id: n.m.id, color: n.edge });
+        maxBottom = Math.max(maxBottom, n.y + CARD_H);
       });
-      laneX += (Math.max.apply(null, xs) - minX) + 200 + 56;
+      laneX += (Math.max.apply(null, xs) - minX) + DX + LANE_GAP;
     });
 
     box.style.width = Math.ceil(maxRight + 40) + "px";
@@ -156,13 +171,13 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
     fLinks.forEach(function (e) {
       var p = nodes[e.p], c = nodes[e.id];
       if (!p || !c) return;
-      var x1 = p.x, y1 = p.y + 54, x2 = c.x, y2 = c.y - 2;
+      var x1 = p.x, y1 = p.y + CARD_H - 2, x2 = c.x, y2 = c.y;
       var my = (y1 + y2) / 2;
       var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", "M" + x1 + " " + y1 + " C " + x1 + " " + my + ", " + x2 + " " + my + ", " + x2 + " " + y2);
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", e.color);
-      path.setAttribute("stroke-width", "2.4");
+      path.setAttribute("stroke-width", "2.6");
       svg.appendChild(path);
     });
     fAxis(lo, hi);
