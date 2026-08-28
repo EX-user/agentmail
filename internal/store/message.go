@@ -810,13 +810,32 @@ func (s *Store) MyGrowthStats(address string, now time.Time) (MyGrowth, error) {
 // writes; legacy mixed-case rows (pre-normalize) are still resolved via a
 // raw-key fallback until /admin/normalize-account-case has been run.
 func getAccountInTx(tx *bolt.Tx, address string) (*Account, error) {
-	val := tx.Bucket(bAccounts).Get([]byte(strings.ToLower(address)))
-	if val == nil {
-		val = tx.Bucket(bAccounts).Get([]byte(address)) // legacy mixed-case key
+	// Lookup order: canonical lowercase key → verbatim (legacy rows stored
+	// pre-normalization) → verbatim local part with lowercased domain
+	// (domain casing is meaningless, local casing is what the user sees).
+	for _, cand := range []string{strings.ToLower(address), address, legacyDomainLower(address)} {
+		if cand == "" {
+			continue
+		}
+		if val := tx.Bucket(bAccounts).Get([]byte(cand)); val != nil {
+			var acc Account
+			if err := json.Unmarshal(val, &acc); err != nil {
+				return nil, err
+			}
+			return &acc, nil
+		}
 	}
-	if val == nil {
-		return nil, ErrAccountNotFound
+	return nil, ErrAccountNotFound
+}
+
+// legacyDomainLower lowercases only the domain part of address.
+func legacyDomainLower(address string) string {
+	at := strings.IndexByte(address, '@')
+	if at < 0 {
+		return ""
 	}
+	return address[:at] + strings.ToLower(address[at:])
+}
 	var acc Account
 	if err := json.Unmarshal(val, &acc); err != nil {
 		return nil, err
