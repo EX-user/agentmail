@@ -131,6 +131,7 @@ func (s *Server) checkRecvRate(address string, bodyLen int64) bool {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/.well-known/assetlinks.json", s.handleAssetlinks)
 
 	// Setup + status — always available (no auth, no initialization required).
 	mux.HandleFunc("/setup", s.handleSetup)
@@ -158,6 +159,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/files/list", s.requireInitialized(s.requireAccount(s.handleFileList)))
 	mux.HandleFunc("/api/files/", s.requireInitialized(s.requireAccount(s.handleFileDownload)))
 	mux.HandleFunc("/api/password", s.requireInitialized(s.requireAccount(s.handleChangePassword)))
+	// Remember-login session tokens (v0.6.27): mint with Basic auth, revoke
+	// (logout) with the bearer token itself.
+	mux.HandleFunc("/api/auth/token", s.requireInitialized(s.requireAccount(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			s.handleAuthTokenIssue(w, r)
+		case http.MethodDelete:
+			s.handleAuthTokenRevoke(w, r)
+		default:
+			methodNotAllowed(w)
+		}
+	})))
 	mux.HandleFunc("/api/subs", s.requireInitialized(s.requireAccount(s.handleSubs)))
 	mux.HandleFunc("/api/subs/remove", s.requireInitialized(s.requireAccount(s.handleSubsRemove)))
 	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
@@ -275,12 +288,39 @@ func (s *Server) filesTTLLoop(ctx context.Context) {
 // address is passed to the handler via the request context.
 func (s *Server) requireAccount(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		address, ok := s.basicAuthAccount(w, r)
+		address, ok := s.authAccount(w, r)
 		if !ok {
 			return // already wrote 401
 		}
 		h.ServeHTTP(w, r.WithContext(withAccount(r.Context(), address)))
 	}
+}
+
+// authAccount accepts EITHER a bearer session token (remember-login,
+// v0.6.27) or the classic Basic credential as a fallback. Both paths write
+// 401 on failure; a present-but-invalid bearer does NOT fall through to
+// Basic parsing (a token client sending Basic-less garbage should learn
+// its token died, not masquerade as a password client).
+func (s *Server) authAccount(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if tok := bearerToken(r.Header.Get("Authorization")); tok != "" {
+		addr, err := s.store.ResolveSessionToken(tok)
+		if err != nil {
+			unauthorized(w)
+			return "", false
+		}
+		return addr, true
+	}
+	return s.basicAuthAccount(w, r)
+}
+
+// bearerToken extracts the token from "Authorization: Bearer <token>"
+// (case-insensitive scheme), or "".
+func bearerToken(header string) string {
+	const prefix = "bearer "
+	if len(header) <= len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {
+		return ""
+	}
+	return header[len(prefix):]
 }
 
 // requireAdmin wraps a handler so that it only runs for the configured admin

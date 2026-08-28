@@ -1457,6 +1457,15 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
 .reply-ref a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .reply-ref a:hover { text-decoration: underline; }
 
+/* PWA standalone (v0.6.24 shell): when launched from the home screen the
+   black-translucent status bar overlays the page — pad the safe areas. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* ===== Threads (topics) view — third mgmt segment ===== */
 #mgmt-threads { max-width: 640px; }
 .th-topic { background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 8px;

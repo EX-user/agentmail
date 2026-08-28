@@ -18,6 +18,25 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+// handleAssetlinks serves the Digital Asset Links statement embedded at
+// build time (v0.6.26 TWA). No auth — Android's verifier fetches it
+// anonymously; the server binary IS the delivery vehicle, so a server swap
+// can never lose the file (alice's review point: an ops-managed file would
+// silently degrade the TWA to a browser tab on redeploy).
+//   GET /.well-known/assetlinks.json
+func (s *Server) handleAssetlinks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		methodNotAllowed(w)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	// The fingerprint only changes with a new signing certificate; let the
+	// Android verifier cache it for a day.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(assetlinksJSON)
+}
+
 // handleStatus reports initialization state (no auth). Used by the panel to
 // decide whether to show the setup wizard or the normal UI.
 //   GET /api/status -> {"initialized": bool, "domain": "..."}
@@ -707,7 +726,50 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "self password change")
+	// Password change invalidates every remembered device (v0.6.27): old
+	// session tokens die with the old credential.
+	if err := s.store.RevokeAllSessionTokens(who); err != nil {
+		badRequest(w, "password changed but token revocation failed: "+err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleAuthTokenIssue mints a session token for the authenticated account
+// (remember-login, v0.6.27). The client authenticated via Basic (the token
+// does not exist yet); repeat logins keep older tokens alive — multi-device
+// friendly per alice's ruling.
+//   POST /api/auth/token -> {"token": "...", "expires_at": 123}
+func (s *Server) handleAuthTokenIssue(w http.ResponseWriter, r *http.Request) {
+	who := accountFrom(r.Context())
+	token, expiresAt, err := s.store.CreateSessionToken(who)
+	if err != nil {
+		badRequest(w, "mint token: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token issued")
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expires_at": expiresAt})
+}
+
+// handleAuthTokenRevoke logs out the device that presents the token
+// (DELETE /api/auth/token with the bearer). The middleware already resolved
+// the token to an account; revoke by raw header so the CURRENT device dies,
+// not every sibling.
+func (s *Server) handleAuthTokenRevoke(w http.ResponseWriter, r *http.Request) {
+	who := accountFrom(r.Context())
+	tok := bearerToken(r.Header.Get("Authorization"))
+	if tok == "" {
+		// Basic-auth caller without a token has nothing to revoke; that is
+		// fine — logout of a non-remembered session is a no-op on the server.
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": false})
+		return
+	}
+	if err := s.store.RevokeSessionToken(tok); err != nil {
+		badRequest(w, "revoke token: "+err.Error())
+		return
+	}
+	_ = s.audit.Record(r.Context(), audit.ActionRegister, who, "session token revoked")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": true})
 }
 
 // --- response helpers ---
