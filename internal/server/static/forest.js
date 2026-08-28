@@ -33,7 +33,7 @@ import { $, $$, esc, api, fmtTime } from "./core.js";
   function fDepthMap(t) {
     var fDepth = {}; fDepth[t.root_id] = 0; var changed = true;
     while (changed) { changed = false;
-      t.msgs.forEach(function (m) {
+      t._msgs.forEach(function (m) {
         var pd = fDepth[m.in_reply_to];
         if (pd != null && (fDepth[m.id] == null || fDepth[m.id] < pd + 1)) { fDepth[m.id] = pd + 1; changed = true; }
       });
