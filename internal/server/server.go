@@ -196,7 +196,6 @@ func (s *Server) Handler() http.Handler {
 		}
 	})))
 	mux.HandleFunc("/api/push/settings", s.requireInitialized(s.requireAccount(s.handlePushSettings)))
-	mux.HandleFunc("/service-worker.js", s.handleServiceWorkerJS)
 	mux.HandleFunc("/api/subs", s.requireInitialized(s.requireAccount(s.handleSubs)))
 	mux.HandleFunc("/api/subs/remove", s.requireInitialized(s.requireAccount(s.handleSubsRemove)))
 	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
