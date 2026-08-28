@@ -78,10 +78,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, basicAuth, toast, se
   function showNewLetterBanner(n, letter) {
     const prev = document.getElementById("new-mail-banner");
     if (prev) prev.remove();
-    const from = letter && letter.from ? letter.from.split("@")[0] : "";
+    const fromName = letter && letter.from ? letter.from.split("@")[0] : "";
     const b = document.createElement("button");
     b.id = "new-mail-banner";
-    b.textContent = t("push.bannerNew", { n: n }) + (from ? " · " + from : "");
+    b.textContent = t("push.bannerNew", { n: n }) + (fromName ? " · " + fromName : "");
     b.addEventListener("click", function () {
       b.remove();
       const tab = document.querySelector('.tab[data-tab=inbox]');
