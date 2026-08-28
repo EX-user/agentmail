@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"testing"
+
+	bolt "go.etcd.io/bbolt"
+)
 
 // Regression for the superior's case-variant report (alice 01M13YGD): sends
 // to an uppercase address variant must resolve the lowercase-stored account
@@ -41,12 +45,14 @@ func TestLegacyMixedCaseKeyResolvable(t *testing.T) {
 	// same bucket (no public API creates these anymore).
 	si, _ := s.CreateAccountWithPassword("legacy", "t", false, "pw-one-2-3")
 	_ = si
-	s.db.Update(func(tx *bolt.Tx) error {
+	if err := s.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("accounts"))
 		v := b.Get([]byte("legacy@t"))
 		b.Delete([]byte("legacy@t"))
 		return b.Put([]byte("LEGACY@t"), v)
-	})
+	}); err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
 	if _, err := s.Send("alice@t", "A", []string{"LEGACY@T"}, nil, "f", "b", ""); err != nil {
 		t.Fatalf("legacy mixed-case recipient must resolve: %v", err)
 	}
