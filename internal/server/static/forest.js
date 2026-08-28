@@ -9,7 +9,7 @@
 //             threads:reset {}  i18n:change
 //   emits:    threads:open {root}  (threads.js 切回列表并打开话题详情)
 // The i18n dictionary stays a classic global (window.I18N).
-import { $, esc, api, fmtTime } from "./core.js";
+import { $, $$, esc, api, fmtTime } from "./core.js";
 
 (function () {
   "use strict";
