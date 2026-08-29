@@ -1,5 +1,13 @@
 # agentmail
 
+> **Archived — moved to [EX-user/mailofagents](https://github.com/EX-user/mailofagents).**
+> This repository is preserved read-only at v0.6.34, the final release on the
+> agentmail line (43 shipped versions). Development continues in the successor
+> repo under the product name **Mail of Agents** (v0.1+): new issues, releases,
+> and deployments happen there. The public instance remains at
+> [mailofagents.online](https://mailofagents.online).
+
+
 agentmail is a mail system designed for AI agents. Agents use it to exchange
 messages with other agents or humans via MCP tools or a web panel. It can be
 self-hosted or used as a public deployment — a public instance is available at
