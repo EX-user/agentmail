@@ -693,24 +693,249 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
   });
 
-  function renderPrefsOwnCard(ownSig, ownVisible) {
-    // 0.3.2 boss 认定四：自身卡迁偏好页，双端同款手机卡样式（ct-card 语法）；
-    // 「My address」显示地址卡随迁撤销（boss：不留「我的地址 XXX」）。
-    const sess = getSession();
-    const el = $("#pown-card");
-    if (!sess || !el) return;
-    el.innerHTML =
-      '<div class="ct-card">' +
-      '<div class="ct-line">' + (ownVisible ? '<span class="badge-listed">listed</span>' : "") +
-      '<div class="ct-addr"><strong>' + esc(sess.address) + "</strong></div>" +
-      '<span class="badge-listed">you</span></div>' +
-      (ownSig ? '<div class="ct-sig">' + esc(ownSig) + "</div>" : "") +
-      '<div class="ct-foot"><button class="row-action pill-btn" id="btn-change-pw-p">' + t("act.changePw") + '</button><button class="row-action pill-btn" data-limits="' + esc(sess.address) + '">' + t("limits.open") + "</button></div>" +
-      "</div>";
-    const pw = $("#btn-change-pw-p");
-    if (pw) pw.addEventListener("click", openChangePassword);
-  }
-
+  function renderPrefsOwnCard(ownSig, ownVisible) {
+    // 0.3.2 boss 认定四：自身卡迁偏好页，双端同款手机卡样式（ct-card 语法）；
+    // 「My address」显示地址卡随迁撤销（boss：不留「我的地址 XXX」）。
+    const sess = getSession();
+    const el = $("#pown-card");
+    if (!sess || !el) return;
+    // 0.3.3 头像：卡首头像 + 相机角标，点头像/「更换头像」钮开同一弹层
+    // （PC/手机同一套，0.3.3 boss 整改二；入口不落账户页——账户页纯列表）。
+    el.innerHTML =
+      '<div class="ct-card av-owncard">' +
+      '<div class="av-ownside"><button type="button" class="av-ownav" id="btn-avatar-open" title="' + t("prof.avatarChange") + '">' +
+      '<span class="av-ownslot" id="own-avatar-slot"></span>' +
+      '<span class="av-cam"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3.2L9.4 5.4h5.2L16.8 8H20v11H4z"/><circle cx="12" cy="13" r="3.4"/></svg></span>' +
+      "</button></div>" +
+      '<div class="ct-line">' + (ownVisible ? '<span class="badge-listed">listed</span>' : "") +
+      '<div class="ct-addr"><strong>' + esc(sess.address) + "</strong></div>" +
+      '<span class="badge-listed">you</span></div>' +
+      (ownSig ? '<div class="ct-sig">' + esc(ownSig) + "</div>" : "") +
+      '<div class="ct-foot"><button type="button" class="row-action pill-btn av-entry" id="btn-avatar-open2">' + t("prof.avatarChange") + '</button><button class="row-action pill-btn" id="btn-change-pw-p">' + t("act.changePw") + '</button><button class="row-action pill-btn" data-limits="' + esc(sess.address) + '">' + t("limits.open") + "</button></div>" +
+      "</div>";
+    const pw = $("#btn-change-pw-p");
+    if (pw) pw.addEventListener("click", openChangePassword);
+    const av1 = $("#btn-avatar-open"), av2 = $("#btn-avatar-open2");
+    if (av1) av1.addEventListener("click", openAvatarModal);
+    if (av2) av2.addEventListener("click", openAvatarModal);
+    ensureOwnAvatarHash();
+  }
+
+  // ---- 0.3.3 avatar upload (own card; one modal, PC and phones) ----
+  // Wiring follows the team-reviewed 0006 approach: the auth wall lives in
+  // the Authorization header, so a real avatar loads via fetch->objectURL —
+  // a plain <img> can never authenticate. Server hard limits (jpeg/png,
+  // longest edge <= 512, <= 100KB) are mirrored client-side; the canvas
+  // scales before upload so the server 413 stays a last resort.
+  var AV_MAX_EDGE = 512, AV_MAX_BYTES = 100 * 1024;
+  var ownAvatarURL = null; // live card objectURL (revoked on replace)
+  var ownAvatarHashDone = false;
+
+  function avFallback(addr) {
+    return '<span class="cl-av-img cl-identicon">' + esc((addr[0] || "?").toUpperCase()) + "</span>";
+  }
+
+  function ensureOwnAvatarHash() {
+    const sess = getSession();
+    if (!sess || ownAvatarHashDone) { renderOwnAvatar(); return; }
+    ownAvatarHashDone = true;
+    api("/api/account/info?query=self", { keepSession: true })
+      .then(function (info) {
+        window.__avatarHashes = window.__avatarHashes || {};
+        if (info && info.avatar_hash) {
+          window.__avatarHashes[String(info.address || sess.address).toLowerCase()] = info.avatar_hash;
+        }
+      })
+      .catch(function () { /* placeholder stays */ })
+      .then(renderOwnAvatar);
+  }
+
+  function renderOwnAvatar() {
+    const sess = getSession();
+    const slot = document.getElementById("own-avatar-slot");
+    if (!sess || !slot) return;
+    const hash = (window.__avatarHashes || {})[sess.address.toLowerCase()] || "";
+    if (ownAvatarURL) { URL.revokeObjectURL(ownAvatarURL); ownAvatarURL = null; }
+    if (!hash) { slot.innerHTML = avFallback(sess.address); return; }
+    // immutable 一年缓存：换头像必须换 URL（?v=hash）才不命中旧缓存
+    fetch("/api/avatar/" + encodeURIComponent(sess.address) + "?v=" + encodeURIComponent(hash), { headers: { Authorization: basicAuth() } })
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.blob(); })
+      .then(function (b) {
+        ownAvatarURL = URL.createObjectURL(b);
+        slot.innerHTML = '<img alt="" src="' + ownAvatarURL + '">';
+      })
+      .catch(function () { slot.innerHTML = avFallback(sess.address); });
+  }
+
+  function openAvatarModal() {
+    const sess = getSession();
+    if (!sess || document.getElementById("av-overlay")) return;
+    const selfKey = sess.address.toLowerCase();
+    const curHash = (window.__avatarHashes || {})[selfKey] || "";
+
+    const ov = document.createElement("div");
+    ov.id = "av-overlay";
+    ov.innerHTML =
+      '<div class="av-card">' +
+      '<div class="av-head"><span>' + t("prof.avatarChange") + '</span><button type="button" class="av-x" id="av-x">×</button></div>' +
+      '<div class="av-body">' +
+      '<div class="av-prev" id="av-prev"></div>' +
+      '<div class="av-info hidden" id="av-info"></div>' +
+      '<div class="av-btns">' +
+      '<button type="button" class="av-pick" id="av-pick">' + t("prof.avatarPick") + "</button>" +
+      '<button type="button" class="av-reset" id="av-reset"></button>' +
+      "</div>" +
+      '<input type="file" id="av-file" accept="image/jpeg,image/png" class="hidden">' +
+      "</div>" +
+      '<div class="av-foot">' +
+      '<button type="button" class="av-cancel" id="av-cancel">' + t("common.cancel") + "</button>" +
+      '<button type="button" class="av-save" id="av-save" disabled>' + t("prof.avatarSave") + "</button>" +
+      "</div></div>";
+    document.body.appendChild(ov);
+
+    const prev = ov.querySelector("#av-prev");
+    const info = ov.querySelector("#av-info");
+    const fileIn = ov.querySelector("#av-file");
+    const resetB = ov.querySelector("#av-reset");
+    const saveB = ov.querySelector("#av-save");
+    const blobURLs = [];
+    let pending = null; // {blob, ext, w, h}
+    let pendingURL = null;
+    let busy = false;
+
+    function trackURL(u) { blobURLs.push(u); return u; }
+    function close() {
+      blobURLs.forEach(function (u) { URL.revokeObjectURL(u); });
+      if (pendingURL) URL.revokeObjectURL(pendingURL);
+      ov.remove();
+    }
+    function showCurrent() {
+      if (pendingURL) { URL.revokeObjectURL(pendingURL); pendingURL = null; }
+      pending = null;
+      info.classList.add("hidden");
+      saveB.disabled = true;
+      resetB.disabled = !curHash; // nothing uploaded -> nothing to reset
+      if (!curHash) { prev.innerHTML = avFallback(sess.address); return; }
+      prev.innerHTML = '<img alt="">';
+      fetch("/api/avatar/" + encodeURIComponent(sess.address) + "?v=" + encodeURIComponent(curHash), { headers: { Authorization: basicAuth() } })
+        .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.blob(); })
+        .then(function (b) { prev.firstChild.src = trackURL(URL.createObjectURL(b)); })
+        .catch(function () { prev.innerHTML = avFallback(sess.address); });
+    }
+    function showPending() {
+      prev.innerHTML = '<img alt="">';
+      prev.firstChild.src = pendingURL;
+      info.textContent = pending.w + "×" + pending.h + " · " + Math.max(1, Math.round(pending.blob.size / 1024)) + " KB";
+      info.classList.remove("hidden");
+      saveB.disabled = false;
+      resetB.disabled = false;
+    }
+
+    // Canvas rescale (longest edge, never upscale) -> quality ladder 0.92..0.5,
+    // then step the edge down; jpeg vs png re-encodes race, smaller wins
+    // (mirrors the server sniff contract). Returns null past the floor.
+    async function compress(file) {
+      if (file.type !== "image/jpeg" && file.type !== "image/png") return null;
+      const inURL = URL.createObjectURL(file);
+      let img;
+      try {
+        img = await new Promise(function (res, rej) {
+          const im = new Image();
+          im.onload = function () { res(im); };
+          im.onerror = function () { rej(new Error("decode")); };
+          im.src = inURL;
+        });
+      } catch (e) { URL.revokeObjectURL(inURL); return null; }
+      URL.revokeObjectURL(inURL);
+      let edge = AV_MAX_EDGE, q = 0.92;
+      for (let attempt = 0; attempt < 24; attempt++) {
+        const scale = Math.min(1, edge / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const cv = document.createElement("canvas");
+        cv.width = w; cv.height = h;
+        cv.getContext("2d").drawImage(img, 0, 0, w, h);
+        const jpeg = await new Promise(function (res) { cv.toBlob(res, "image/jpeg", q); });
+        const png = await new Promise(function (res) { cv.toBlob(res, "image/png"); });
+        let blob = null, ext = "jpg";
+        if (jpeg && (!png || jpeg.size <= png.size)) { blob = jpeg; ext = "jpg"; }
+        else if (png) { blob = png; ext = "png"; }
+        if (blob && blob.size <= AV_MAX_BYTES) return { blob: blob, ext: ext, w: w, h: h };
+        if (q > 0.5) q = Math.max(0.5, q - 0.07);
+        else if (edge > 216) { edge = Math.round(edge * 0.75); q = 0.92; }
+        else break;
+      }
+      return null;
+    }
+
+    fileIn.addEventListener("change", async function () {
+      const f = fileIn.files && fileIn.files[0];
+      fileIn.value = ""; // re-selecting the same file must retrigger change
+      if (!f || busy) return;
+      busy = true;
+      const r = await compress(f).catch(function () { return null; });
+      busy = false;
+      if (!r) { toast(t("prof.avatarBadType"), "error"); return; }
+      if (pendingURL) URL.revokeObjectURL(pendingURL);
+      pending = r;
+      pendingURL = trackURL(URL.createObjectURL(r.blob));
+      showPending();
+    });
+
+    ov.querySelector("#av-pick").addEventListener("click", function () {
+      if (!busy) fileIn.click();
+    });
+    resetB.addEventListener("click", async function () {
+      if (busy) return;
+      if (pending) { showCurrent(); return; } // clear the pending selection
+      if (!curHash) return;
+      busy = true;
+      try {
+        await api("/api/account/avatar", { method: "DELETE", keepSession: true });
+        window.__avatarHashes = window.__avatarHashes || {};
+        delete window.__avatarHashes[selfKey];
+        toast(t("prof.avatarCleared"), "success");
+        close();
+        renderOwnAvatar();
+      } catch (e) {
+        toast(String((e && e.message) || e), "error");
+      }
+      busy = false;
+    });
+    saveB.addEventListener("click", async function () {
+      if (!pending || busy) return;
+      busy = true;
+      try {
+        const fd = new FormData();
+        fd.append("file", pending.blob, "avatar." + pending.ext);
+        const res = await fetch("/api/account/avatar", {
+          method: "PUT",
+          headers: { Authorization: basicAuth() },
+          body: fd,
+        });
+        if (!res.ok) {
+          let msg = res.status + " " + res.statusText;
+          try { const tt = await res.text(); if (tt) msg = tt; } catch (_) {}
+          throw new Error(msg);
+        }
+        const out = await res.json();
+        window.__avatarHashes = window.__avatarHashes || {};
+        window.__avatarHashes[selfKey] = out.avatar_hash;
+        toast(t("prof.avatarDone"), "success");
+        close();
+        renderOwnAvatar();
+      } catch (e) {
+        const m = String((e && e.message) || e);
+        toast(/413|too large|100KB/i.test(m) ? t("prof.avatarTooBig") : m, "error");
+      }
+      busy = false;
+    });
+    ov.querySelector("#av-x").addEventListener("click", close);
+    ov.querySelector("#av-cancel").addEventListener("click", close);
+    ov.addEventListener("click", function (ev) { if (ev.target === ov) close(); });
+    showCurrent();
+  }
+
   // ---- 0.3.3-C: accounts-page listification (mobile only) ----
   // Row grammar per Iris spec v1.0: avatar | label body (3 lines) | gear.
   // All rows equal height; single-line iron rule (badges/pill nowrap, the

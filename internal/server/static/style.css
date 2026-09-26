@@ -2874,3 +2874,40 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
 #pown-card .ct-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 #pown-card button.row-action.pill-btn { font-size: 12px; padding: 3px 14px;
   border-radius: 999px; min-height: 0; }
+
+/* ---- 0.3.3 avatar upload: own-card avatar + one modal (PC & phones) ---- */
+.ct-card.av-owncard { display: grid; grid-template-columns: 52px 1fr; column-gap: 12px; row-gap: 4px; align-items: center; }
+.ct-card.av-owncard .av-ownside { grid-row: 1 / span 3; }
+.av-ownav { position: relative; display: block; width: 52px; height: 52px; padding: 0; border: none; background: none; cursor: pointer; }
+.av-ownslot { display: block; width: 52px; height: 52px; border-radius: 13px; overflow: hidden; border: 1px solid var(--border); }
+.av-ownslot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av-ownslot .cl-av-img { width: 100%; height: 100%; font-size: 20px; }
+.av-cam { position: absolute; right: -5px; bottom: -5px; width: 19px; height: 19px; border-radius: 50%;
+  background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--panel); box-sizing: content-box; }
+button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--accent); }
+#av-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.58); z-index: 300;
+  display: flex; align-items: center; justify-content: center; }
+.av-card { width: 322px; max-width: calc(100% - 36px); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 14px; padding: 0 0 12px;
+  box-shadow: 0 18px 48px rgba(0,0,0,.5); }
+.av-head { display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px 11px; border-bottom: 1px solid var(--border); font-size: 14.5px; font-weight: 700; }
+.av-x { background: none; border: none; color: var(--muted); font-size: 19px; line-height: 1;
+  cursor: pointer; padding: 0 2px; }
+.av-body { display: flex; flex-direction: column; align-items: center; padding: 16px 16px 0; }
+.av-prev { width: 96px; height: 96px; border-radius: 24px; overflow: hidden; border: 1px solid var(--border); }
+.av-prev img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av-prev .cl-av-img { width: 100%; height: 100%; font-size: 34px; }
+.av-info { margin-top: 10px; font-size: 11.5px; opacity: .85; background: rgba(127,127,127,.12);
+  border-radius: 6px; padding: 3px 9px; }
+.av-btns { display: flex; gap: 8px; margin-top: 16px; width: 100%; }
+.av-btns button { flex: 1 1 0; height: 32px; border-radius: 8px; font-size: 12.5px; cursor: pointer; }
+.av-pick { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+.av-reset { background: transparent; border: 1px solid rgba(229,72,77,.55); color: #e5484d; }
+.av-btns button:disabled { opacity: .38; cursor: default; }
+.av-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 16px 0; }
+.av-foot button { height: 31px; padding: 0 15px; border-radius: 8px; font-size: 12.5px; cursor: pointer; }
+.av-cancel { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.av-save { background: var(--accent); border: 1px solid var(--accent); color: #fff; font-weight: 600; }
+.av-save:disabled { opacity: .38; }
