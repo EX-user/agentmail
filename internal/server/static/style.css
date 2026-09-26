@@ -1071,6 +1071,15 @@ nav {
   /* boss 去框线定稿（上下悬浮区）：页签/顶区钮无框线保留填色；active 高亮底保留。仅移动断点，PC 零改动。 */
   .tab.active { border-color: transparent; }
   #app-header .btn-pref-pill, #app-header .btn-logout-pill, #app-header .lang-toggle { border-color: transparent; }
+
+  /* boss rc3 feedback: fitted one-screen pages self-clear via the nav-aware
+     fits - the static 64px main reserve below them read as an empty gray
+     strip between content and the bottom bar. */
+  body:has(#tab-inbox:not(.hidden)) main,
+  body:has(#tab-mail:not(.hidden)) main,
+  body:has(#tab-compose:not(.hidden)) main,
+  body:has(#tab-audit:not(.hidden)) main,
+  body:has(#tab-accounts:not(.hidden)) main { padding-bottom: 0; }
 /* Boss order (C correction, rides with B): the accounts summary line is
    text outside the list — hidden on phones, PC unaffected. */
 #acc-act-sum { display: none; }
