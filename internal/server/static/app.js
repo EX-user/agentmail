@@ -777,13 +777,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     ov.id = "av-overlay";
     ov.innerHTML =
       '<div class="av-card">' +
-      '<div class="av-head"><span>' + t("prof.avatarChange") + '</span><button type="button" class="av-x" id="av-x">×</button></div>' +
+      '<div class="av-head"><span>' + t("prof.avatarChange") + '</span><button type="button" class="av-x" id="av-x" aria-label="' + t("common.close") + '" title="' + t("common.close") + '">×</button></div>' +
       '<div class="av-body">' +
       '<div class="av-prev" id="av-prev"></div>' +
       '<div class="av-info hidden" id="av-info"></div>' +
       '<div class="av-btns">' +
       '<button type="button" class="av-pick" id="av-pick">' + t("prof.avatarPick") + "</button>" +
-      '<button type="button" class="av-reset" id="av-reset"></button>' +
+      '<button type="button" class="av-reset" id="av-reset">' + t("prof.avatarReset") + "</button>" +
       "</div>" +
       '<input type="file" id="av-file" accept="image/jpeg,image/png" class="hidden">' +
       "</div>" +
