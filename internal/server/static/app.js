@@ -1112,6 +1112,30 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       } else { el.classList.remove("mq"); el.style.removeProperty("--mq-shift"); }
     });
   }
+  // 0.3.3-C ②③ (Iris spec v1.0): empty/failure states are expressed IN the
+  // row grammar - never as floating text outside the list; a failure row is
+  // a whole-row retry button (same interaction grain as tap-to-compose).
+  function im3StateRowHtml(kind, titleKey, subKey, retrySrc) {
+    var cls = kind === "err" ? "im3-err" : "im3-empty";
+    var av = kind === "err" ? "！" : "○";
+    var retry = retrySrc ? ' data-retry="' + retrySrc + '"' : "";
+    return '<div class="im3-row ' + cls + '"' + retry + ">" +
+      '<div class="im3-av ' + (kind === "err" ? "im3-av-err" : "im3-av-empty") + '">' + av + "</div>" +
+      '<div class="im3-main im3-state-main">' +
+      '<div class="im3-state-t">' + t(titleKey) + "</div>" +
+      '<div class="im3-state-s">' + t(subKey) + "</div></div></div>";
+  }
+  function wireErrRetry(root) {
+    $$("[data-retry]", root).forEach(function (row) {
+      row.addEventListener("click", function () {
+        if (row.getAttribute("data-retrying")) return;
+        row.setAttribute("data-retrying", "1");
+        var s = row.querySelector(".im3-state-s");
+        if (s) s.textContent = t("acc.retrying");
+        loadAccounts(); // whole-list rebuild - success clears the row, failure re-renders it
+      });
+    });
+  }
   function accWireList(root) {
     // Row tap = compose; gear tap = in-place overlay; back hides it.
     $$(".im3-row", root).forEach(function (row) {
@@ -1156,6 +1180,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // Subordinate management UI lives in Preferences since v0.6; Accounts
     // still needs fresh edges for the sub badges (and read-only rows).
     var subs = await requestSubs(true).catch(function () { return null; });
+    // requestSubs resolves null on failure (the subs:request listener
+    // catches rejections) - null is the failure signal, distinct from
+    // a successful empty list.
+    var subsFailed = subs === null;
     var subsList = (subs && subs.subordinates) || [];
     // Rows match the 5-column header (Address, Tags, Signature, Created,
     // Actions) so the Change-password button lands in the Actions column
@@ -1233,8 +1261,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       "</tr>"
     );
     var seenAddrs = {};
+    var contactsFailed = false, contactRaw = 0;
     try {
       const data = await api("/api/contacts", { keepSession: true });
+      contactRaw = (data.contacts || []).length;
       (data.contacts || []).forEach(function (c) {
         if (subAddrs[c]) return; // already shown (PC leading rows / mobile container)
         seenAddrs[c] = 1;
@@ -1261,7 +1291,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: null });
       });
     } catch (e) {
-      // contacts failure is non-fatal; just show self.
+      contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent
     }
     // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
@@ -1288,13 +1318,19 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         '<div class="im3-main">' +
         '<div class="im3-l1"><span class="im3-addr im3-title-pin"><span class="im3-addr-in">' + esc(t("acc.regTitle")) + "</span></span></div>" +
         '<div class="im3-line2">' + esc(t("acc.regSub")) + "</div></div></div>";
-      ctBox.innerHTML = regRow + clRows;
+      // 0.3.3-C (2)(3): failure rows at their source positions; the empty
+      // row only when both sources succeeded and came back empty.
+      var errSubsRow = subsFailed ? im3StateRowHtml("err", "acc.errSubs", "acc.retryTap", "subs") : "";
+      var errContactsRow = contactsFailed ? im3StateRowHtml("err", "acc.errContacts", "acc.retryTap", "contacts") : "";
+      var emptyRow = (!subsFailed && !contactsFailed && subsList.length === 0 && contactRaw === 0) ? im3StateRowHtml("empty", "acc.emptyTitle", "acc.emptySub", null) : "";
+      ctBox.innerHTML = regRow + errSubsRow + clRows + errContactsRow + emptyRow;
       var regEl = ctBox.querySelector("[data-reg]");
       if (regEl) regEl.addEventListener("click", function () {
         var b = document.getElementById("btn-subreg");
         if (b) b.click();
       });
       accWireList(ctBox);
+      wireErrRetry(ctBox);
       avHydrate(ctBox);
       im3MarqueeScan(ctBox);
     }
