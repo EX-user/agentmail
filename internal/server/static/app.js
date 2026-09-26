@@ -622,6 +622,23 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         if (line3.innerHTML !== lh) line3.innerHTML = lh;
       }
     });
+    // boss rc2 feedback: if interaction order changed, re-render the list -
+    // line3 patches alone cannot reorder. Debounced; converges because the
+    // re-render's own applyActivity sees the new order as already applied.
+    var box = $("#acc-m-contacts");
+    if (box && !applyActivity._reloading) {
+      var by = {};
+      ((actData && actData.subs) || []).forEach(function (s) { by[String(s.address).toLowerCase()] = s; });
+      var want = Object.keys(by).sort(function (a, b) {
+        return (+by[b].latest_at || 0) - (+by[a].latest_at || 0);
+      }).filter(function (a) { return box.querySelector('.im3-row.im3-sub[data-claddr="' + a + '"]'); });
+      var have = [...box.querySelectorAll(".im3-row.im3-sub")].map(function (r) { return String(r.getAttribute("data-claddr")).toLowerCase(); });
+      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; });
+      if (!same && have.length) {
+        applyActivity._reloading = true;
+        setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
+      }
+    }
     var sum = $("#acc-act-sum");
     if (sum) {
       var subs = (actData && actData.subs) || [];
@@ -672,6 +689,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       if (!document.hidden && accountsPanelVisible() && Date.now() - actLastPull > 10000) pullActivity(); // 回窗即拉（防抖 10s）
     });
   })();
+  document.addEventListener("compose:sent", function () {
+    actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
+  });
+
   function renderPrefsOwnCard(ownSig, ownVisible) {
     // 0.3.2 boss 认定四：自身卡迁偏好页，双端同款手机卡样式（ct-card 语法）；
     // 「My address」显示地址卡随迁撤销（boss：不留「我的地址 XXX」）。
@@ -867,7 +888,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     $$(".im3-row", root).forEach(function (row) {
       row.addEventListener("click", function (ev) {
         if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
-        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: row.getAttribute("data-claddr") } }));
+        var to = row.getAttribute("data-claddr");
+        if (!to) return; // register/pinned row opens its own flow, not compose
+        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
       });
       var gear = row.querySelector("[data-gear]");
       if (gear) gear.addEventListener("click", function () {
@@ -941,6 +964,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var clRows = "";
     var actByAddr = {};
     ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    // boss rc2 feedback: IM-style ordering - the most recently interacted
+    // account tops the list (latest_at desc; untouched rows keep their
+    // relative order below via stable sort).
+    subsList = subsList.slice().sort(function (a, b) {
+      var sa = actByAddr[String(a.address).toLowerCase()] || {};
+      var sb = actByAddr[String(b.address).toLowerCase()] || {};
+      return (+sb.latest_at || 0) - (+sa.latest_at || 0);
+    });
     subsList.forEach(function (e) {
       var sig = e.signature || listedSig[e.address] || "";
       // 0.3.2 tag 语义反转（boss 认定五）：从属是面板主角不打标（listed 照旧）。
@@ -3389,8 +3420,18 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // visible. PC keeps the table.
   // 键盘态视口高（0.2.5 高优 v2）：pan 模式键盘下 innerHeight 不缩、只有
   // visualViewport 缩——量测取两者较小值，两种键盘模式都成立。
+  // Bottom floating bar (mobile nav) occupies the viewport bottom when
+  // fixed - every one-screen fit must budget for it (boss rc2 feedback 1).
+  window.__fixedNavInset = function () {
+    var n = document.querySelector("nav");
+    if (!n) return 0;
+    if (getComputedStyle(n).position !== "fixed") return 0;
+    return Math.round(n.getBoundingClientRect().height);
+  };
+
   function acKbVh() {
-    return window.visualViewport ? Math.min(window.innerHeight, Math.round(window.visualViewport.height)) : window.innerHeight;
+    var vh = window.visualViewport ? Math.min(window.innerHeight, Math.round(window.visualViewport.height)) : window.innerHeight;
+    return vh - (window.__fixedNavInset ? window.__fixedNavInset() : 0);
   }
   function fitAccountsOneScreen() {
     var page = $("#tab-accounts");

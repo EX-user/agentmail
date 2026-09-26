@@ -1062,12 +1062,15 @@ nav::-webkit-scrollbar { display: none; }
 nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
   background: var(--panel); /* 样式照旧：顶区原 nav 承 panel 底 */
-  box-shadow: 0 -1px 0 var(--border);
+  box-shadow: none; /* boss 去框线定稿：底栏无顶线，与顶区同 panel 底 */
   /* boss: the tab's bottom edge sat too close to the screen edge — pad a
      little more (safe-area still adds on top of this where present). */
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   margin: 0; padding-left: 6px; padding-right: 6px; padding-top: 6px;
 }
+  /* boss 去框线定稿（上下悬浮区）：页签/顶区钮无框线保留填色；active 高亮底保留。仅移动断点，PC 零改动。 */
+  .tab.active { border-color: transparent; }
+  #app-header .btn-pref-pill, #app-header .btn-logout-pill, #app-header .lang-toggle { border-color: transparent; }
 /* Boss order (C correction, rides with B): the accounts summary line is
    text outside the list — hidden on phones, PC unaffected. */
 #acc-act-sum { display: none; }

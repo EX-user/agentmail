@@ -856,6 +856,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       renderInReplyTo();
       status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
+      // Accounts page listens: refreshes activity so the recipient tops the list.
+      document.dispatchEvent(new CustomEvent("compose:sent", { detail: { to: $("#compose-to").value } }));
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
@@ -1641,7 +1643,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (window.innerWidth > 800) { tab.style.removeProperty("--compose-1s"); return; }
     var top = tab.getBoundingClientRect().top;
     if (top <= 0) return;
-    var h = window.innerHeight - Math.max(top, 0) - 10;
+    var h = window.innerHeight - (window.__fixedNavInset ? window.__fixedNavInset() : 0) - Math.max(top, 0) - 10;
     if (h < 360) h = 360;
     tab.style.setProperty("--compose-1s", h + "px");
     var over = document.documentElement.scrollHeight - window.innerHeight;

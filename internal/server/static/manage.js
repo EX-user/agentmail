@@ -1972,7 +1972,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
   // 键盘态视口高（0.2.5 高优 v2）：pan 模式键盘下 innerHeight 不缩、只有
   // visualViewport 缩——量测一律取两者较小值，两种键盘模式都成立。
   function mgKbVh() {
-    return window.visualViewport ? Math.min(window.innerHeight, Math.round(window.visualViewport.height)) : window.innerHeight;
+    var vh = window.visualViewport ? Math.min(window.innerHeight, Math.round(window.visualViewport.height)) : window.innerHeight;
+    return vh - (window.__fixedNavInset ? window.__fixedNavInset() : 0);
   }
   function fitAuditOneScreen() {
     var tab = document.getElementById("tab-audit");

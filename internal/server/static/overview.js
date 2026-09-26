@@ -382,7 +382,7 @@ var mgmtNodeSet = null;
   function fitLinksGraph() {
     var wrap = document.getElementById("mgmt-graph-wrap");
     if (!wrap || wrap.offsetParent === null) return;
-    var h = window.innerHeight - wrap.getBoundingClientRect().top - 14;
+    var h = window.innerHeight - (window.__fixedNavInset ? window.__fixedNavInset() : 0) - wrap.getBoundingClientRect().top - 14;
     if (h < 420) h = 420;
     wrap.style.height = h + "px";
   }
