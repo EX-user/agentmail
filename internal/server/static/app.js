@@ -835,7 +835,11 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // then step the edge down; jpeg vs png re-encodes race, smaller wins
     // (mirrors the server sniff contract). Returns null past the floor.
     async function compress(file) {
-      if (file.type !== "image/jpeg" && file.type !== "image/png") return null;
+      // MIME 可能为空或 octet-stream（CDP/OS 差异）：扩展名兜底过门，
+      // 内容合法性仍由下方 canvas 解码把关（解码失败按类型错报）。
+      const nameL = (file.name || "").toLowerCase();
+      const extOk = /\.(jpe?g|png)$/.test(nameL);
+      if (file.type !== "image/jpeg" && file.type !== "image/png" && !extOk) return null;
       const inURL = URL.createObjectURL(file);
       let img;
       try {
