@@ -1049,7 +1049,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // A-line hook: payload avatar_hash wins -> real avatar endpoint;
     // otherwise the deterministic mixed generator (spec v1.1).
     var h = (window.__avatarHashes || {})[String(addr).toLowerCase()];
-    if (h) return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '"><img class="cl-av-img" src="/api/avatar/' + encodeURIComponent(addr) + '" alt="" onerror="__avFallback(this)"></div>';
+    if (h) return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '"><img class="cl-av-img" src="/api/avatar/' + encodeURIComponent(addr) + '?v=' + encodeURIComponent(h) + '" alt="" onerror="__avFallback(this)"></div>';
     return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avpend="1">' + esc((String(addr)[0] || "?").toUpperCase()) + "</div>";
   }
   // Hydrate pending generator avatars (async seed -> svg swap-in place).
