@@ -1062,13 +1062,15 @@ nav::-webkit-scrollbar { display: none; }
 nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
   background: var(--panel); /* 样式照旧：顶区原 nav 承 panel 底 */
-  box-shadow: none; /* boss 去框线定稿：底栏无顶线，与顶区同 panel 底 */
+  box-shadow: 0 -1px 0 var(--border); /* boss rc4 补充：底栏区框线恢复（按钮框线仍去），与顶区风格对等 */
   /* boss: the tab's bottom edge sat too close to the screen edge — pad a
      little more (safe-area still adds on top of this where present). */
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   margin: 0; padding-left: 6px; padding-right: 6px; padding-top: 6px;
 }
   /* boss 去框线定稿（上下悬浮区）：页签/顶区钮无框线保留填色；active 高亮底保留。仅移动断点，PC 零改动。 */
+  /* boss rc4 补充：上悬浮区去阴影，与带框线的底栏风格对等 */
+  #app-header { box-shadow: none; }
   .tab.active { border-color: transparent; }
   #app-header .btn-pref-pill, #app-header .btn-logout-pill, #app-header .lang-toggle { border-color: transparent; }
 
