@@ -1643,7 +1643,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (window.innerWidth > 800) { tab.style.removeProperty("--compose-1s"); return; }
     var top = tab.getBoundingClientRect().top;
     if (top <= 0) return;
-    var h = window.innerHeight - (window.__fixedNavInset ? window.__fixedNavInset() : 0) - Math.max(top, 0) - 10;
+    var h = window.innerHeight - (window.__fixedNavInset ? window.__fixedNavInset() : 0) - Math.max(top, 0);
     if (h < 360) h = 360;
     tab.style.setProperty("--compose-1s", h + "px");
     var over = document.documentElement.scrollHeight - window.innerHeight;

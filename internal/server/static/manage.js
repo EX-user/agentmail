@@ -2185,7 +2185,7 @@ function fitMgmtOneScreen() {
   }
   function fitBox(el, prop, min) {
     var top = el.getBoundingClientRect().top;
-    var h = mgKbVh() - Math.max(top, 0) - 10;
+    var h = mgKbVh() - Math.max(top, 0);
     if (h < min) h = min;
     el.style.setProperty(prop, h + "px");
     var over = document.documentElement.scrollHeight - window.innerHeight;

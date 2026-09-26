@@ -3688,10 +3688,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // Bottom floating bar (mobile nav) occupies the viewport bottom when
   // fixed - every one-screen fit must budget for it (boss rc2 feedback 1).
   window.__fixedNavInset = function () {
+    // Below the breakpoint the bar overlays the viewport bottom by design;
+    // measure it when rendered, fall back to its 56px design height when
+    // an early fit runs before first paint settles.
+    if (window.innerWidth > 800) return 0;
     var n = document.querySelector("nav");
-    if (!n) return 0;
-    if (getComputedStyle(n).position !== "fixed") return 0;
-    return Math.round(n.getBoundingClientRect().height);
+    if (!n) return 56;
+    var h = Math.round(n.getBoundingClientRect().height) || 56;
+    return Math.max(h, 56);
   };
 
   function acKbVh() {
@@ -3756,8 +3760,39 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var curAcc = parseInt(page.style.getPropertyValue("--acc-1s"), 10) || 0;
       if (curAcc > 240) page.style.setProperty("--acc-1s", Math.max(240, curAcc - over) + "px");
     }
+    // Converging self-refit: the first pass can run before the mobile
+
+    // layout (fixed nav / fonts) settles - re-run until two passes agree,
+
+    // so the list lands flush on the bar on every entry path.
+
+    var sig2 = Math.round(acKbVh()) + "/" + Math.round(tabTop) + "/" + Math.round(ctBox.getBoundingClientRect().top) + "/" + (ctBox.style.maxHeight || "");
+
+    if (fitAccountsOneScreen._sig !== sig2) {
+
+      fitAccountsOneScreen._sig = sig2;
+
+      clearTimeout(fitAccountsOneScreen._rt);
+
+      fitAccountsOneScreen._rt = setTimeout(fitAccountsOneScreen, 300);
+
+    }
   }
   window.addEventListener("resize", fitAccountsOneScreen);
+  // Header growth sentinel (boss rc6: gray band of shifting heights): the
+  // header can grow AFTER the first fit (whoami fill / marquee mount) -
+  // re-dispatch resize so every one-screen fit recomputes with the
+  // settled geometry.
+  (function headerGrowthSentinel() {
+    var hdr = document.getElementById("app-header");
+    if (!hdr || !window.MutationObserver) return;
+    var t = null;
+    new MutationObserver(function () {
+      clearTimeout(t);
+      t = setTimeout(function () { window.dispatchEvent(new Event("resize")); }, 120);
+    }).observe(hdr, { childList: true, subtree: true, characterData: true });
+  })();
+
   // 输入法高优修（上级 0.2.5）：软键盘视口变化时账户页重算（与 manage.js
   // 的 vv 重算同口径，各模块挂自家 fit，防抖 120ms）。
   if (window.visualViewport) {
