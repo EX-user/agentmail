@@ -1263,7 +1263,7 @@ nav {
   .header-row { flex-wrap: wrap; row-gap: 8px; min-width: 0; }
   /* v2: the right group takes its own single compact row — address left
      (ellipsis), pills right. */
-  .header-right { flex-basis: 100%; }
+  .header-right { flex-basis: 100%; min-width: 0; } /* boss rc2: long address must not push the three pills off-screen - the group itself may shrink */
   #whoami {
     flex: 1 1 0; min-width: 0; text-align: left;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
