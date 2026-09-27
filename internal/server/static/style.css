@@ -1730,12 +1730,29 @@ html[data-theme="dark"]  .sc-item { background: rgba(22,27,41,.72); }
   padding: 4px 12px; font-size: 12px; min-height: 0;
 }
 .inbox-nav .row-action + .row-action { border-left: 1px solid var(--border); }
+/* 0016 (boss directive): the List|Message tab control is gone; the round
+   back button sits left of prev/next in the message view and returns to
+   the list. Dual pane only exists <=800px, so the button is PC-hidden. */
+.inbox-navband {
+  display: inline-flex; align-items: center; gap: 8px;
+  align-self: flex-start; margin: 0 0 10px;
+}
+.inbox-navband .inbox-nav { margin: 0; }
+.pane-back { display: none; }
 @media (max-width: 800px) {
   /* The pager belongs to the List tab; hide it while reading a message. */
   /* 分页控件 09-04 挪入网格后不再是网格兄弟节点——补子选择器，
      Message 模式（列表隐藏）下分页条照旧隐藏 */
   #inbox-grid.mshow-detail ~ .inbox-pager,
   #inbox-grid.mshow-detail > .inbox-pager { display: none; }
+  .pane-back {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0; flex: 0 0 auto;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--panel); color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer;
+  }
+  .pane-back:hover { color: var(--accent); border-color: var(--accent); }
 }
 
 /* Inbox unread badge (v0.5.5): pure red dot, absolutely positioned so it
@@ -2229,7 +2246,7 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
     height: var(--inbox-pc-1s, auto);
     min-height: 0;
   }
-  #tab-inbox > h2, #tab-inbox > .row, #tab-inbox .mail-tabs { flex: 0 0 auto; }
+  #tab-inbox > h2, #tab-inbox > .row { flex: 0 0 auto; }
   #inbox-grid { flex: 1 1 auto; min-height: 0; }
   #inbox-grid > .pane { height: 100%; min-height: 0; max-height: none; }
   #tab-inbox .inbox-pager { flex: 0 0 auto; margin-bottom: 0; }

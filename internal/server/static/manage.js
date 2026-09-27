@@ -1781,10 +1781,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     // Compact pill (superior-approved) in its own band above the letter —
     // the letter body scrolls in a separate region below it, so the buttons
     // are always reachable and never overlap the content.
-    return '<div class="inbox-nav">' +
+    // 0016 (boss directive): the explicit List|Message tab control is gone;
+    // a small round back button left of prev/next returns to the list (the
+    // dual pane only exists <=800px, so CSS hides the button on PC).
+    return '<div class="inbox-navband">' +
+      '<button type="button" class="pane-back" data-i18n-title="inbox.backList" title="Back to list" aria-label="Back to list">←</button>' +
+      '<div class="inbox-nav">' +
       '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
       '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
-      "</div>";
+      "</div></div>";
   }
 
   // Two-zone detail frame: nav band + independently scrolling letter region.
@@ -1801,6 +1806,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     const navPrev = $('[data-nav="-1"]', detail), navNext = $('[data-nav="1"]', detail);
     if (navPrev) navPrev.addEventListener("click", function () { inboxStepNav(item, -1); });
     if (navNext) navNext.addEventListener("click", function () { inboxStepNav(item, 1); });
+    const navBack = $(".pane-back", detail);
+    if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -1852,6 +1859,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
         if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
         if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
+        const navBack = $(".pane-back", detail);
+        if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
       }
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
@@ -1869,6 +1878,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
       if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
       if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
+      const navBack = $(".pane-back", detail);
+      if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
     }
   }
 
