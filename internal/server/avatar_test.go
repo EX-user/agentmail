@@ -124,6 +124,28 @@ func TestAvatarLifecycle(t *testing.T) {
 		t.Fatalf("upload body: %v hash=%q", err, up.AvatarHash)
 	}
 
+	// 2b) 0021: /api/profile/self carries avatar_hash symmetrically.
+	preq, _ := http.NewRequest("GET", ts.URL+"/api/profile/self", nil)
+	preq.SetBasicAuth("avuser@test.example", "avpassword1")
+	pres, err := c.Do(preq)
+	if err != nil {
+		t.Fatalf("profile self: %v", err)
+	}
+	pb, _ := io.ReadAll(pres.Body)
+	pres.Body.Close()
+	if pres.StatusCode != http.StatusOK {
+		t.Fatalf("profile self: %d %s", pres.StatusCode, pb)
+	}
+	var prof struct {
+		AvatarHash string `json:"avatar_hash"`
+	}
+	if err := json.Unmarshal(pb, &prof); err != nil {
+		t.Fatalf("profile body: %v", err)
+	}
+	if prof.AvatarHash != up.AvatarHash {
+		t.Fatalf("profile hash = %q, want %q", prof.AvatarHash, up.AvatarHash)
+	}
+
 	// 3) GET serves the bytes with ETag/immutable and honors If-None-Match.
 	req1, _ := http.NewRequest("GET", ts.URL+"/api/avatar/avuser@test.example", nil)
 	req1.SetBasicAuth("avuser@test.example", "avpassword1")

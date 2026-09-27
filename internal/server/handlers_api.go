@@ -495,7 +495,7 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		used, fileCount, expiring := s.store.AccountFileStats(acc.Address)
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"address":              acc.Address,
 			"visible":              acc.Visible,
 			"signature":            acc.Signature,
@@ -503,7 +503,11 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 			"attachments_count":    fileCount,
 			"attachments_expiring": expiring,
 			"prefs":                acc.Prefs,
-		})
+		}
+		// 0021: symmetric with the directory payloads - the own-card and
+		// row hydration both key off avatar_hash.
+		exposeAvatarHash(resp, acc)
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 	if r.Method != http.MethodPost {
