@@ -1087,11 +1087,34 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   };
 
   function accAvatarHtml(addr, isSub) {
-    // A-line hook: payload avatar_hash wins -> real avatar endpoint;
-    // otherwise the deterministic mixed generator (spec v1.1).
-    var h = (window.__avatarHashes || {})[String(addr).toLowerCase()];
-    if (h) return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '"><img class="cl-av-img" src="/api/avatar/' + encodeURIComponent(addr) + '?v=' + encodeURIComponent(h) + '" alt="" onerror="__avFallback(this)"></div>';
-    return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avpend="1">' + esc((String(addr)[0] || "?").toUpperCase()) + "</div>";
+    // A-line hook, 0021 rework (bug fix: uploaded avatars invisible to
+    // other accounts): the old branch rendered a bare <img
+    // src=/api/avatar/...> - under the auth wall an <img> can never carry
+    // credentials, so every row except the own card 401'd into the
+    // generator forever. Rows now ALWAYS render a placeholder that
+    // avRemoteHydrate fills via the shared avatarObjectURL registry
+    // (authenticated fetch -> objectURL); hash present = ?v= bust,
+    // absent = plain endpoint whose 404 falls back to the generator.
+    var h = (window.__avatarHashes || {})[String(addr).toLowerCase()] || '';
+    return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div>';
+  }
+  // avRemoteHydrate (0021): fill remote placeholders via the shared
+  // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
+  // isConnected guards the re-render race; a failed fetch (404 = the
+    // account has no avatar) hands the box to the generator path.
+  function avRemoteHydrate(root) {
+    $$("[data-avremote]", root).forEach(function (el) {
+      var addr = el.getAttribute("data-av");
+      var hash = el.getAttribute("data-avhash") || "";
+      avatarObjectURL(addr, hash, false).then(function (url) {
+        if (!el.isConnected) return;
+        el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
+      }).catch(function () {
+        if (!el.isConnected) return;
+        el.setAttribute("data-avpend", "1");
+        avHydrate(el.parentElement || el);
+      });
+    });
   }
   // Hydrate pending generator avatars (async seed -> svg swap-in place).
   function avHydrate(root) {
@@ -1244,6 +1267,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       (dir.entries || []).forEach(function (e) {
         listedSet[e.address] = 1;
         if (e.signature) listedSig[e.address] = e.signature;
+        // 0021 (bug fix: uploaded avatars invisible to other accounts):
+        // stash directory avatar_hash so row avatars can cache-bust.
+        if (e.avatar_hash) window.__avatarHashes[String(e.address || "").toLowerCase()] = e.avatar_hash;
       });
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var rows = [];
@@ -1338,6 +1364,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // (approved two-zone layout) — nothing about them joins the main list.
     tbody.innerHTML = rows.join("");
     avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
+    avRemoteHydrate(tbody); // 0021: registry-backed real avatars
     preloadLimits(selfAddr, subsList.map(function (e) { return e.address; }));
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);
@@ -1374,6 +1401,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       accWireList(ctBox);
       wireErrRetry(ctBox);
       avHydrate(ctBox);
+      avRemoteHydrate(ctBox); // 0021: registry-backed real avatars
       im3MarqueeScan(ctBox);
     }
     // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
