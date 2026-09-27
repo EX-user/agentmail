@@ -2183,9 +2183,10 @@ function fitMgmtOneScreen() {
     if (dir) dir.style.removeProperty("--ovw-dir-1s");
     return;
   }
-  function fitBox(el, prop, min) {
+  function fitBox(el, prop, min, gap) {
+    gap = gap || 0;
     var top = el.getBoundingClientRect().top;
-    var h = mgKbVh() - Math.max(top, 0);
+    var h = mgKbVh() - Math.max(top, 0) - gap;
     if (h < min) h = min;
     el.style.setProperty(prop, h + "px");
     var over = document.documentElement.scrollHeight - window.innerHeight;
@@ -2195,7 +2196,10 @@ function fitMgmtOneScreen() {
   }
   // Browse (superior 09-01): 查信 sub-page joins the one-screen family —
   // the mail grid scrolls inside the measured column.
-  if (br && !br.classList.contains("hidden")) fitBox(br, "--mgmt-b-1s", 280);
+  // 0015 (boss rc10 retest: browse bottom edge sat ON the bar): standing
+  // 14px clearance below the browse column; threads list stays flush
+  // (approved on rc10).
+  if (br && !br.classList.contains("hidden")) fitBox(br, "--mgmt-b-1s", 280, 14);
   if (th && !th.classList.contains("hidden")) fitBox(th, "--th-1s", 280);
   if (ov && !ov.classList.contains("hidden")) fitBox(ov, "--ovw-m-1s", 280);
   // Directory (总览-通讯录, superior 0.2.2 feedback point 1): the table

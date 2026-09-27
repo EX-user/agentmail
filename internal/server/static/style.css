@@ -1122,6 +1122,12 @@ nav {
   html:has(#tab-compose:not(.hidden)) body,
   html:has(#tab-audit:not(.hidden)) body,
   html:has(#tab-accounts:not(.hidden)) body { overflow: hidden; height: 100dvh; margin: 0; }
+  /* 0015: JS fallback for WebViews without :has()/dvh - app.js toggles
+     html.page-locked and pins --app-vh to a real px innerHeight on every
+     tab switch and resize; same contract as the :has rules above, so
+     the lock never depends on selector support. */
+  html.page-locked { overflow: hidden; height: var(--app-vh, 100dvh); }
+  html.page-locked body { overflow: hidden; height: var(--app-vh, 100dvh); margin: 0; }
 /* Boss order (C correction, rides with B): the accounts summary line is
    text outside the list — hidden on phones, PC unaffected. */
 #acc-act-sum { display: none; }
@@ -2179,7 +2185,10 @@ input[type="search"].app-input:focus, input[type="text"].app-input:focus {
   }
   #mgmt-threads > .th-viewseg { flex: 0 0 auto; }
   #mgmt-threads > #th-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-  #mgmt-threads > #tf-scroll { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+  /* 0015 (boss rc10 retest): the forest canvas bottom sat ON the bar -
+     standing 14px clearance, same contract the browse subpage gets in
+     fitMgmtOneScreen. */
+  #mgmt-threads > #tf-scroll { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; margin-bottom: 14px; }
 
   #mgmt-overview:not(.hidden) {
     display: flex; flex-direction: column;

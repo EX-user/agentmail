@@ -147,6 +147,25 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   });
 })();
 
+  // Page-scroll lock, JS side (0015): the CSS html:has(...) lock needs
+  // :has() plus dvh (Chrome 105/108+) - an older WebView never matches it
+  // and the page still scrolls behind the fixed bar (boss rc10 retest:
+  // compose could still be dragged). The router knows the active tab, so
+  // toggle a class and pin a real-px viewport height; the CSS mirrors the
+  // :has rules for html.page-locked, making the lock support-independent.
+  var PAGE_LOCK_TABS = ["inbox", "mail", "compose", "audit", "accounts"];
+  function syncPageLock(name) {
+    var de = document.documentElement;
+    var lock = PAGE_LOCK_TABS.indexOf(name) >= 0;
+    de.classList.toggle("page-locked", lock);
+    if (lock) de.style.setProperty("--app-vh", window.innerHeight + "px");
+    else de.style.removeProperty("--app-vh");
+  }
+  window.addEventListener("resize", function () {
+    if (document.documentElement.classList.contains("page-locked")) {
+      document.documentElement.style.setProperty("--app-vh", window.innerHeight + "px");
+    }
+  });
   function activateTab(name) {
     // Leaving a message view by any route (tab switch included) must stop
     // all audio (feedback: sound kept playing after leaving the content).
@@ -155,6 +174,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     });
     $$(".tab-panel").forEach(function (p) { p.classList.add("hidden"); });
     $("#tab-" + name).classList.remove("hidden");
+    syncPageLock(name);
     if (name === "overview") loadOverview();
     if (name === "accounts") { loadAccounts(); activityEntered(); } // 进页即拉（5s 防抖，boss 报单修）
     if (name === "inbox") document.dispatchEvent(new CustomEvent("inbox:entered"));

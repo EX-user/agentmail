@@ -1644,10 +1644,28 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var top = tab.getBoundingClientRect().top;
     if (top <= 0) return;
     var h = window.innerHeight - (window.__fixedNavInset ? window.__fixedNavInset() : 0) - Math.max(top, 0);
-    if (h < 360) h = 360;
+    if (h < 240) h = 240;
     tab.style.setProperty("--compose-1s", h + "px");
     var over = document.documentElement.scrollHeight - window.innerHeight;
-    if (over > 0) tab.style.setProperty("--compose-1s", Math.max(h - over, 360) + "px");
+    if (over > 0) tab.style.setProperty("--compose-1s", Math.max(h - over, 240) + "px");
+    // 0015 (boss rc10 retest: compose still had scroll room on shorter
+    // viewports): the form's min content - the body textarea, whose rows
+    // attribute alone sets ~230px regardless of the 140px CSS floor - can
+    // exceed the measured tab, and .compose-form scrolls internally. Give
+    // the body exactly what the fixed rows leave (60px abs min); typed
+    // overflow scrolls inside the textarea, standard behavior.
+    var form = tab.querySelector(".compose-form");
+    var body = document.getElementById("compose-body");
+    if (form && body) {
+      body.style.minHeight = "";
+      body.style.height = "";
+      var over2 = form.scrollHeight - form.clientHeight;
+      if (over2 > 0) {
+        var bh = body.getBoundingClientRect().height;
+        body.style.height = Math.max(60, Math.round(bh - over2)) + "px";
+        body.style.minHeight = "0";
+      }
+    }
   }
   window.addEventListener("resize", fitComposeOneScreen);
   (function wireThreadModal() {
