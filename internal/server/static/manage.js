@@ -1794,16 +1794,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     // Compact pill (superior-approved) in its own band above the letter —
     // the letter body scrolls in a separate region below it, so the buttons
     // are always reachable and never overlap the content.
-    // 0016/0017 (boss directive): the explicit List|Message tab control is
-    // gone on BOTH dual-pane pages; the back button is the leftmost
-    // segment of the same pill (boss rc12 retest: a separate round button
-    // did not match the pill style). PC-hidden — the dual pane only
-    // exists <=800px. wirePaneBack binds it per page.
-    return '<div class="inbox-nav">' +
-      '<button type="button" class="row-action pane-back" data-i18n-title="inbox.backList" title="Back to list" aria-label="Back to list">←</button>' +
+    // 0016..0018 (boss directives): the explicit List|Message tab control
+    // is gone on BOTH dual-pane pages; back is a STANDALONE pill-styled
+    // button left of prev/next (rc13 retest: merged into the pill read as
+    // cramped taps and mismatched; separate but same style is the ask).
+    // PC-hidden — the dual pane only exists <=800px. wirePaneBack binds it.
+    return '<div class="inbox-navband">' +
+      '<button type="button" class="pane-back" data-i18n-title="inbox.backList" title="Back to list" aria-label="Back to list">←</button>' +
+      '<div class="inbox-nav">' +
       '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
       '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
-      "</div>";
+      "</div></div>";
   }
 
   // Two-zone detail frame: nav band + independently scrolling letter region.
