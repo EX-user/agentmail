@@ -1034,6 +1034,16 @@ nav::-webkit-scrollbar { display: none; }
   .im3-state-s { font-size: 11.5px; line-height: 16px; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .im3-row.im3-err[data-retrying] { opacity: 0.6; pointer-events: none; }
+  /* boss rc9/rc10 feedback: flush containers need inner breathing so the
+     last interactive row clears the bar at scroll-end (buttons must not
+     sit flush against it). Probe on rc9: threads pager scroll-end gap was
+     0px (buttons touching the bar) - the old #mgmt-threads > *:last-child
+     matched the hidden #tf-scroll, not the list; browse sat at ~18px and
+     still read tight. Both manage lists now clear the bar by ~24px at
+     scroll-end. */
+  #acc-m-contacts .im3-row:last-child { margin-bottom: 10px; }
+  #mail-list > *:last-child { margin-bottom: 14px; }
+  #th-list > *:last-child { margin-bottom: 24px; }
   /* boss directive round 2: keep the bare symbol but give it back a small
      box, glyph a notch larger, still centered. */
   .im3-gear { height: 26px; padding: 0 7px; border: 1px solid var(--border); border-radius: 8px;
@@ -1097,6 +1107,21 @@ nav {
   body:has(#tab-compose:not(.hidden)) main,
   body:has(#tab-audit:not(.hidden)) main,
   body:has(#tab-accounts:not(.hidden)) main { padding-bottom: 0; }
+  /* One-screen pages never scroll as a page: their fits own the geometry
+     and the inner lists scroll. Locking the body kills every residual
+     scroll tail / rubber band (boss rc9 feedback).
+     NOTE: html:has(...) - body cannot :has itself. */
+  /* the scrolling element in standards mode is html, not body - lock both */
+  html:has(#tab-inbox:not(.hidden)),
+  html:has(#tab-mail:not(.hidden)),
+  html:has(#tab-compose:not(.hidden)),
+  html:has(#tab-audit:not(.hidden)),
+  html:has(#tab-accounts:not(.hidden)) { overflow: hidden; height: 100dvh; }
+  html:has(#tab-inbox:not(.hidden)) body,
+  html:has(#tab-mail:not(.hidden)) body,
+  html:has(#tab-compose:not(.hidden)) body,
+  html:has(#tab-audit:not(.hidden)) body,
+  html:has(#tab-accounts:not(.hidden)) body { overflow: hidden; height: 100dvh; margin: 0; }
 /* Boss order (C correction, rides with B): the accounts summary line is
    text outside the list — hidden on phones, PC unaffected. */
 #acc-act-sum { display: none; }

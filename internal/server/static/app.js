@@ -3711,7 +3711,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // measurement timing does.
     var tabTop = page.getBoundingClientRect().top;
     if (tabTop > 0) {
-      var accH = acKbVh() - tabTop - 24;
+      var accH = acKbVh() - tabTop;
       if (accH < 300) accH = 300;
       page.style.setProperty("--acc-1s", accH + "px");
     }
@@ -3741,14 +3741,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       subList.style.maxHeight = subH + "px";
     }
     var ctTop2 = ctBox.getBoundingClientRect().top;
-    var ctH = acKbVh() - 24 - ctTop2;
+    var ctH = acKbVh() - ctTop2;
     if (ctH < reserve && subList) {
       // Shrink the subordinate list by the deficit, then re-pin exactly.
       var deficit = reserve - ctH;
       var cur = parseInt(subList.style.maxHeight, 10) || 0;
       subList.style.maxHeight = Math.max(96, cur - deficit) + "px";
       ctTop2 = ctBox.getBoundingClientRect().top;
-      ctH = acKbVh() - 24 - ctTop2;
+      ctH = acKbVh() - ctTop2;
     }
     ctBox.style.maxHeight = Math.max(96, ctH) + "px";
     // Correction pass: if anything still pushes the document past the
@@ -3759,6 +3759,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     if (over > 0) {
       var curAcc = parseInt(page.style.getPropertyValue("--acc-1s"), 10) || 0;
       if (curAcc > 240) page.style.setProperty("--acc-1s", Math.max(240, curAcc - over) + "px");
+      // the contacts box is flush by design - it must give back the same
+      // overflow or the page keeps a scrollable gray tail
+      var cmBox = document.querySelector("#acc-m-contacts");
+      if (cmBox) {
+        var cm = parseInt(cmBox.style.maxHeight, 10) || 0;
+        if (cm > 96) cmBox.style.maxHeight = Math.max(96, cm - over) + "px";
+      }
     }
     // Converging self-refit: the first pass can run before the mobile
 
