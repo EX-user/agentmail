@@ -1654,16 +1654,26 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // exceed the measured tab, and .compose-form scrolls internally. Give
     // the body exactly what the fixed rows leave (60px abs min); typed
     // overflow scrolls inside the textarea, standard behavior.
+    // 0020 (boss rc15 field report: with the soft keyboard open the body
+    // crushed to a ~2-line sliver): while the keyboard is up - the body is
+    // focused, or the visual viewport sits far below the layout one - skip
+    // the compression and let the form scroll internally instead; the next
+    // refit after the keyboard closes restores the static compression.
     var form = tab.querySelector(".compose-form");
     var body = document.getElementById("compose-body");
     if (form && body) {
+      var ae = document.activeElement;
+      var kbOpen = (ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) ||
+        (window.visualViewport && window.visualViewport.height < window.innerHeight - 120);
       body.style.minHeight = "";
       body.style.height = "";
-      var over2 = form.scrollHeight - form.clientHeight;
-      if (over2 > 0) {
-        var bh = body.getBoundingClientRect().height;
-        body.style.height = Math.max(60, Math.round(bh - over2)) + "px";
-        body.style.minHeight = "0";
+      if (!kbOpen) {
+        var over2 = form.scrollHeight - form.clientHeight;
+        if (over2 > 0) {
+          var bh = body.getBoundingClientRect().height;
+          body.style.height = Math.max(60, Math.round(bh - over2)) + "px";
+          body.style.minHeight = "0";
+        }
       }
     }
   }
