@@ -34,10 +34,11 @@ type SubRecord struct {
 
 // SubEdge is one relationship edge as returned by the listing queries.
 type SubEdge struct {
-	Address   string `json:"address"`    // the other side (subordinate or superior, per query)
-	Scope     string `json:"scope"`
-	CreatedAt int64  `json:"created_at"`
-	Signature string `json:"signature"`  // the other side's directory signature ("" when unset/hidden — bots are usually unlisted)
+	Address    string `json:"address"` // the other side (subordinate or superior, per query)
+	Scope      string `json:"scope"`
+	CreatedAt  int64  `json:"created_at"`
+	Signature  string `json:"signature"`             // the other side's directory signature ("" when unset/hidden — bots are usually unlisted)
+	AvatarHash string `json:"avatar_hash,omitempty"` // the other side's avatar hash ("" = generator fallback); row hydration keys and cache-busts off it
 }
 
 // subKey builds the bSubs key for "subordinate declares under superior".
@@ -194,13 +195,15 @@ func (s *Store) SubordinatesOf(superior string) []SubEdge {
 			var rec SubRecord
 			_ = json.Unmarshal(v, &rec)
 			sig := ""
+			avh := ""
 			if raw := ab.Get([]byte(sub)); raw != nil {
 				var acc Account
 				if json.Unmarshal(raw, &acc) == nil {
 					sig = acc.Signature
+					avh = acc.AvatarHash
 				}
 			}
-			out = append(out, SubEdge{Address: sub, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig})
+			out = append(out, SubEdge{Address: sub, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig, AvatarHash: avh})
 		}
 		return nil
 	})
@@ -223,13 +226,15 @@ func (s *Store) SuperiorsOf(subordinate string) []SubEdge {
 			var rec SubRecord
 			_ = json.Unmarshal(v, &rec)
 			sig := ""
+			avh := ""
 			if raw := ab.Get([]byte(sup)); raw != nil {
 				var acc Account
 				if json.Unmarshal(raw, &acc) == nil {
 					sig = acc.Signature
+					avh = acc.AvatarHash
 				}
 			}
-			out = append(out, SubEdge{Address: sup, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig})
+			out = append(out, SubEdge{Address: sup, Scope: rec.Scope, CreatedAt: rec.CreatedAt, Signature: sig, AvatarHash: avh})
 		}
 		return nil
 	})

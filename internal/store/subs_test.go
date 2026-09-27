@@ -167,3 +167,45 @@ func TestUnreadCountDecrementsAfterRead(t *testing.T) {
 		t.Fatalf("summary says unread but count=%d", n)
 	}
 }
+
+// TestSubsEdgeAvatarHash: both edge listings carry the other side's avatar
+// hash (the row hydration cache key) and clear it again on delete — same
+// lifecycle symmetry the mgmt summary and directory payloads cover.
+func TestSubsEdgeAvatarHash(t *testing.T) {
+	s := newSubsStore(t)
+	seedSubsAccounts(t, s)
+
+	if err := s.DeclareSubordinate("b@t", "a@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	// No avatar uploaded yet: both edges carry an empty hash.
+	if got := s.SubordinatesOf("b@t"); got[0].AvatarHash != "" {
+		t.Fatalf("subordinate edge avatar_hash = %q, want empty", got[0].AvatarHash)
+	}
+	if got := s.SuperiorsOf("a@t"); got[0].AvatarHash != "" {
+		t.Fatalf("superior edge avatar_hash = %q, want empty", got[0].AvatarHash)
+	}
+	// Upload on the subordinate: the superior's listing sees the hash.
+	hash, err := s.SaveAvatar("a@t", []byte("png-bytes"))
+	if err != nil {
+		t.Fatalf("save avatar: %v", err)
+	}
+	if got := s.SubordinatesOf("b@t"); got[0].AvatarHash != hash {
+		t.Fatalf("subordinate edge avatar_hash = %q, want %q", got[0].AvatarHash, hash)
+	}
+	// And the superior's own upload shows in the subordinate's view.
+	supHash, err := s.SaveAvatar("b@t", []byte("sup-bytes"))
+	if err != nil {
+		t.Fatalf("save avatar: %v", err)
+	}
+	if got := s.SuperiorsOf("a@t"); got[0].AvatarHash != supHash {
+		t.Fatalf("superior edge avatar_hash = %q, want %q", got[0].AvatarHash, supHash)
+	}
+	// Delete: back to empty on the watched side.
+	if err := s.DeleteAvatar("a@t"); err != nil {
+		t.Fatalf("delete avatar: %v", err)
+	}
+	if got := s.SubordinatesOf("b@t"); got[0].AvatarHash != "" {
+		t.Fatalf("subordinate edge avatar_hash = %q after delete, want empty", got[0].AvatarHash)
+	}
+}
