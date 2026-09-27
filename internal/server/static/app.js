@@ -748,8 +748,28 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // longest edge <= 512, <= 100KB) are mirrored client-side; the canvas
   // scales before upload so the server 413 stays a last resort.
   var AV_MAX_EDGE = 512, AV_MAX_BYTES = 100 * 1024;
-  var ownAvatarURL = null; // live card objectURL (revoked on replace)
   var ownAvatarHashDone = false;
+
+  // Shared blob loader (own card + accounts rows + modal preview): one
+  // objectURL per addr|hash for the whole session. Re-renders reuse the
+  // registry instead of refetching, so the URL count stays bounded by the
+  // set of distinct avatars seen — no per-render revoke bookkeeping.
+  // pub=true serves directory-visible addresses via the public endpoint
+  // (D1 gate); both endpoints are immutable+1y cached, hence ?v=hash.
+  var avBlobRegistry = {}, avBlobInflight = {};
+  function avatarObjectURL(addr, hash, pub) {
+    const key = String(addr).toLowerCase() + "|" + hash;
+    if (avBlobRegistry[key]) return Promise.resolve(avBlobRegistry[key]);
+    if (avBlobInflight[key]) return avBlobInflight[key];
+    const url = pub
+      ? "/api/public/avatar?address=" + encodeURIComponent(addr) + "&v=" + encodeURIComponent(hash)
+      : "/api/avatar/" + encodeURIComponent(addr) + "?v=" + encodeURIComponent(hash);
+    avBlobInflight[key] = fetch(url, pub ? {} : { headers: { Authorization: basicAuth() } })
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.blob(); })
+      .then(function (b) { return avBlobRegistry[key] = URL.createObjectURL(b); })
+      .catch(function (e) { delete avBlobInflight[key]; throw e; });
+    return avBlobInflight[key];
+  }
 
   function avFallback(addr) {
     return '<span class="cl-av-img cl-identicon">' + esc((addr[0] || "?").toUpperCase()) + "</span>";
@@ -775,16 +795,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     const slot = document.getElementById("own-avatar-slot");
     if (!sess || !slot) return;
     const hash = (window.__avatarHashes || {})[sess.address.toLowerCase()] || "";
-    if (ownAvatarURL) { URL.revokeObjectURL(ownAvatarURL); ownAvatarURL = null; }
     if (!hash) { slot.innerHTML = avFallback(sess.address); return; }
-    // immutable 一年缓存：换头像必须换 URL（?v=hash）才不命中旧缓存
-    fetch("/api/avatar/" + encodeURIComponent(sess.address) + "?v=" + encodeURIComponent(hash), { headers: { Authorization: basicAuth() } })
-      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.blob(); })
-      .then(function (b) {
-        ownAvatarURL = URL.createObjectURL(b);
-        slot.innerHTML = '<img alt="" src="' + ownAvatarURL + '">';
-      })
-      .catch(function () { slot.innerHTML = avFallback(sess.address); });
+    avatarObjectURL(sess.address, hash).then(function (url) {
+      const live = document.getElementById("own-avatar-slot"); // may have re-rendered meanwhile
+      if (live) live.innerHTML = '<img alt="" src="' + url + '">';
+    }).catch(function () {
+      const live = document.getElementById("own-avatar-slot");
+      if (live) live.innerHTML = avFallback(sess.address);
+    });
   }
 
   function openAvatarModal() {
@@ -818,14 +836,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     const fileIn = ov.querySelector("#av-file");
     const resetB = ov.querySelector("#av-reset");
     const saveB = ov.querySelector("#av-save");
-    const blobURLs = [];
     let pending = null; // {blob, ext, w, h}
     let pendingURL = null;
     let busy = false;
 
-    function trackURL(u) { blobURLs.push(u); return u; }
     function close() {
-      blobURLs.forEach(function (u) { URL.revokeObjectURL(u); });
+      // Only the pending-selection preview is ours to revoke; the current
+      // preview shares the page-level avatarObjectURL registry (revoking
+      // it would break the own card and the account rows).
       if (pendingURL) URL.revokeObjectURL(pendingURL);
       ov.remove();
     }
@@ -837,10 +855,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       resetB.disabled = !curHash; // nothing uploaded -> nothing to reset
       if (!curHash) { prev.innerHTML = avFallback(sess.address); return; }
       prev.innerHTML = '<img alt="">';
-      fetch("/api/avatar/" + encodeURIComponent(sess.address) + "?v=" + encodeURIComponent(curHash), { headers: { Authorization: basicAuth() } })
-        .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.blob(); })
-        .then(function (b) { prev.firstChild.src = trackURL(URL.createObjectURL(b)); })
-        .catch(function () { prev.innerHTML = avFallback(sess.address); });
+      avatarObjectURL(sess.address, curHash).then(function (url) {
+        if (prev.firstChild) prev.firstChild.src = url;
+      }).catch(function () { prev.innerHTML = avFallback(sess.address); });
     }
     function showPending() {
       prev.innerHTML = '<img alt="">';
@@ -902,7 +919,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       if (!r) { toast(t("prof.avatarBadType"), "error"); return; }
       if (pendingURL) URL.revokeObjectURL(pendingURL);
       pending = r;
-      pendingURL = trackURL(URL.createObjectURL(r.blob));
+      pendingURL = URL.createObjectURL(r.blob); // ours alone — revoked on close/replace
       showPending();
     });
 
