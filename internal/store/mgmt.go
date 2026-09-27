@@ -37,8 +37,9 @@ func truncateRunes(s string, n int) string {
 type MgmtSubSummary struct {
 	Address     string           `json:"address"`
 	Signature   string           `json:"signature"`
-	LastInAt    int64            `json:"last_in_at"`  // unix s, 0 = never (ALL TIME)
-	LastOutAt   int64            `json:"last_out_at"` // unix s, 0 = never (ALL TIME)
+	AvatarHash  string           `json:"avatar_hash,omitempty"` // 0021: real-avatar cache key for the subordinate row (empty = generator)
+	LastInAt    int64            `json:"last_in_at"`            // unix s, 0 = never (ALL TIME)
+	LastOutAt   int64            `json:"last_out_at"`           // unix s, 0 = never (ALL TIME)
 	CountIn7d   int              `json:"count_in_7d"`
 	CountOut7d  int              `json:"count_out_7d"`
 	AvgLenIn    int              `json:"avg_len_in"`   // mean body runes, 7d window; 0 = no mail
@@ -300,6 +301,7 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 		// up per sub (≤10) outside the message scan; misses stay 0.
 		if acc, err := s.GetAccount(subs[i].Address); err == nil {
 			subs[i].LastReadAt = s.LastReadAt(acc.UUID)
+			subs[i].AvatarHash = acc.AvatarHash // 0021: row avatar hydration on the superior side
 		}
 	}
 	out.Subs = subs

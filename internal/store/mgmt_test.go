@@ -292,3 +292,47 @@ func TestMgmtOverviewNoDanglingEdgeAfterRemoval(t *testing.T) {
 		}
 	}
 }
+
+// 0021: the subordinate row carries the account's avatar_hash so the
+// superior-side list can hydrate real avatars (empty = generator). Saving an
+// avatar must surface it; deleting must drop it back to empty.
+func TestMgmtSubsAvatarHash(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare sub1: %v", err)
+	}
+
+	ov, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if len(ov.Subs) != 1 || ov.Subs[0].Address != "sub1@t" {
+		t.Fatalf("want single sub1 row, got %+v", ov.Subs)
+	}
+	if ov.Subs[0].AvatarHash != "" {
+		t.Fatalf("pre-save hash = %q, want empty", ov.Subs[0].AvatarHash)
+	}
+
+	hash, err := s.SaveAvatar("sub1@t", []byte("fake-png-bytes"))
+	if err != nil {
+		t.Fatalf("save avatar: %v", err)
+	}
+	ov, err = s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if ov.Subs[0].AvatarHash != hash {
+		t.Fatalf("post-save hash = %q, want %q", ov.Subs[0].AvatarHash, hash)
+	}
+
+	if err := s.DeleteAvatar("sub1@t"); err != nil {
+		t.Fatalf("delete avatar: %v", err)
+	}
+	ov, err = s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if ov.Subs[0].AvatarHash != "" {
+		t.Fatalf("post-delete hash = %q, want empty", ov.Subs[0].AvatarHash)
+	}
+}
