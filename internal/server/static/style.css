@@ -223,6 +223,18 @@ td.sig-cell.marquee .sig-dup { display: inline; }
    nowrap cells refuse to shrink — the address column ate the row and
    squeezed the signature column into one-char-per-line stacks. */
 #accounts-table td.addr-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 0019 (boss directive): PC table rows carry avatars too - the same
+   accAvatarHtml payload as the mobile list (hash->endpoint, else the
+   deterministic generator via avHydrate). Scoped to >800px: the mobile
+   card list already shows avatars, so the wrapper is inert there. */
+#accounts-table .im3-av { display: none; }
+@media (min-width: 801px) {
+  #accounts-table .im3-av { display: inline-flex; width: 28px; height: 28px; font-size: 13px; border-radius: 8px; }
+  #accounts-table .im3-av .cl-av-img { width: 28px; height: 28px; }
+  #accounts-table .pc-av-line { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; vertical-align: middle; }
+  #accounts-table .pc-addr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #accounts-table td.addr-cell .sig-track { min-width: 0; }
+})
 .sub-sig { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sub-list { min-width: 0; }
 /* Keep wrapping as a fallback for very narrow viewports. */

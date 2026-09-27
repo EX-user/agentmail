@@ -1255,8 +1255,12 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var badge = listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "";
       pcSubRows +=
         '<tr class="subrow-pc" data-act-acct="' + esc(e.address) + '">' +
-        '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(e.address) +
-        '<span class="act-pill-slot" data-act-slot="pill"></span></td>' +
+        '<td class="addr-cell" data-label="' + t("col.address") + '">' +
+        // 0019 (boss directive): PC rows carry avatars - same accAvatarHtml
+        // payload as the mobile list; CSS scopes it to >800px.
+        '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
+        '<span class="pc-addr">' + esc(e.address) + '</span>' +
+        '<span class="act-pill-slot" data-act-slot="pill"></span></span></td>' +
         '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
         '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
         "<td data-label=\"Created\"></td>" +
@@ -1301,7 +1305,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span></td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span></span></td>" +
           '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           "<td data-label=\"Created\"></td>" +
@@ -1316,6 +1320,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
     tbody.innerHTML = rows.join("");
+    avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
     preloadLimits(selfAddr, subsList.map(function (e) { return e.address; }));
     const btn = $("#btn-change-pw");
     if (btn) btn.addEventListener("click", openChangePassword);
@@ -1949,6 +1954,12 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   });
 
   async function loadSettings() {
+    // 0019: admin endpoint, admin role only. A regular user visiting the
+    // Settings tab used to take the /admin/settings 401 WITHOUT keepSession
+    // - the api teardown path cleared the session and scheduled the login
+    // screen, so the next Accounts render came up unauthorized/empty.
+    const sess = getSession();
+    if (sess && !sess.is_admin) return;
     try {
       const s = await api("/admin/settings");
       const regStatus = $("#reg-status");
