@@ -1730,14 +1730,10 @@ html[data-theme="dark"]  .sc-item { background: rgba(22,27,41,.72); }
   padding: 4px 12px; font-size: 12px; min-height: 0;
 }
 .inbox-nav .row-action + .row-action { border-left: 1px solid var(--border); }
-/* 0016 (boss directive): the List|Message tab control is gone; the round
-   back button sits left of prev/next in the message view and returns to
-   the list. Dual pane only exists <=800px, so the button is PC-hidden. */
-.inbox-navband {
-  display: inline-flex; align-items: center; gap: 8px;
-  align-self: flex-start; margin: 0 0 10px;
-}
-.inbox-navband .inbox-nav { margin: 0; }
+/* 0016/0017 (boss directive + rc12 retest): the List|Message tab control
+   is gone on both dual-pane pages; the back button is the leftmost
+   segment of the prev/next pill itself, so the styling is the pill's own.
+   Dual pane only exists <=800px, so the segment is PC-hidden. */
 .pane-back { display: none; }
 @media (max-width: 800px) {
   /* The pager belongs to the List tab; hide it while reading a message. */
@@ -1745,14 +1741,7 @@ html[data-theme="dark"]  .sc-item { background: rgba(22,27,41,.72); }
      Message 模式（列表隐藏）下分页条照旧隐藏 */
   #inbox-grid.mshow-detail ~ .inbox-pager,
   #inbox-grid.mshow-detail > .inbox-pager { display: none; }
-  .pane-back {
-    display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; padding: 0; flex: 0 0 auto;
-    border: 1px solid var(--border); border-radius: 999px;
-    background: var(--panel); color: var(--muted);
-    font-size: 15px; line-height: 1; cursor: pointer;
-  }
-  .pane-back:hover { color: var(--accent); border-color: var(--accent); }
+  .pane-back { display: inline-block; }
 }
 
 /* Inbox unread badge (v0.5.5): pure red dot, absolutely positioned so it

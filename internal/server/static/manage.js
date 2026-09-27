@@ -1014,10 +1014,20 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     else toast(t("inbox.noMore"), "error");
   }
 
+  // wirePaneBack (0017): the back segment returns the pane to its list;
+  // the grid id derives from the detail pane id, so inbox and browse
+  // share one helper (boss: manage-browse uses the same design).
+  function wirePaneBack(detail) {
+    const back = $(".pane-back", detail);
+    if (back) back.addEventListener("click", function () {
+      mailShowPane(detail.id.replace("-detail", "-grid"), "list");
+    });
+  }
   function wireMailNav(detail, item) {
     const p = $('[data-nav="-1"]', detail), n = $('[data-nav="1"]', detail);
     if (p) p.addEventListener("click", function () { mailStepNav(item, -1); });
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
+    wirePaneBack(detail);
   }
 
   // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row in the
@@ -1742,6 +1752,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       $$("#inbox-mode-pill [data-imode]").forEach(function (x) { x.classList.remove("on"); });
       b.classList.add("on");
       inboxMode = b.dataset.imode;
+      // 0017 (boss rc12 retest): a mode switch lands on the list, not on
+      // whatever message was open (mobile dual pane only; inert on PC).
+      mailShowPane("inbox-grid", "list");
       refreshInbox(0);
     });
   });
@@ -1781,15 +1794,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     // Compact pill (superior-approved) in its own band above the letter —
     // the letter body scrolls in a separate region below it, so the buttons
     // are always reachable and never overlap the content.
-    // 0016 (boss directive): the explicit List|Message tab control is gone;
-    // a small round back button left of prev/next returns to the list (the
-    // dual pane only exists <=800px, so CSS hides the button on PC).
-    return '<div class="inbox-navband">' +
-      '<button type="button" class="pane-back" data-i18n-title="inbox.backList" title="Back to list" aria-label="Back to list">←</button>' +
-      '<div class="inbox-nav">' +
+    // 0016/0017 (boss directive): the explicit List|Message tab control is
+    // gone on BOTH dual-pane pages; the back button is the leftmost
+    // segment of the same pill (boss rc12 retest: a separate round button
+    // did not match the pill style). PC-hidden — the dual pane only
+    // exists <=800px. wirePaneBack binds it per page.
+    return '<div class="inbox-nav">' +
+      '<button type="button" class="row-action pane-back" data-i18n-title="inbox.backList" title="Back to list" aria-label="Back to list">←</button>' +
       '<button class="row-action" data-nav="-1">↑ ' + t("inbox.prev") + "</button>" +
       '<button class="row-action" data-nav="1">' + t("inbox.next") + " ↓</button>" +
-      "</div></div>";
+      "</div>";
   }
 
   // Two-zone detail frame: nav band + independently scrolling letter region.
@@ -1806,8 +1820,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     const navPrev = $('[data-nav="-1"]', detail), navNext = $('[data-nav="1"]', detail);
     if (navPrev) navPrev.addEventListener("click", function () { inboxStepNav(item, -1); });
     if (navNext) navNext.addEventListener("click", function () { inboxStepNav(item, 1); });
-    const navBack = $(".pane-back", detail);
-    if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
+    wirePaneBack(detail);
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -1859,8 +1872,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
         if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
         if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-        const navBack = $(".pane-back", detail);
-        if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
+        wirePaneBack(detail);
       }
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
@@ -1878,8 +1890,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
       if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
       if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-      const navBack = $(".pane-back", detail);
-      if (navBack) navBack.addEventListener("click", function () { mailShowPane("inbox-grid", "list"); });
+      wirePaneBack(detail);
     }
   }
 
