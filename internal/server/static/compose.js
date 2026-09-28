@@ -1134,6 +1134,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           '<div class="thread-full hidden"></div>' +
           "</div>";
       }).join("");
+      // 0.3.4 IM semantics (boss 09-29): opening the conversation reads
+      // it - each unread incoming letter is fetched once (the detail GET
+      // marks it read server-side), so the next accounts poll clears the
+      // dots everywhere. Self-limiting: afterwards there is nothing to
+      // fetch. Regular accounts only (admin previews never write state).
+      if (isRegular) {
+        all.filter(function (m) { return m.dir === "in" && m.unread; }).forEach(function (m) {
+          api("/api/message?id=" + encodeURIComponent(m.id), { keepSession: true }).catch(function () {});
+        });
+      }
       // Wire Reply/Follow-up buttons: fill the compose form's To + Subject.
       $$(".thread-action", threadEl).forEach(function (btn) {
         btn.addEventListener("click", function (e) {

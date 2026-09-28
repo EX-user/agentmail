@@ -3218,4 +3218,4 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
    poll, in-place flip only (1046 no-touch discipline). Positioned
    INSIDE the box: the .im3-av overflow clips anything past the edge. */
 .im3-av { position: relative; }
-.im3-av.has-unread::after { content: ""; position: absolute; top: 0; right: 0; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--panel, #fff); }
+.im3-av.has-unread::after { content: ""; position: absolute; top: 0; right: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
