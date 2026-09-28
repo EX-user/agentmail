@@ -1067,7 +1067,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           '" data-subj="' + esc(newSubj) + '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
-          ' <span class="thread-toggle">▾ click to expand</span> ' + actionBtn + '</div>' +
+          ' <span class="thread-toggle">▾ expand</span> ' + actionBtn + '</div>' +
           '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(m.subject || "(no subject)") + "</div>" +
           '<div class="thread-prev">' + esc(m.preview || "") + "</div>" +
           '<div class="thread-full hidden"></div>' +
