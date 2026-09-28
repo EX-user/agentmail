@@ -307,10 +307,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       return;
     }
     // The inline list lives in #thread-holder; if the drawer owns the node,
-    // take it back (the drawer only opens from the full form, never in IM).
+    // take it back - EXCEPT while the drawer is open (boss test-server
+    // report: the drawer opens from the full form, which lives INSIDE im
+    // mode since 0.3.5; this recovery used to yank the thread list out of
+    // the open drawer within one 400ms tick, leaving the modal empty).
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
-    if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    var drawer = document.getElementById("thread-modal");
+    var drawerOwns = !!(drawer && !drawer.classList.contains("hidden") && drawer.contains(thread));
+    if (!drawerOwns && thread && holder && !holder.contains(thread)) holder.appendChild(thread);
     // Full-form owns the page: the chips stay in the form until the card
     // returns (syncImMode re-runs on many beats and would yank them back).
     if (sheetIntoCard && !sec.classList.contains("im-full")) sheetIntoCard();

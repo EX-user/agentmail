@@ -3119,8 +3119,12 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #im-bar #compose-attachments { margin: 0; }
   /* 附件卡提密（boss：信息密度低）：单行 chip——📎 名（省略）·大小·× 同排 */
+  /* boss test-server report: base .attach-card allows flex-wrap - a long
+     filename pushed the size chip onto a second line before the name ever
+     spent its shrink; nowrap forces ellipsis on the name first, keeping
+     clip+name+size+x on one line. */
   #tab-compose.im #im-bar .attach-card {
-    display: flex; align-items: center; gap: 7px;
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 7px;
     padding: 3px 9px; border: 1px solid var(--border); border-radius: 10px;
     background: rgba(127,127,127,.10); min-width: 0;
   }
@@ -3182,7 +3186,11 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #compose-thread { padding-bottom: 84px; } /* 最新信滚出浮层卡（卡高62+阴影余量22） */
   /* 完整写信页 within a conversation: the validated form returns in full */
-  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
+  /* boss test-server report: the back button sat flush on the scroll clip
+     edge - CJK glyph ink pokes above the box on device fonts, so the first
+     line read half-clipped under the header; standing top padding keeps the
+     rest state clear of the clip line. */
+  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; padding-top: 12px; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
   /* the irt row carries an inline display:flex - only !important hides it
      while the conversation owns the page (it returns in the full form) */
@@ -3193,7 +3201,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im.im-full #im-bar { display: none; }
   #tab-compose.im.im-full #im-back {
     display: inline-flex; align-items: center; width: auto; align-self: flex-start;
-    min-height: 0; padding: 0; margin: 0 0 10px;
+    min-height: 0; padding: 3px 0; margin: 0 0 10px;
     background: none; border: none; border-radius: 0;
     color: var(--accent); font-weight: 700; font-size: 13px;
   }
