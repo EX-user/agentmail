@@ -3242,9 +3242,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
 }
 #tab-compose.im #im-bar #im-irt-line #im-irt-x { margin-left: auto; flex: 0 0 auto; }
 
-/* boss 09-30: cc row lives above the input line in the conversation card
-   (not inside the panel zone) once chips exist. Bar-resident styling. */
-#tab-compose.im #im-bar > #compose-cc-row { order: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 0; }
-#tab-compose.im #im-bar > #compose-cc-row .cc-input-wrap { flex: 1 1 auto; min-width: 130px; }
-#tab-compose.im #im-bar > #compose-cc-row input { background: transparent; border: 1px solid var(--border); border-radius: 10px; padding: 5px 9px; font-size: 12.5px; min-height: 0; }
-#tab-compose.im #im-bar > #compose-cc-row .cc-chip { white-space: nowrap; }
+/* boss 09-30 (corrected): the IRT line rides above the input line in the
+   conversation card - visible only while an anchor is set. Opaque surface
+   so scrolling capsules never fight its text. */
+#tab-compose.im #im-bar > #im-irt-line { order: 2; background: var(--panel); }
