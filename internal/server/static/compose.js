@@ -1836,6 +1836,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (sheet.classList.contains("hidden")) {
         input.blur(); // drop the soft keyboard before the panel opens
         sheet.classList.remove("hidden");
+        // Opening the panel shrinks the list; without this the clip edge
+        // slices a capsule mid-line and reads as occlusion (boss). Snap to
+        // the latest so the cut falls below the newest letter, chat-style.
+        var holderEl = document.getElementById("thread-holder");
+        if (holderEl) holderEl.scrollTop = holderEl.scrollHeight;
       } else closeSheet();
     });
     document.getElementById("im-attach").addEventListener("click", function () {
