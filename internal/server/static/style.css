@@ -1030,6 +1030,10 @@ nav::-webkit-scrollbar { display: none; }
     84%, 100% { transform: translateX(var(--mq-shift, -40px)); } }
   .im3-line2, .im3-line3 { font-size: 11.5px; line-height: 16px; height: 16px; color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 0.3.4 item 1 (boss pick B): the pinned register row carries the full
+     readable note - let its line2 wrap; the one-line ellipsis grammar
+     stays for every other row. */
+  .im3-row[data-reg] .im3-line2 { white-space: normal; height: auto; }
   .im3-line3 .cl-none { opacity: .75; }
   /* 0.3.3-C ②③ (Iris spec v1.0): empty / fetch-failure rows - row-grammar
      states, not floating text. Error red matches the 404-fallback family. */
