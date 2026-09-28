@@ -70,3 +70,23 @@ func (s *Server) handleMgmtContactLatests(w http.ResponseWriter, r *http.Request
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"contacts": list, "count": len(list)})
 }
+
+// handleMgmtUnreadBySender returns the accounts-page unread-dot data
+// (0.3.4 item 1): per sender with unread mail in the login account's own
+// inbox, the unread count. Self data only - no subordinate scan.
+//
+//	GET /api/mgmt/unread-by-sender (auth=self)
+//	  -> {"by_sender": {"addr": n, ...}, "count": N}
+func (s *Server) handleMgmtUnreadBySender(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	me := accountFrom(r.Context())
+	by, err := s.store.UnreadBySender(me)
+	if err != nil {
+		internalError(w, "unread by sender: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"by_sender": by, "count": len(by)})
+}

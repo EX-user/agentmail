@@ -438,3 +438,96 @@ func TestMgmtContactLatests(t *testing.T) {
 		}
 	}
 }
+
+// TestMgmtLatestBody (0.3.4 item 1 companion): latest_body rides the same
+// 0023 me-pair gate as latest_subject and never diverges from it - the
+// client swaps a "no information" subject for the body on display.
+func TestMgmtLatestBody(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	base := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC).Unix()
+	put := func(from, to, subj, body string, at int64) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, Subject: subj, Body: body, ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	put("sub1@t", "me@t", "短信", "正文内容在这里：无主题也要有信息量", base-3600)
+	put("sub1@t", "stranger@t", "unrelated out", "x", base-1800)
+	put("stranger@t", "sub1@t", "unrelated in", "y", base-60)
+
+	out, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if len(out.Subs) != 1 {
+		t.Fatalf("len(subs) = %d, want 1", len(out.Subs))
+	}
+	row := out.Subs[0]
+	if row.LatestSubject != "短信" || row.LatestBody != "正文内容在这里：无主题也要有信息量" {
+		t.Fatalf("latest pair = (%q, %q), want subject+body captured together", row.LatestSubject, row.LatestBody)
+	}
+	// Unrelated traffic must not have moved the pair (0023 gate).
+	if row.LatestAt != base-3600 {
+		t.Fatalf("latest_at = %d, want the related one only", row.LatestAt)
+	}
+}
+
+// TestUnreadBySender (0.3.4 item 1): per-sender unread counts from the
+// login account's own inbox - server truth for the per-row avatar dot.
+func TestUnreadBySender(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	for _, m := range []struct{ from, subj string }{
+		{"ext1@t", "u1"}, {"ext1@t", "u2"}, {"sub1@t", "u3"}, {"ext2@t", "r1"},
+	} {
+		if _, err := s.Send(m.from, m.from, []string{"me@t"}, nil, m.subj, "b", ""); err != nil {
+			t.Fatalf("send %s: %v", m.subj, err)
+		}
+	}
+	// Read ext2's letter: any read path must drop the sender off the list.
+	me, err := s.GetAccount("me@t")
+	if err != nil {
+		t.Fatalf("me: %v", err)
+	}
+	inbox, err := s.ReadInbox("me@t", 20)
+	if err != nil {
+		t.Fatalf("inbox: %v", err)
+	}
+	var readID string
+	for _, m := range inbox {
+		if m.From == "ext2@t" {
+			readID = m.ID
+		}
+	}
+	if readID == "" {
+		t.Fatal("ext2 letter not in inbox")
+	}
+	if err := s.MarkRead(me.UUID, readID); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+
+	out, err := s.UnreadBySender("me@t")
+	if err != nil {
+		t.Fatalf("unread by sender: %v", err)
+	}
+	if out["ext1@t"] != 2 || out["sub1@t"] != 1 {
+		t.Fatalf("counts = %v, want ext1:2 sub1:1", out)
+	}
+	if _, ok := out["ext2@t"]; ok {
+		t.Fatalf("read sender must be absent: %v", out)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len = %d (%v), want 2", len(out), out)
+	}
+}

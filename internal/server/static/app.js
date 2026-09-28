@@ -623,6 +623,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       byAddr[String(s.address).toLowerCase()] = s;
     });
     avSyncAvatarsFromActivity((actData && actData.subs) || []); // A-case: avatar spot-hydration on the same poll
+    var unreadBy = (actData && actData.unreadBySender) || {};
     // Contact rows (bug fix 09-29): correspondence-driven latest for
     // non-subordinate rows; a declared sub entry wins the slot.
     ((actData && actData.contacts) || []).forEach(function (c) {
@@ -641,6 +642,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
 
       // 0.3.3-C: the latest-message line rides the same in-place update --
       // the poll delivers latest_subject/latest_at after first render.
+      // 0.3.4 item 1: the avatar unread dot flips on server truth -
+      // any read path clears it within the next poll (same 5s cycle).
+      var av = el.querySelector(".im3-av");
+      if (av) {
+        var has = !!unreadBy[String(el.getAttribute("data-act-acct")).toLowerCase()];
+        if (av.classList.contains("has-unread") !== has) av.classList.toggle("has-unread", has);
+      }
       var line3 = el.querySelector(".im3-line3");
       if (line3) {
         var lh = accLatestHtml(s);
@@ -700,6 +708,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       // boss bug 09-29: contact rows ride the same poll - correspondence-driven
       // latest data for non-subordinate counterparties.
       await api("/api/mgmt/contacts-latest", { keepSession: true }).then(function (dc) { d.contacts = (dc && dc.contacts) || []; }, function () { d.contacts = []; });
+      await api("/api/mgmt/unread-by-sender", { keepSession: true }).then(function (du) { d.unreadBySender = (du && du.by_sender) || {}; }, function () { d.unreadBySender = {}; });
       actData = d;
       actLastPull = Date.now();
       applyActivity();
@@ -1417,7 +1426,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // plan (phones merge badges+address into one line); the twin card
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
-          "<tr class=\"ct-row\">" +
+          '<tr class="ct-row" data-act-acct="' + esc(c) + '">' +
           '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +

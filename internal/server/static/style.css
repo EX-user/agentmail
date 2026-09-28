@@ -3214,3 +3214,8 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
    now rides the line3 row only (entry rows drop their bottom border). */
 #accounts-table .subrow-pc > td, #accounts-table .ct-row > td { border-bottom: none; }
 #accounts-table tr.line3-row > td { border-bottom: 1px solid var(--border); }
+/* 0.3.4 item 1: the avatar unread dot - server truth via the activity
+   poll, in-place flip only (1046 no-touch discipline). Positioned
+   INSIDE the box: the .im3-av overflow clips anything past the edge. */
+.im3-av { position: relative; }
+.im3-av.has-unread::after { content: ""; position: absolute; top: 0; right: 0; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--panel, #fff); }
