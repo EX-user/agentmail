@@ -1403,8 +1403,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '</span><span class="pc-badges">' + badge.trim() + "</span></span>" +
-          '<div class="im3-line3 pc-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div></td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span>" +
+          '<div class="im3-line3 pc-line3"><span class="pc-badges">' + badge.trim() + "</span> <span class=\"cl-none\">" + esc(t("acc.latestNone")) + "</span></div></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"

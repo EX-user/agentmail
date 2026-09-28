@@ -165,6 +165,9 @@ button.row-gear:hover { color: var(--accent); border-color: var(--accent); }
    (time dir . subject) - applyActivity patches it in place like on phones. */
 .pc-line3 { margin-top: 3px; font-size: 12px; color: var(--muted, #888); max-width: 560px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-line3 .cl-none { color: var(--muted, #aaa); }
+/* ct-row: the address line is a block flex row (long marquee addresses must
+   not stack the badges/latest line on top of it). */
+
 button.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 
 tr.row-disabled td { opacity: 0.5; }
@@ -3195,3 +3198,12 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im.im-full #im-back::before { content: "\2039\00a0"; font-size: 15px; line-height: 1; }
 }
+
+/* boss PC round (ct-row): the long-address marquee must not swallow the
+   badges/latest line - block-level address row, marquee boxed inside, the
+   line3 on its own row beneath. Late-placed + ID-scoped to win the cascade
+   over the .mq marquee rules above. */
+#accounts-table .ct-row .pc-av-line { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; overflow: hidden; }
+#accounts-table .ct-row .pc-av-line .sig-track { display: inline-block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#accounts-table .ct-row .pc-line3 { position: static; }
+>>>>>>> 53cccf3 (feat(static): the PC accounts rows gain the latest-message line (boss PC round follow-up) - same text as the mobile list item (time dir . subject, no 'Latest:' prefix, no-info subjects show the body via the two-locale set; the Go latest_body field auto-activates the body path once it lands). The line reuses the im3-line3 class so applyActivity's in-place patch covers PC rows for free. accLatestHtml upgraded in place and acc.latestPre retires; I18N grows the dict(lang) accessor. ct-row: badges leave the marquee track for the line3 row (long addresses were swallowing them), and the address line goes block-flex so the marquee boxes inside its cell instead of overlapping the rows beneath (late-placed ID-scoped rules to win the cascade over .mq).)
