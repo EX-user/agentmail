@@ -41,6 +41,24 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // Input (and its set button) hides while an anchor is set.
     var inp = !!(composeInReplyTo);
     if (wrap) wrap.classList.toggle("hidden", inp);
+    imIrtPaint();
+  }
+
+  // boss 09-29: the ＋ panel's irt line - display + cancel for the anchor
+  // (boss asked to SEE the irt parameter and clear it; it now stays empty
+  // unless set explicitly). Painted from renderInReplyTo and the 400ms tick.
+  function imIrtPaint() {
+    var line = document.getElementById("im-irt-line");
+    if (!line) return;
+    var sec = document.getElementById("tab-compose");
+    line.classList.toggle("hidden", !(sec && sec.classList.contains("im")));
+    var val = document.getElementById("im-irt-val");
+    if (val) {
+      var v = composeInReplyTo || "\u2014";
+      if (val.textContent !== v) val.textContent = v;
+    }
+    var x = document.getElementById("im-irt-x");
+    if (x) x.classList.toggle("hidden", !composeInReplyTo);
   }
 
   // Manual anchor entry, Cc-autocomplete style. Typing filters the recent
@@ -262,8 +280,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   function predictedImSubject() {
     var s = ($("#compose-subject").value || "").trim();
     if (s) return { text: s, auto: false };
-    if (threadNewest && threadNewest.subject) return { text: "Re: " + threadNewest.subject, auto: true };
-    return { text: "", auto: false };
+    // boss 09-29: no auto-anchoring and no phantom inherit - the send path
+    // stamps the no-information subject word when empty, so the line shows
+    // exactly that (the line predicts what will go out).
+    return { text: t("compose.noSubjectWord"), auto: true };    return { text: "", auto: false };
   }
   function imPaintHead() {
     var peer = document.getElementById("im-peer");
@@ -336,14 +356,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     return /^(短信|消息|sms|message|—)$/i.test(v);
   }
 
-  function autoDeriveForIm() {
-    var sec = document.getElementById("tab-compose");
-    if (!sec || !sec.classList.contains("im")) return;
-    if (!composeInReplyTo && threadNewest && threadNewest.id) {
-      composeInReplyTo = threadNewest.id;
-      renderInReplyTo();
-    }
-  }
+  // autoDeriveForIm retired (boss 09-29): in-reply-to stays EMPTY unless it
+  // is set explicitly - a thread capsule anchors that letter, the panel's
+  // irt line shows and clears it. Nothing derives it from the thread.
 
   function renderComposeCc() {
     const tags = $("#cc-tags");
@@ -982,15 +997,12 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   }
 
   $("#btn-send").addEventListener("click", async function () {
-    // 0.3.5 件2: the IM bar hides the three header controls — subject and
-    // the reply anchor ride on the conversation. This runs FIRST so the
-    // validation below reads the derived values (learned via probe: the
-    // stale-captured consts failed needSubject even after deriving).
-    autoDeriveForIm();
     // Boss doctrine (the contract): the envelope may not go out empty -
     // the conversation page stamps a no-information subject from the
     // agreed set; the display layer normalizes it back to the no-subject
     // face. The pair only works because both ends speak the same set.
+    // (The old autoDeriveForIm pre-pass is retired - boss 09-29: irt
+    // defaults to empty, nothing derives it from the thread.)
     if (imMode() && !$("#compose-subject").value.trim()) {
       $("#compose-subject").value = t("compose.noSubjectWord");
     }
@@ -1129,8 +1141,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         // the subject field stays untouched (boss: it lives in the body).
         const actionLabel = m.dir === "in" ? t("thread.reply") : t("thread.followUp");
         const actionTarget = m.dir === "in" ? (m.from || m.peer) : m.peer;
+        const actionKind = m.dir === "in" ? "re" : "fwd";
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
-          '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
+          '" data-mid="' + esc(m.id) + '" data-act="' + actionKind +
+          '" data-subj="' + esc(m.subject || "") + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">' + esc(t("thread.expand")) + '</span> ' + actionBtn + '</div>' +
@@ -1159,7 +1173,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           $("#compose-to").value = btn.dataset.target;
           composeInReplyTo = btn.dataset.mid || null;
           renderInReplyTo();
-          if (imMode()) { syncImBar(); $("#im-input").focus(); }
+          if (imMode()) {
+            // Boss 09-29 (refined): tapping the capsule RESETS the body to
+            // prefix + that letter's subject - the visible "who I am
+            // replying to" cue (subject itself goes out as the no-info word).
+            var pfx = btn.dataset.act === "fwd" ? t("compose.followUpPrefix") : "Re:";
+            var s2 = (btn.dataset.subj || "").trim();
+            $("#compose-body").value = s2 ? (pfx + " " + s2) : pfx;
+            syncImBar();
+            $("#im-input").focus();
+          }
           else $("#compose-body").focus();
           $("#compose-status").textContent = "Replying to " + btn.dataset.target;
           syncComposeSplit();
@@ -1236,7 +1259,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // sometimes (value changed by autofill/other code paths). The split state
   // now reconciles against the To value on a fixed tick — the value is the
   // single source of truth, events only make it instant.
-  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); }, 400);
+  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); imIrtPaint(); }, 400);
   document.addEventListener("focusin", syncComposeSplit);
   document.addEventListener("focusout", function () { setTimeout(syncComposeSplit, 0); });
 
@@ -1947,6 +1970,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     document.addEventListener("click", function (e) {
       if (e.target.closest("#im-plus")) {
         setSheet(sheet.classList.contains("hidden"));
+        return;
+      }
+      if (e.target.closest("#im-irt-x")) {
+        composeInReplyTo = null;
+        renderInReplyTo();
         return;
       }
       if (e.target.closest("#im-cc")) {

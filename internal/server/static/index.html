@@ -869,6 +869,9 @@
           <button type="button" id="im-send" title="➤">➤</button>
         </div>
         <div id="im-sheet" class="hidden">
+          <!-- boss 09-29: the irt parameter shows and clears here (empty
+               state is the em-dash; the x appears only when an anchor is set) -->
+          <div id="im-irt-line" class="hidden"><span>↩</span><span id="im-irt-val"></span><button type="button" id="im-irt-x" class="attach-x hidden" aria-label="Clear">×</button></div>
           <button type="button" id="im-cc" class="row-action" data-i18n="compose.addCc">＋ Cc</button>
           <button type="button" id="im-attach" class="row-action" data-i18n="compose.attach">📎 Attach</button>
           <button type="button" id="im-full" class="row-action" data-i18n="compose.imFull">Full compose form</button>

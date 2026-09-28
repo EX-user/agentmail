@@ -3148,7 +3148,8 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) button {
     flex: 1 1 30%; min-width: 0; padding: 5px 8px; font-size: 12px;
-    background: rgba(127,127,127,.14); border: 1px solid var(--border);
+    /* boss: flat gray read muddy in light mode - theme surface */
+    background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 10px; color: var(--accent);
   }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row {
@@ -3190,7 +3191,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
      edge - CJK glyph ink pokes above the box on device fonts, so the first
      line read half-clipped under the header; standing top padding keeps the
      rest state clear of the clip line. */
-  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; padding-top: 12px; }
+  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; padding-top: 6px; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
   /* the irt row carries an inline display:flex - only !important hides it
      while the conversation owns the page (it returns in the full form) */
@@ -3227,3 +3228,16 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
    INSIDE the box: the .im3-av overflow clips anything past the edge. */
 .im3-av-wrap { position: relative; display: inline-flex; flex: none; }
 .im3-av-wrap.has-unread::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+
+/* boss 09-29: the ＋ panel's irt line - display + cancel. Late-placed and
+   ID-scoped to win the cascade; hidden outside conversation mode. */
+#tab-compose.im #im-bar #im-irt-line {
+  display: flex; align-items: center; gap: 7px; flex: 1 1 100%;
+  min-width: 0; padding: 1px 2px; font-size: 11px; color: var(--muted);
+}
+#tab-compose.im #im-bar #im-irt-line #im-irt-val {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px;
+  color: var(--text); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+#tab-compose.im #im-bar #im-irt-line #im-irt-x { margin-left: auto; flex: 0 0 auto; }

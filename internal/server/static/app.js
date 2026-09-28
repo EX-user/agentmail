@@ -655,18 +655,29 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         if (line3.innerHTML !== lh) line3.innerHTML = lh;
       }
     });
-    // boss rc2 feedback: if interaction order changed, re-render the list -
-    // line3 patches alone cannot reorder. Debounced; converges because the
-    // re-render's own applyActivity sees the new order as already applied.
-    var box = $("#acc-m-contacts");
-    if (box && !applyActivity._reloading) {
-      var by = {};
-      ((actData && actData.subs) || []).forEach(function (s) { by[String(s.address).toLowerCase()] = s; });
-      var want = Object.keys(by).sort(function (a, b) {
-        return (+by[b].latest_at || 0) - (+by[a].latest_at || 0);
-      }).filter(function (a) { return box.querySelector('.im3-row.im3-sub[data-claddr="' + a + '"]'); });
-      var have = [...box.querySelectorAll(".im3-row.im3-sub")].map(function (r) { return String(r.getAttribute("data-claddr")).toLowerCase(); });
-      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; });
+    // boss 09-29: if interaction order changed, re-render the list - line3
+    // patches alone cannot reorder. The comparison covers the UNIFIED page
+    // order (subordinates AND contacts, latest_at desc); activity-bearing
+    // addresses only, as a sequence, so rows without data cannot loop it.
+    // Debounced; converges because the re-render's own applyActivity sees
+    // the new order as already applied.
+    var box = $("#acc-m-contacts");
+    if (box && !applyActivity._reloading) {
+      var by = {};
+      ((actData && actData.subs) || []).forEach(function (s) { by[String(s.address).toLowerCase()] = s; });
+      ((actData && actData.contacts) || []).forEach(function (c) {
+        var kk = String(c.address).toLowerCase();
+        if (!by[kk]) by[kk] = c;
+      });
+      var want = Object.keys(by).sort(function (a, b) {
+        return (+by[b].latest_at || 0) - (+by[a].latest_at || 0);
+      });
+      var wantSet = {};
+      want.forEach(function (a) { wantSet[a] = 1; });
+      var have = [...box.querySelectorAll(".im3-row")]
+        .map(function (r) { return String(r.getAttribute("data-claddr") || "").toLowerCase(); })
+        .filter(function (a) { return a && wantSet[a]; });
+      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; });
       // 0024 batch guard: the reorder reload has no exit once it starts
       // against an empty actData (rows exist, panel later hidden, pulls
       // visibility-gated) - the 150ms loop rebuilt the whole list ~27x/5s
@@ -675,7 +686,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       if (!same && have.length && actData) {
         applyActivity._reloading = true;
         setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
-      }
+      }
     }
     var sum = $("#acc-act-sum");
     if (sum) {
@@ -1356,72 +1367,75 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // register button lives above the table — #subreg-pc in index.html);
     // phones keep the approved container card (agentreg-row below) and hide
     // the PC rows via CSS.
-    var pcSubRows = "";
     var clRows = "";
     var actByAddr = {};
-    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
     ((actData && actData.contacts) || []).forEach(function (x) { var k = String(x.address).toLowerCase(); if (!actByAddr[k]) actByAddr[k] = x; });
-    // boss rc2 feedback: IM-style ordering - the most recently interacted
-    // account tops the list (latest_at desc; untouched rows keep their
-    // relative order below via stable sort).
+    var seenAddrs = {};
+    var contactsFailed = false, contactRaw = 0;
+    // Contacts are fetched BEFORE any row is built (boss 09-29: the whole
+    // page shares one ordering, so both sides must be in hand up front).
+    var contactList = [];
+    try {
+      const data = await api("/api/contacts", { keepSession: true });
+      contactRaw = (data.contacts || []).length;
+      (data.contacts || []).forEach(function (c) {
+        if (subAddrs[c]) return; // subordinate entries render from subsList
+        seenAddrs[c] = 1;
+        contactList.push(c);
+      });
+    } catch (e) {
+      contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent
+    }
+    // boss 09-29: ONE ordering for the page - recent interaction time
+    // (latest_at desc, stable; untouched rows keep their relative order).
+    // Relationship no longer groups the list, so a non-subordinate
+    // counterparty can top it. Rows keep their per-type shape (subs:
+    // gear/limits; contacts: ext badge) on both PC and the mobile card.
     subsList = subsList.slice().sort(function (a, b) {
       var sa = actByAddr[String(a.address).toLowerCase()] || {};
       var sb = actByAddr[String(b.address).toLowerCase()] || {};
       return (+sb.latest_at || 0) - (+sa.latest_at || 0);
     });
-    subsList.forEach(function (e) {
-      var sig = e.signature || listedSig[e.address] || "";
-      // 0.3.2 tag 语义反转（boss 认定五）：从属是面板主角不打标（listed 照旧）。
-      var badge = listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "";
-      pcSubRows +=
-        '<tr class="subrow-pc" data-act-acct="' + esc(e.address) + '">' +
-        '<td class="addr-cell" data-label="' + t("col.address") + '">' +
-        // 0019 (boss directive): PC rows carry avatars - same accAvatarHtml
-        // payload as the mobile list; CSS scopes it to >800px.
-        '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
-        '<span class="pc-addr">' + esc(e.address) + '</span>' +
-        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
-        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
-        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
-        '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
-        "</tr>";
-      // boss PC round: the latest message runs the FULL row width (one
-      // colspan-3 line under the entry), still patched in place by
-      // applyActivity via the data-act-acct hook.
-      pcSubRows +=
-        '<tr class="line3-row" data-act-acct="' + esc(e.address) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td></tr>";
-
-      // Mobile container card (one-screen plan): badges + address share one
-      // line (address marquees on overflow), signature max one line (same),
-      // pill buttons bottom-right — all inside the scrollable .sub-list.
-      clRows += accRowHtml({ addr: e.address, badge: badge, sig: sig, isSub: true, sub: actByAddr[String(e.address).toLowerCase()] });
-    });
-    rows.push(pcSubRows);
-
-    rows.push(
-      '<tr class="agentreg-row">' +
-      '<td colspan="3" class="agentreg-cell">' +
-      '<div class="agentreg-card">' +
-      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
-      '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
-      // Feedback 09-04 (mobile): the register button lives in its own card;
-      // subordinate entries merge into the contacts card below (subs on top).
-      "</div></td>" +
-      "</tr>"
-    );
-    var seenAddrs = {};
-    var contactsFailed = false, contactRaw = 0;
-    try {
-      const data = await api("/api/contacts", { keepSession: true });
-      contactRaw = (data.contacts || []).length;
-      (data.contacts || []).forEach(function (c) {
-        if (subAddrs[c]) return; // already shown (PC leading rows / mobile container)
-        seenAddrs[c] = 1;
-        // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
-        // 从属集内的地址打「外部」标（与 listed 并存不互斥）。纯前端推导
-        // （requestSubs 从属集在手），数据面零改动（Devi 已确认口径）。
-        var badge = (subAddrs[c] ? "" : '<span class="badge-ext">' + t("acc.badgeExt") + "</span>") +
-          (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
+    var entries = [];
+    subsList.forEach(function (e) { entries.push({ sub: true, addr: e.address, e: e }); });
+    contactList.forEach(function (c) { entries.push({ sub: false, addr: c }); });
+    var entryAt = function (addr) { var x = actByAddr[String(addr).toLowerCase()]; return (+(x && x.latest_at)) || 0; };
+    entries.sort(function (a, b) { return entryAt(b.addr) - entryAt(a.addr); });
+    entries.forEach(function (en) {
+      if (en.sub) {
+        var e = en.e;
+        var sig = e.signature || listedSig[e.address] || "";
+        // 0.3.2 tag 语义反转（boss 认定五）：从属是面板主角不打标（listed 照旧）。
+        var badge = listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "";
+        rows.push(
+          '<tr class="subrow-pc" data-act-acct="' + esc(e.address) + '">' +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' +
+          // 0019 (boss directive): PC rows carry avatars - same accAvatarHtml
+          // payload as the mobile list; CSS scopes it to >800px.
+          '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
+          '<span class="pc-addr">' + esc(e.address) + '</span>' +
+          '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
+          '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
+          "</tr>");
+        // boss PC round: the latest message runs the FULL row width (one
+        // colspan-3 line under the entry), still patched in place by
+        // applyActivity via the data-act-acct hook.
+        rows.push(
+          '<tr class="line3-row" data-act-acct="' + esc(e.address) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td></tr>");
+        // Mobile container card (one-screen plan): badges + address share one
+        // line (address marquees on overflow), signature max one line (same),
+        // pill buttons bottom-right — all inside the scrollable .sub-list.
+        clRows += accRowHtml({ addr: e.address, badge: badge, sig: sig, isSub: true, sub: actByAddr[String(e.address).toLowerCase()] });
+      } else {
+        var c = en.addr;
+        // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
+        // 从属集内的地址打「外部」标（与 listed 并存不互斥）。纯前端推导
+        // （requestSubs 从属集在手），数据面零改动（Devi 已确认口径）。
+        var badge2 = '<span class="badge-ext">' + t("acc.badgeExt") + "</span>" +
+          (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
         // Every address row gets the same shape (feedback: subordinate
         // rows with and without mail history must look identical):
         // badge column, Compose action; Created only where known.
@@ -1430,20 +1444,26 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           '<tr class="ct-row" data-act-acct="' + esc(c) + '">' +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge.trim() + "</span></span></td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge2.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
-          "</tr>"
-        );
+          "</tr>");
         rows.push(
-          '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>"
-        );
-        clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
-      });
-    } catch (e) {
-      contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent
-    }
-    // Subordinate accounts render ONLY inside the register card's zone
+          '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>");
+        clRows += accRowHtml({ addr: c, badge: badge2.trim(), sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
+      }
+    });
+    // Register card LAST: with one unified ordering it must not split the
+    // interaction-ranked rows (it is a tool, not an account entry).
+    rows.push(
+      '<tr class="agentreg-row">' +
+      '<td colspan="3" class="agentreg-cell">' +
+      '<div class="agentreg-card">' +
+      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
+      '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
+      "</div></td>" +
+      "</tr>"
+    );    // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
     tbody.innerHTML = rows.join("");
     avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
