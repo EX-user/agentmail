@@ -57,8 +57,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       api("/api/sent?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; })
     ]).then(function (res) {
       var items = [];
-      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || t("thread.noSubject"), dir: "←", ts: m.received_at || 0 }); });
-      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || t("thread.noSubject"), dir: "→", ts: m.received_at || 0 }); });
+      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: noSubjectInfo(m.subject) ? t("thread.noSubject") : m.subject, dir: "←", ts: m.received_at || 0 }); });
+      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: noSubjectInfo(m.subject) ? t("thread.noSubject") : m.subject, dir: "→", ts: m.received_at || 0 }); });
       items.sort(function (a, b) { return b.ts - a.ts; });
       items = items.slice(0, 30);
       irtLabels = items.map(function (it) {
@@ -321,6 +321,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // any more: boss - putting "Re: <latest>" on the envelope is a weird
   // design; the conversation page sends by the no-content-subject doctrine
   // (empty goes out empty).
+  // noSubjectInfo: Felix's legacy set (zh 短信/消息/空, en SMS/Message/—,
+  // trim + case-insensitive) marks subjects the OLD UI actually filled as
+  // placeholders - they render exactly like an empty subject (one
+  // localized no-subject face; the set is a legacy normalizer only).
+  function noSubjectInfo(s) {
+    var v = (s || "").trim();
+    if (!v) return true;
+    return /^(短信|消息|sms|message|—)$/i.test(v);
+  }
+
   function autoDeriveForIm() {
     var sec = document.getElementById("tab-compose");
     if (!sec || !sec.classList.contains("im")) return;
@@ -1112,7 +1122,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">' + esc(t("thread.expand")) + '</span> ' + actionBtn + '</div>' +
-          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(m.subject || t("thread.noSubject")) + "</div>" +
+          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(noSubjectInfo(m.subject) ? t("thread.noSubject") : m.subject) + "</div>" +
           '<div class="thread-prev">' + esc(m.preview || "") + "</div>" +
           '<div class="thread-full hidden"></div>' +
           "</div>";
