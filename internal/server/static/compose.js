@@ -317,10 +317,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The reply anchor wires to the newest letter unless the user picked one
-  // explicitly (only EMPTY fields are derived). The SUBJECT is NOT derived
-  // any more: boss - putting "Re: <latest>" on the envelope is a weird
-  // design; the conversation page sends by the no-content-subject doctrine
-  // (empty goes out empty).
+  // explicitly (only EMPTY fields are derived). The SUBJECT is never
+  // derived from the thread: boss - putting "Re: <latest>" on the envelope
+  // is a weird design; the conversation page stamps the no-information
+  // subject word instead (see the send path).
   // noSubjectInfo: Felix's legacy set (zh 短信/消息/空, en SMS/Message/—,
   // trim + case-insensitive) marks subjects the OLD UI actually filled as
   // placeholders - they render exactly like an empty subject (one
@@ -982,6 +982,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // validation below reads the derived values (learned via probe: the
     // stale-captured consts failed needSubject even after deriving).
     autoDeriveForIm();
+    // Boss doctrine (the contract): the envelope may not go out empty -
+    // the conversation page stamps a no-information subject from the
+    // agreed set; the display layer normalizes it back to the no-subject
+    // face. The pair only works because both ends speak the same set.
+    if (imMode() && !$("#compose-subject").value.trim()) {
+      $("#compose-subject").value = t("compose.noSubjectWord");
+    }
     const toRaw = $("#compose-to").value.trim();
     const subject = $("#compose-subject").value.trim();
     const bodyText = $("#compose-body").value;
