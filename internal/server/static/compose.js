@@ -244,7 +244,6 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // everything under #tab-compose.im).
   var threadNewest = null;
   var ccMoveBack = null; // wireImBar assigns: the Cc row's ride-home (module handle)
-  var ccIntoPanel = null; // wireImBar assigns: the Cc row moves in with IM mode
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -306,7 +305,6 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
     if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
-    if (ccIntoPanel) ccIntoPanel(); // the Cc row lives in the panel during IM
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The three header controls are hidden behind the conversation in IM mode:
@@ -372,6 +370,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     const has = composeCcChips.length > 0;
     row.classList.toggle("hidden", !has);
     btn.classList.toggle("hidden", has);
+    // IM panel: the pull-out button returns the moment the row dissolves
+    // (send clears the chips) and stays hidden while the row resides.
+    var imBtn = document.getElementById("im-cc");
+    var imSheet = document.getElementById("im-sheet");
+    if (imBtn && imSheet && imSheet.contains(row)) {
+      imBtn.classList.toggle("hidden", !row.classList.contains("hidden"));
+    }
   }
 
   // ---- recipient autocomplete (alice's task): typing filters the known
@@ -1856,15 +1861,30 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var ccHome = document.getElementById("compose-cc-row");
     var ccHomeParent = ccHome ? ccHome.parentNode : null;
     var ccHomeNext = ccHome ? ccHome.nextSibling : null;
-    ccIntoPanel = function () { // module handle: the row moves in with IM mode
-      if (ccHome && sheet && !sec.classList.contains("im-full") &&
-          !sheet.contains(ccHome)) sheet.appendChild(ccHome);
-    };
-    ccMoveBack = function () { // module handle: syncImMode calls it off-mode
+        ccMoveBack = function () { // module handle: syncImMode calls it off-mode
       if (ccHome && ccHomeParent && ccHome.parentNode !== ccHomeParent) {
         ccHomeParent.insertBefore(ccHome, ccHomeNext);
       }
     };
+    // Boss semantics (v2 correction): ＋ pops the buttons; tapping Cc pulls
+    // the row OUT to reside by the bar (发信后即消 - a send dissolves it);
+    // while the row exists its button hides. One reconciler keeps the pair
+    // honest wherever the row state changes.
+    function imSyncCcUi() {
+      var btn = document.getElementById("im-cc");
+      if (btn && ccHome && sheet && sheet.contains(ccHome)) {
+        btn.classList.toggle("hidden", !ccHome.classList.contains("hidden"));
+      }
+    }
+    document.getElementById("im-cc").addEventListener("click", function () {
+      if (ccHome) {
+        sheet.appendChild(ccHome);
+        ccHome.classList.remove("hidden");
+      }
+      imSyncCcUi();
+      var ccInput = $("#compose-cc");
+      if (ccInput) ccInput.focus();
+    });
     document.getElementById("im-refresh").addEventListener("click", function () {
       loadComposeThread();
     });

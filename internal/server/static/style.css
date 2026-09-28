@@ -3026,8 +3026,6 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
      the panel surface (boss: the opaque block was ugly). */
   #tab-compose.im #im-sheet #compose-cc-row { display: block; margin: 0; }
   #tab-compose.im #im-sheet #compose-cc-row input { background: transparent; }
-  /* 常驻：面板里有控件就不再有开关按钮（boss），空态也不自隐 */
-  #tab-compose.im #im-sheet #compose-cc-row.hidden { display: block !important; }
   /* the conversation header: label + peer + refresh (h3 stays retired) */
   #tab-compose.im #im-head {
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
