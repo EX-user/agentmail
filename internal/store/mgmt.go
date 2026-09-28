@@ -399,6 +399,11 @@ type MgmtContactLatest struct {
 	Address       string `json:"address"`
 	LatestSubject string `json:"latest_subject,omitempty"`
 	LatestAt      int64  `json:"latest_at,omitempty"`
+	// Direction of the LATEST message ("in"|"out", relative to me) - the
+	// client's accLatestHtml renders the arrow from it, same as the
+	// subs-overview payload (review note: without it every contact row
+	// reads as received, even one's own outbound latest).
+	LatestDir string `json:"latest_dir,omitempty"`
 }
 
 // MgmtContactLatests returns, per non-subordinate counterparty that ever
@@ -415,6 +420,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 	type cl struct {
 		subject string
 		at      int64
+		dir     string
 	}
 	latest := map[string]*cl{}
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -431,7 +437,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 			for _, a := range m.CC {
 				recips[strings.ToLower(a)] = true
 			}
-			touch := func(addr string) {
+			touch := func(addr, dir string) {
 				if addr == me || subSet[addr] {
 					return
 				}
@@ -443,14 +449,15 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 				if m.ReceivedAt > c.at {
 					c.at = m.ReceivedAt
 					c.subject = truncateRunes(m.Subject, 100)
+					c.dir = dir
 				}
 			}
 			if from == me {
 				for r := range recips {
-					touch(r)
+					touch(r, "out")
 				}
 			} else if recips[me] {
-				touch(from)
+				touch(from, "in")
 			}
 			return nil
 		})
@@ -460,7 +467,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 	}
 	out := make([]MgmtContactLatest, 0, len(latest))
 	for a, c := range latest {
-		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestAt: c.at})
+		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestAt: c.at, LatestDir: c.dir})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
 	return out, nil

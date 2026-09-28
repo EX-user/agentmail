@@ -414,8 +414,11 @@ func TestMgmtContactLatests(t *testing.T) {
 	if len(out) != 3 {
 		t.Fatalf("len(contacts) = %d (%v), want 3", len(out), out)
 	}
-	if c := got["ext1@t"]; c.LatestAt != base-1800 || c.LatestSubject != "ext1-replied-newer" {
-		t.Fatalf("ext1 = %+v, want newer reply", c)
+	if c := got["ext1@t"]; c.LatestAt != base-1800 || c.LatestSubject != "ext1-replied-newer" || c.LatestDir != "in" {
+		t.Fatalf("ext1 = %+v, want newer reply (in)", c)
+	}
+	if c := got["other2@t"]; c.LatestDir != "out" {
+		t.Fatalf("other2 dir = %q, want out (my outbound is the latest)", c.LatestDir)
 	}
 	if c := got["ext2@t"]; c.LatestAt != base-7200 || c.LatestSubject != "in-from-ext2" {
 		t.Fatalf("ext2 = %+v", c)
