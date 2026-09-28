@@ -316,17 +316,14 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (sheetIntoCard && !sec.classList.contains("im-full")) sheetIntoCard();
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
-  // The three header controls are hidden behind the conversation in IM mode:
-  // an empty subject becomes "Re: <latest subject>" and the anchor wires to
-  // the newest letter unless the user picked one explicitly (only EMPTY
-  // fields are derived, so the full form stays authoritative where shown).
+  // The reply anchor wires to the newest letter unless the user picked one
+  // explicitly (only EMPTY fields are derived). The SUBJECT is NOT derived
+  // any more: boss - putting "Re: <latest>" on the envelope is a weird
+  // design; the conversation page sends by the no-content-subject doctrine
+  // (empty goes out empty).
   function autoDeriveForIm() {
     var sec = document.getElementById("tab-compose");
     if (!sec || !sec.classList.contains("im")) return;
-    var subjEl = $("#compose-subject");
-    if (!(subjEl.value || "").trim() && threadNewest && threadNewest.subject) {
-      subjEl.value = "Re: " + threadNewest.subject;
-    }
     if (!composeInReplyTo && threadNewest && threadNewest.id) {
       composeInReplyTo = threadNewest.id;
       renderInReplyTo();
@@ -981,7 +978,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     const status = $("#compose-status");
 
     if (!toRaw) { status.textContent = t("compose.needTo"); return; }
-    if (!subject) { status.textContent = t("compose.needSubject"); return; }
+    // Boss: the conversation page sends by the no-content-subject doctrine
+    // - an empty subject goes out as-is. The full form keeps its gate.
+    if (!subject && !imMode()) { status.textContent = t("compose.needSubject"); return; }
     if (!bodyText) { status.textContent = t("compose.needBody"); return; }
 
     // Comma-separated list of addresses, trimmed, de-duplicated.
