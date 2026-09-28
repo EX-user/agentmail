@@ -1840,17 +1840,23 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); send.click(); }
     });
     send.addEventListener("click", function () { $("#btn-send").click(); });
-    function closeSheet() { sheet.classList.add("hidden"); }
-    plus.addEventListener("click", function () {
-      if (sheet.classList.contains("hidden")) {
+    function closeSheet() { setSheet(false); }
+    // Boss: while the panel is open the plus morphs to a minus; tapping it
+    // (or anything outside) collapses again. One switch owns the glyph.
+    function setSheet(open) {
+      sheet.classList.toggle("hidden", !open);
+      plus.textContent = open ? "\u2212" : "\uff0b";
+      if (open) {
         input.blur(); // drop the soft keyboard before the panel opens
-        sheet.classList.remove("hidden");
         // Opening the panel shrinks the list; without this the clip edge
         // slices a capsule mid-line and reads as occlusion (boss). Snap to
         // the latest so the cut falls below the newest letter, chat-style.
         var holderEl = document.getElementById("thread-holder");
         if (holderEl) holderEl.scrollTop = holderEl.scrollHeight;
-      } else closeSheet();
+      }
+    }
+    plus.addEventListener("click", function () {
+      setSheet(sheet.classList.contains("hidden"));
     });
     document.getElementById("im-attach").addEventListener("click", function () {
       closeSheet();

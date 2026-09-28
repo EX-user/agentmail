@@ -3076,8 +3076,8 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
      edge in flow (keyboard-safe, no fixed-position fighting) */
   #tab-compose.im #im-bar {
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
-    background: transparent; border: 1px solid var(--border); border-radius: 21px;
-    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    background: transparent; border: none; border-radius: 0;
+    box-shadow: none;
     padding: 7px 8px 7px 13px; margin: 8px 0 2px;
   }
   #tab-compose.im #im-bar #im-plus {
@@ -3100,9 +3100,9 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im #thread-holder { position: relative; }
   #tab-compose.im #thread-holder #im-sheet:not(.hidden) {
     position: sticky; bottom: 0; z-index: 5;
-    display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px;
-    background: transparent; border: none; border-radius: 0;
-    box-shadow: none; padding: 2px 2px; margin: 6px 0 0;
+    display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px;
+    background: transparent; border: 1px solid var(--border); border-radius: 16px;
+    padding: 6px; margin: 6px 0 0;
   }
   /* 紧凑版（boss：之前还行）：cc 行整行，两入口并排各半，不再竖排大块 */
   #tab-compose.im #thread-holder #im-sheet:not(.hidden) button {
