@@ -163,7 +163,8 @@ button.row-gear:hover { color: var(--accent); border-color: var(--accent); }
 .pc-badges { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
 /* boss PC round: the row's latest-message line mirrors the mobile list item
    (time dir . subject) - applyActivity patches it in place like on phones. */
-.pc-line3 { margin-top: 3px; font-size: 12px; color: var(--muted, #888); max-width: 560px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-line3 { font-size: 12px; color: var(--muted, #888); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.line3-row > td { padding: 0 12px 10px; border-top: none; }
 .pc-line3 .cl-none { color: var(--muted, #aaa); }
 /* ct-row: the address line is a block flex row (long marquee addresses must
    not stack the badges/latest line on top of it). */

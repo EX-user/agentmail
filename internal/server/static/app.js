@@ -1358,12 +1358,17 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // payload as the mobile list; CSS scopes it to >800px.
         '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
         '<span class="pc-addr">' + esc(e.address) + '</span>' +
-        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span>" +
-        '<div class="im3-line3 pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td>" +
+        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
         '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
         '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
         "</tr>";
+      // boss PC round: the latest message runs the FULL row width (one
+      // colspan-3 line under the entry), still patched in place by
+      // applyActivity via the data-act-acct hook.
+      pcSubRows +=
+        '<tr class="line3-row" data-act-acct="' + esc(e.address) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td></tr>";
+
       // Mobile container card (one-screen plan): badges + address share one
       // line (address marquees on overflow), signature max one line (same),
       // pill buttons bottom-right — all inside the scrollable .sub-list.
@@ -1403,11 +1408,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span>" +
-          '<div class="im3-line3 pc-line3"><span class="pc-badges">' + badge.trim() + "</span> <span class=\"cl-none\">" + esc(t("acc.latestNone")) + "</span></div></td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
+        );
+        rows.push(
+          '<tr class="line3-row"><td colspan="3"><div class="pc-line3">' + accLatestHtml(null) + "</div></td></tr>"
         );
         clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: null });
       });
