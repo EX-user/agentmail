@@ -1085,7 +1085,7 @@ nav::-webkit-scrollbar { display: none; }
     flex: 0 0 auto; align-self: center; }
   .im3-gear:hover { color: var(--accent); border-color: var(--accent); }
   .im3-overlay { position: absolute; inset: 0; display: none; align-items: center; gap: 8px;
-    padding: 0 12px 0 12px; background: var(--panel-2); z-index: 3; }
+    padding: 0 12px 0 12px; background: color-mix(in srgb, var(--panel-2) 86%, transparent); z-index: 3; }
   .im3-overlay.on { display: flex; }
   .im3-overlay button { font-size: 12px; padding: 5px 12px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }

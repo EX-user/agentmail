@@ -176,7 +176,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     $("#tab-" + name).classList.remove("hidden");
     syncPageLock(name);
     if (name === "overview") loadOverview();
-    if (name === "accounts") { loadAccounts(); activityEntered(); } // 进页即拉（5s 防抖，boss 报单修）
+    if (name === "accounts") { loadAccounts(); activityEntered(); } // 进页即拉（5s 防抖，boss 报单修）
+
     if (name === "inbox") document.dispatchEvent(new CustomEvent("inbox:entered"));
     if (name === "profile") document.dispatchEvent(new CustomEvent("profile:entered"));
     if (name === "mail") document.dispatchEvent(new CustomEvent("manage:entered"));
@@ -546,99 +547,293 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     }
   }
 
-  // ---- 0.3.2 概览重构：从属活动 B 案融合（boss 0924 认定）----
-  // 从属表从管理-概览并入账户页：心跳胶囊（活动行按 boss 0924 口径摘除：「7日/均/常联」不再显示）
-  // 融进账户表从属行与手机从属卡（不换表头、不加列）。10s 轮询宿主=
-  // 账户页可见期；进页即拉（5s 防抖——boss 报单「进页晚显 10s」修，规格
-  // alice/Devi 0924 定）；轮询就地更新只写胶囊槽位，行元素本体不动
-  // （1046 语义沿袭，滑条零扰）。图不跟活帧（boss 定）：图侧留 overview.js。
-  var HB_TTL_SEC = 60; // 3×20s 上报周期为过期线（boss 0923 定口径：前端刷 10s/心跳 20s/TTL 60s）
-  var HB_POLL_SEC = 10; // T1=前端刷新间隔（轮询 POLL_MS 与此同源）
-  var HB_GRAY = [0x9c, 0xa3, 0xaf]; // 渐变灰端 #9ca3af
-  var HB_COLORS = { working: [0x16, 0xa3, 0x4a], waiting: [0x25, 0x63, 0xeb], compact: [0xb4, 0x53, 0x09], error: [0xdc, 0x26, 0x26], arming: [0x25, 0x63, 0xeb] };
-  (function hbInjectCss() {
-    var css = ".hb-pill{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;" +
-      "font-size:11px;line-height:16px;font-weight:600;color:#fff;vertical-align:1px;white-space:nowrap}" +
-      ".hb-working{background:#16a34a}.hb-waiting{background:#2563eb}.hb-compact{background:#b45309}" +
-      ".hb-error{background:#dc2626}.hb-arming{background:#2563eb;animation:hbBreath 1.6s ease-in-out infinite}" +
-      "@keyframes hbBreath{0%,100%{opacity:1}50%{opacity:.55}}" +
-      ".hb-pill{transition:background-color .9s linear}";
-    var st = document.createElement("style");
-    st.textContent = css;
-    document.head.appendChild(st);
-  })();
-  var HB_STATES = { working: 1, waiting: 1, compact: 1, error: 1, arming: 1 };
-  // boss 0923 公式：f=max(t-t1-T1,0)/T3 ∈[0,1]，活跃色→灰实时渐变；f>=1 即隐（TTL）。
-  function hbFreshRatio(at) {
-    var f = (Date.now() / 1000 - at - HB_POLL_SEC) / HB_TTL_SEC;
-    return f < 0 ? 0 : (f > 1 ? 1 : f);
-  }
-  function hbFadeColor(key, f) {
-    var c = HB_COLORS[key];
-    if (!c || f <= 0) return ""; // f=0 交给状态类本色
-    var r = Math.round(c[0] + (HB_GRAY[0] - c[0]) * f);
-    var g = Math.round(c[1] + (HB_GRAY[1] - c[1]) * f);
-    var b2 = Math.round(c[2] + (HB_GRAY[2] - c[2]) * f);
-    return "rgb(" + r + "," + g + "," + b2 + ")";
-  }
-  function hbPillHtml(s) {
-    var hst = s && s.worker_state;
-    if (!hst) return "";
-    var at = +s.worker_seen_at || 0;
-    if (at > 1e12) at = at / 1000; // 毫秒时间戳兜底
-    if (!at || Date.now() / 1000 - at >= HB_POLL_SEC + HB_TTL_SEC) return ""; // TTL 过期即隐（T1+T3）
-    var key = hst.toLowerCase();
-    if (!HB_STATES[key]) return ""; // 未知状态=不显（前瞻兼容 worker 新态）
-    var f = hbFreshRatio(at);
-    var col = hbFadeColor(key, f);
-    var style = col ? ' style="background-color:' + col + '"' : "";
-    return '<span class="hb-pill hb-' + key + '" data-hb-t1="' + at + '" data-hb-key="' + key + '"' + style + ' title="' + esc(t("hb." + key + "Tip")) + '">' + esc(t("hb." + key)) + "</span>";
-  }
-  // 实时走查（1s，仅改样式/摘除，不动结构）。0.3.2 修（boss 报单双根因之二）：
-  // 走查加宿主视图域门——账户页不可见时不摘不涂，离页不再偷摘过期胶囊；
-  // 回页由进页即拉按服务器数据整槽重渲，状态以服务器为准。
-  (function hbFadeLoop() {
-    setInterval(function () {
-      if (document.hidden) return;
-      var panel = document.getElementById("tab-accounts");
-      if (!panel || panel.offsetParent === null) return;
-      var pills = document.querySelectorAll(".hb-pill[data-hb-t1]");
-      for (var i = 0; i < pills.length; i++) {
-        var el = pills[i];
-        var at = +el.getAttribute("data-hb-t1") || 0;
-        var f = hbFreshRatio(at);
-        if (f >= 1) { el.remove(); continue; }
-        var col = hbFadeColor(el.getAttribute("data-hb-key"), f);
-        if (col) el.style.backgroundColor = col;
-        else el.style.backgroundColor = "";
-      }
-    }, 1000);
-  })();
-  // 活动数据＋就地应用：从属行/手机从属卡内的两个槽位（胶囊槽/活动行槽）
-  // 整槽重写，行元素与操作按钮不动——滚动/悬停零感（1046 语义）。
-  var actData = null, actLastPull = 0, actPulling = false;
-  function applyActivity() {
-    var byAddr = {};
-    ((actData && actData.subs) || []).forEach(function (s) {
-      byAddr[String(s.address).toLowerCase()] = s;
-    });
-    avSyncAvatarsFromActivity((actData && actData.subs) || []); // A-case: avatar spot-hydration on the same poll
-    var unreadBy = (actData && actData.unreadBySender) || {};
-    // Contact rows (bug fix 09-29): correspondence-driven latest for
-    // non-subordinate rows; a declared sub entry wins the slot.
-    ((actData && actData.contacts) || []).forEach(function (c) {
-      var k = String(c.address).toLowerCase();
-      if (!byAddr[k]) byAddr[k] = c;
-    });
-    $$("[data-act-acct]").forEach(function (el) {
-      var s = byAddr[String(el.getAttribute("data-act-acct")).toLowerCase()];
-      var pill = el.querySelector('[data-act-slot="pill"]');
-      // 1046 纪律（boss 0924 口径：刷新逻辑与原管理-概览从属列表对应）：
-      // 先比对、内容无变化不写 DOM——轮询对滚动零扰。
-      if (pill) {
-        var html = s ? hbPillHtml(s) : "";
-        if (pill.innerHTML !== html) pill.innerHTML = html;
-      }
+  // ---- 0.3.2 概览重构：从属活动 B 案融合（boss 0924 认定）----
+
+
+  // 从属表从管理-概览并入账户页：心跳胶囊（活动行按 boss 0924 口径摘除：「7日/均/常联」不再显示）
+
+
+
+  // 融进账户表从属行与手机从属卡（不换表头、不加列）。10s 轮询宿主=
+
+
+  // 账户页可见期；进页即拉（5s 防抖——boss 报单「进页晚显 10s」修，规格
+
+
+  // alice/Devi 0924 定）；轮询就地更新只写胶囊槽位，行元素本体不动
+
+
+
+  // （1046 语义沿袭，滑条零扰）。图不跟活帧（boss 定）：图侧留 overview.js。
+
+
+  var HB_TTL_SEC = 60; // 3×20s 上报周期为过期线（boss 0923 定口径：前端刷 10s/心跳 20s/TTL 60s）
+
+
+  var HB_POLL_SEC = 10; // T1=前端刷新间隔（轮询 POLL_MS 与此同源）
+
+
+  var HB_GRAY = [0x9c, 0xa3, 0xaf]; // 渐变灰端 #9ca3af
+
+
+  var HB_COLORS = { working: [0x16, 0xa3, 0x4a], waiting: [0x25, 0x63, 0xeb], compact: [0xb4, 0x53, 0x09], error: [0xdc, 0x26, 0x26], arming: [0x25, 0x63, 0xeb] };
+
+
+  (function hbInjectCss() {
+
+
+    var css = ".hb-pill{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;" +
+
+
+      "font-size:11px;line-height:16px;font-weight:600;color:#fff;vertical-align:1px;white-space:nowrap}" +
+
+
+      ".hb-working{background:#16a34a}.hb-waiting{background:#2563eb}.hb-compact{background:#b45309}" +
+
+
+      ".hb-error{background:#dc2626}.hb-arming{background:#2563eb;animation:hbBreath 1.6s ease-in-out infinite}" +
+
+
+      "@keyframes hbBreath{0%,100%{opacity:1}50%{opacity:.55}}" +
+
+
+      ".hb-pill{transition:background-color .9s linear}";
+
+
+    var st = document.createElement("style");
+
+
+    st.textContent = css;
+
+
+    document.head.appendChild(st);
+
+
+  })();
+
+
+  var HB_STATES = { working: 1, waiting: 1, compact: 1, error: 1, arming: 1 };
+
+
+  // boss 0923 公式：f=max(t-t1-T1,0)/T3 ∈[0,1]，活跃色→灰实时渐变；f>=1 即隐（TTL）。
+
+
+  function hbFreshRatio(at) {
+
+
+    var f = (Date.now() / 1000 - at - HB_POLL_SEC) / HB_TTL_SEC;
+
+
+    return f < 0 ? 0 : (f > 1 ? 1 : f);
+
+
+  }
+
+
+  function hbFadeColor(key, f) {
+
+
+    var c = HB_COLORS[key];
+
+
+    if (!c || f <= 0) return ""; // f=0 交给状态类本色
+
+
+    var r = Math.round(c[0] + (HB_GRAY[0] - c[0]) * f);
+
+
+    var g = Math.round(c[1] + (HB_GRAY[1] - c[1]) * f);
+
+
+    var b2 = Math.round(c[2] + (HB_GRAY[2] - c[2]) * f);
+
+
+    return "rgb(" + r + "," + g + "," + b2 + ")";
+
+
+  }
+
+
+  function hbPillHtml(s) {
+
+
+    var hst = s && s.worker_state;
+
+
+    if (!hst) return "";
+
+
+    var at = +s.worker_seen_at || 0;
+
+
+    if (at > 1e12) at = at / 1000; // 毫秒时间戳兜底
+
+
+    if (!at || Date.now() / 1000 - at >= HB_POLL_SEC + HB_TTL_SEC) return ""; // TTL 过期即隐（T1+T3）
+
+
+    var key = hst.toLowerCase();
+
+
+    if (!HB_STATES[key]) return ""; // 未知状态=不显（前瞻兼容 worker 新态）
+
+
+    var f = hbFreshRatio(at);
+
+
+    var col = hbFadeColor(key, f);
+
+
+    var style = col ? ' style="background-color:' + col + '"' : "";
+
+
+    return '<span class="hb-pill hb-' + key + '" data-hb-t1="' + at + '" data-hb-key="' + key + '"' + style + ' title="' + esc(t("hb." + key + "Tip")) + '">' + esc(t("hb." + key)) + "</span>";
+
+
+  }
+
+
+  // 实时走查（1s，仅改样式/摘除，不动结构）。0.3.2 修（boss 报单双根因之二）：
+
+
+  // 走查加宿主视图域门——账户页不可见时不摘不涂，离页不再偷摘过期胶囊；
+
+
+  // 回页由进页即拉按服务器数据整槽重渲，状态以服务器为准。
+
+
+  (function hbFadeLoop() {
+
+
+    setInterval(function () {
+
+
+      if (document.hidden) return;
+
+
+      var panel = document.getElementById("tab-accounts");
+
+
+      if (!panel || panel.offsetParent === null) return;
+
+
+      var pills = document.querySelectorAll(".hb-pill[data-hb-t1]");
+
+
+      for (var i = 0; i < pills.length; i++) {
+
+
+        var el = pills[i];
+
+
+        var at = +el.getAttribute("data-hb-t1") || 0;
+
+
+        var f = hbFreshRatio(at);
+
+
+        if (f >= 1) { el.remove(); continue; }
+
+
+        var col = hbFadeColor(el.getAttribute("data-hb-key"), f);
+
+
+        if (col) el.style.backgroundColor = col;
+
+
+        else el.style.backgroundColor = "";
+
+
+      }
+
+
+    }, 1000);
+
+
+  })();
+
+
+  // 活动数据＋就地应用：从属行/手机从属卡内的两个槽位（胶囊槽/活动行槽）
+
+
+  // 整槽重写，行元素与操作按钮不动——滚动/悬停零感（1046 语义）。
+
+
+  var actData = null, actLastPull = 0, actPulling = false;
+
+
+  function applyActivity() {
+
+
+    var byAddr = {};
+
+
+    ((actData && actData.subs) || []).forEach(function (s) {
+
+
+      byAddr[String(s.address).toLowerCase()] = s;
+
+
+    });
+
+
+    avSyncAvatarsFromActivity((actData && actData.subs) || []); // A-case: avatar spot-hydration on the same poll
+
+
+    var unreadBy = (actData && actData.unreadBySender) || {};
+
+
+    // Contact rows (bug fix 09-29): correspondence-driven latest for
+
+
+    // non-subordinate rows; a declared sub entry wins the slot.
+
+
+    ((actData && actData.contacts) || []).forEach(function (c) {
+
+
+      var k = String(c.address).toLowerCase();
+
+
+      if (!byAddr[k]) byAddr[k] = c;
+
+
+    });
+
+
+    $$("[data-act-acct]").forEach(function (el) {
+
+
+      var s = byAddr[String(el.getAttribute("data-act-acct")).toLowerCase()];
+
+
+      var pill = el.querySelector('[data-act-slot="pill"]');
+
+
+      // 1046 纪律（boss 0924 口径：刷新逻辑与原管理-概览从属列表对应）：
+
+
+
+      // 先比对、内容无变化不写 DOM——轮询对滚动零扰。
+
+
+
+      if (pill) {
+
+
+
+        var html = s ? hbPillHtml(s) : "";
+
+
+
+        if (pill.innerHTML !== html) pill.innerHTML = html;
+
+
+
+      }
+
+
+
 
       // 0.3.3-C: the latest-message line rides the same in-place update --
       // the poll delivers latest_subject/latest_at after first render.
@@ -654,7 +849,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         var lh = accLatestHtml(s);
         if (line3.innerHTML !== lh) line3.innerHTML = lh;
       }
-    });
+    });
+
+
     // boss 09-29: if interaction order changed, re-render the list - line3
     // patches alone cannot reorder. The comparison covers the UNIFIED page
     // order (subordinates AND contacts, latest_at desc); activity-bearing
@@ -687,65 +884,183 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         applyActivity._reloading = true;
         setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
       }
-    }
-    var sum = $("#acc-act-sum");
-    if (sum) {
-      var subs = (actData && actData.subs) || [];
-      if (subs.length) {
-        var live = 0, in7 = 0, out7 = 0;
-        var now = Date.now() / 1000;
-        var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
-        var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
-        subs.forEach(function (s) {
-          var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
-          var read = s.last_read_at || 0;
-          if ((traffic && now - traffic <= strongH * 3600) || (read && now - read <= weakH * 3600)) live++;
-          in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
-        });
-        sum.textContent = t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 });
-        sum.hidden = false;
-      } else sum.hidden = true;
-    }
-  }
-  function accountsPanelVisible() {
-    var p = document.getElementById("tab-accounts");
-    return !!p && p.offsetParent !== null;
-  }
-  async function pullActivity() {
-    if (actPulling || document.hidden || !accountsPanelVisible()) return;
-    actPulling = true;
-    try {
-      var d = await api("/api/mgmt/subs-overview?days=7", { keepSession: true });
-      // boss bug 09-29: contact rows ride the same poll - correspondence-driven
-      // latest data for non-subordinate counterparties.
-      await api("/api/mgmt/contacts-latest", { keepSession: true }).then(function (dc) { d.contacts = (dc && dc.contacts) || []; }, function () { d.contacts = []; });
-      await api("/api/mgmt/unread-by-sender", { keepSession: true }).then(function (du) { d.unreadBySender = (du && du.by_sender) || {}; }, function () { d.unreadBySender = {}; });
-      actData = d;
-      actLastPull = Date.now();
-      applyActivity();
-    } catch (_) { /* 失败静默（权限/网络）——活动槽保持空态 */ }
-    actPulling = false;
-  }
-  function activityEntered() {
-    // 进页即拉（5s 防抖）：进账户页 ≤一个网络往返内胶囊/活动行可见——
-    // boss 报单「进页晚显约 10s」修复的一半；另一半是走查视图域门。
-    if (Date.now() - actLastPull > 5000) pullActivity();
-  }
-  (function activityPollLoop() {
-    var POLL_MS = HB_POLL_SEC * 1000; // T1 同源（boss 0923 定 10s）；测试/调优可覆盖（下限 5s）
-    try {
-      var o = parseInt(localStorage.getItem("ovw_subs_poll_ms") || "0", 10);
-      if (o >= 5000) POLL_MS = o;
-    } catch (_) {}
-    setInterval(function () { if (!document.hidden && accountsPanelVisible()) pullActivity(); }, POLL_MS);
-    document.addEventListener("visibilitychange", function () {
-      if (!document.hidden && accountsPanelVisible() && Date.now() - actLastPull > 10000) pullActivity(); // 回窗即拉（防抖 10s）
-    });
-  })();
-  document.addEventListener("compose:sent", function () {
-    actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
-  });
-
+    }
+
+
+    var sum = $("#acc-act-sum");
+
+
+    if (sum) {
+
+
+      var subs = (actData && actData.subs) || [];
+
+
+      if (subs.length) {
+
+
+        var live = 0, in7 = 0, out7 = 0;
+
+
+        var now = Date.now() / 1000;
+
+
+        var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
+
+
+        var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
+
+
+        subs.forEach(function (s) {
+
+
+          var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
+
+
+          var read = s.last_read_at || 0;
+
+
+          if ((traffic && now - traffic <= strongH * 3600) || (read && now - read <= weakH * 3600)) live++;
+
+
+          in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
+
+
+        });
+
+
+        sum.textContent = t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 });
+
+
+        sum.hidden = false;
+
+
+      } else sum.hidden = true;
+
+
+    }
+
+
+  }
+
+
+  function accountsPanelVisible() {
+
+
+    var p = document.getElementById("tab-accounts");
+
+
+    return !!p && p.offsetParent !== null;
+
+
+  }
+
+
+  async function pullActivity() {
+
+
+    if (actPulling || document.hidden || !accountsPanelVisible()) return;
+
+
+    actPulling = true;
+
+
+    try {
+
+
+      var d = await api("/api/mgmt/subs-overview?days=7", { keepSession: true });
+
+
+      // boss bug 09-29: contact rows ride the same poll - correspondence-driven
+
+
+      // latest data for non-subordinate counterparties.
+
+
+      await api("/api/mgmt/contacts-latest", { keepSession: true }).then(function (dc) { d.contacts = (dc && dc.contacts) || []; }, function () { d.contacts = []; });
+
+
+      await api("/api/mgmt/unread-by-sender", { keepSession: true }).then(function (du) { d.unreadBySender = (du && du.by_sender) || {}; }, function () { d.unreadBySender = {}; });
+
+
+      actData = d;
+
+
+      actLastPull = Date.now();
+
+
+      applyActivity();
+
+
+    } catch (_) { /* 失败静默（权限/网络）——活动槽保持空态 */ }
+
+
+    actPulling = false;
+
+
+  }
+
+
+  function activityEntered() {
+
+
+    // 进页即拉（5s 防抖）：进账户页 ≤一个网络往返内胶囊/活动行可见——
+
+
+    // boss 报单「进页晚显约 10s」修复的一半；另一半是走查视图域门。
+
+
+    if (Date.now() - actLastPull > 5000) pullActivity();
+
+
+  }
+
+
+  (function activityPollLoop() {
+
+
+    var POLL_MS = HB_POLL_SEC * 1000; // T1 同源（boss 0923 定 10s）；测试/调优可覆盖（下限 5s）
+
+
+    try {
+
+
+      var o = parseInt(localStorage.getItem("ovw_subs_poll_ms") || "0", 10);
+
+
+      if (o >= 5000) POLL_MS = o;
+
+
+    } catch (_) {}
+
+
+    setInterval(function () { if (!document.hidden && accountsPanelVisible()) pullActivity(); }, POLL_MS);
+
+
+    document.addEventListener("visibilitychange", function () {
+
+
+      if (!document.hidden && accountsPanelVisible() && Date.now() - actLastPull > 10000) pullActivity(); // 回窗即拉（防抖 10s）
+
+
+    });
+
+
+  })();
+
+
+  document.addEventListener("compose:sent", function () {
+
+
+    actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
+
+
+  });
+
+
+
+
+
   function renderPrefsOwnCard(ownSig, ownVisible) {
     // 0.3.2 boss 认定四：自身卡迁偏好页，双端同款手机卡样式（ct-card 语法）；
     // 「My address」显示地址卡随迁撤销（boss：不留「我的地址 XXX」）。
@@ -1008,6 +1323,330 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     ov.querySelector("#av-cancel").addEventListener("click", close);
     ov.addEventListener("click", function (ev) { if (ev.target === ov) close(); });
     showCurrent();
+  }
+
+  // ---- 0.3.3-C: accounts-page listification (mobile only) ----
+  // Row grammar per Iris spec v1.0: avatar | label body (3 lines) | gear.
+  // All rows equal height; single-line iron rule (badges/pill nowrap, the
+  // address marquees only on overflow, sig/latest ellipsize); gear opens an
+  // in-place overlay card (absolutely positioned over the row — page layout
+  // pixel-stable); tapping the row composes (replaces per-row compose btns).
+  function accRelTime(ts) {
+    if (!ts) return "";
+    var d = new Date(ts * 1000), now = new Date();
+    var hm = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var diff = Math.round((today - day) / 86400000);
+    if (diff <= 0) return hm;
+    if (diff === 1) return t("acc.yesterday");
+    return t("acc.daysAgo", { n: diff });
+  }
+  // boss mobile-list round (0.3.4): no "Latest:" prefix; a no-information
+  // subject (IM-style sends fill it) shows the body snippet instead - the
+  // set is the union of both locales' vocabularies. latest_body rides the
+  // same payload once the Go side lands; until then the subject fallback
+  // keeps the line honest.
+  var noinfoCache = null;
+  function noinfoSet() {
+    if (noinfoCache) return noinfoCache;
+    var out = {};
+    ["zh", "en"].forEach(function (l) {
+      var d = window.I18N && window.I18N.dict && window.I18N.dict(l);
+      var raw = (d && d["acc.noinfoSubjects"]) || "";
+      raw.split(",").forEach(function (w) {
+        w = w.trim().toLowerCase();
+        if (w) out[w] = 1;
+      });
+    });
+    noinfoCache = out;
+    return out;
+  }
+  function accLatestHtml(s) {
+    if (!s || !(+s.latest_at)) return '<div class="im3-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div>";
+    var dir = s.latest_dir === "out" ? t("acc.latestOut") : t("acc.latestIn");
+    var shown = s.latest_subject || "";
+    if (shown && !shown.trim()) shown = s.latest_body || shown;
+    if (shown && noinfoSet()[shown.trim().toLowerCase()]) shown = s.latest_body || shown;
+    var subj = shown ? "\u300c" + shown + "\u300d" : "";
+    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
+  }
+  // ---- default avatar generator v2 (boss 0.3.4: monochrome minimal
+  // robot + random configurator). Deterministic: address (lowercase) ->
+  // SHA-256 -> seed bytes S[0..3], same address renders the same avatar
+  // everywhere. Palette/accessory/eye pools are FIXED (visibility-tested,
+  // boss-marked): accessories pick from the agreed palette inside their
+  // tier (large items all 10 colors, small items the 5-color subset),
+  // eyes come from a weighted pool (plain pair upweighted + paired sets
+  // wink/love/shy/happy + independent picks, two eyes may differ). ----
+  var __avHashCache = {};
+  function avSeed(addr, cb) {
+    var a = String(addr).toLowerCase();
+    if (__avHashCache[a]) { cb(__avHashCache[a]); return; }
+    var subtle = (window.crypto && window.crypto.subtle) || null;
+    if (!subtle) { __avHashCache[a] = new Uint8Array([a.length, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]); cb(__avHashCache[a]); return; }
+    subtle.digest("SHA-256", new TextEncoder().encode(a)).then(function (buf) {
+      __avHashCache[a] = new Uint8Array(buf.slice(0, 4));
+      cb(__avHashCache[a]);
+    }).catch(function () {
+      __avHashCache[a] = new Uint8Array([0xff, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]);
+      cb(__avHashCache[a]);
+    });
+  }
+  var AV_BG = "#cfcfcf", AV_INK_ON_WHITE = "#9a9a9a";
+  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#c6b6e0", "#ecb8a8", "#a8d0cc", "#d8b8b8", "#c2d6a8", "#d8c2e0"];
+  var AV_SMALL_ACCENTS = ["#e6b8c2", "#a9c6de", "#c6b6e0", "#ecb8a8", "#d8b8b8"];
+  var AV_EYES = ["?", "#", "\u00d7", "bar"];
+  var AV_MOUTHS = ["line", "wave", "dot", "v"];
+  function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
+  var AV_ACCS = [
+    ["flower", 1], ["headphone", 0], ["cat", 0], ["tophat", 1], ["bunny", 1],
+    ["chef", 1], ["heartclip", 1], ["sprout", 1], ["cherry", 1], ["bell", 1],
+    ["bowtie", 1], ["strawhat", 0], ["windkey", 0], ["propeller", 0]
+  ];
+  function avRobotSvg(addr, S) {
+    var pick = function (n, mod) { return S[n % 4] % mod; };
+    var white = "#ffffff";
+    var grey = AV_INK_ON_WHITE;
+    var accDef = AV_ACCS[pick(0, AV_ACCS.length)];
+    var accent = accDef[1] ? AV_SMALL_ACCENTS[pick(1, AV_SMALL_ACCENTS.length)] : AV_ACCENTS[pick(1, AV_ACCENTS.length)];
+    var eyeL = AV_EYES[pick(1, AV_EYES.length)];
+    var eyeR = AV_EYES[pick(2, AV_EYES.length)];
+    var mouth = AV_MOUTHS[pick(3, AV_MOUTHS.length)];
+    var acc = accDef[0];
+    function barEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 3) + '" y="28" width="6" height="16" rx="3" fill="' + grey + '"/></g>'; }
+    function gtEye(x, flip) {
+      var d = flip ? ("M" + (x + 6) + " 29 L" + (x - 6) + " 36 L" + (x + 6) + " 43")
+                   : ("M" + (x - 6) + " 29 L" + (x + 6) + " 36 L" + (x - 6) + " 43");
+      return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="' + d + '" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></g>';
+    }
+    function heartEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + x + ' 43 C' + (x - 9) + ' 36 ' + (x - 6) + ' 26 ' + x + ' 31 C' + (x + 6) + ' 26 ' + (x + 9) + ' 36 ' + x + ' 43 Z" fill="' + grey + '"/></g>'; }
+    function shyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 28 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function happyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 43 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function qEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 5) + ' 32 C' + (x - 5) + ' 25 ' + (x + 5) + ' 25 ' + (x + 5) + ' 31 C' + (x + 5) + ' 35 ' + x + ' 35 ' + x + ' 39" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/><circle cx="' + x + '" cy="45" r="2.6" fill="' + grey + '"/></g>'; }
+    function hashEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 6.5) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x + 2.9) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="32.5" width="15" height="3.4" rx="1.7" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="38.6" width="15" height="3.4" rx="1.7" fill="' + grey + '"/></g>'; }
+    function xEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 29 L' + (x + 6) + ' 43 M' + (x + 6) + ' 29 L' + (x - 6) + ' 43" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    var INDEP = [qEye, hashEye, xEye, barEye];
+    var roll = pick(1, 100);
+    var eyesEl = "";
+    if (roll < 25) eyesEl = barEye(36) + barEye(60);
+    else if (roll < 35) eyesEl = gtEye(36, false) + barEye(60);
+    else if (roll < 45) eyesEl = barEye(36) + gtEye(60, true);
+    else if (roll < 55) eyesEl = heartEye(36) + heartEye(60);
+    else if (roll < 65) eyesEl = shyEye(36) + shyEye(60);
+    else if (roll < 75) eyesEl = happyEye(36) + happyEye(60);
+    else eyesEl = INDEP[pick(2, INDEP.length)](36) + INDEP[pick(3, INDEP.length)](60);
+    var mouthEl = "";
+    if (mouth === "line") mouthEl = '<rect x="40" y="47" width="16" height="3.5" rx="1.75" fill="' + grey + '"/>';
+    else if (mouth === "wave") mouthEl = '<path d="M39 48 q4.5 -4.5 9 0 q4.5 4.5 9 0" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round"/>';
+    else if (mouth === "dot") mouthEl = '<circle cx="48" cy="48" r="3" fill="' + grey + '"/>';
+    else mouthEl = '<path d="M42.5 46 l5.5 5.5 l5.5 -5.5" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>';
+    var A = accent, accEl = "";
+    if (acc === "flower") accEl = '<g fill="' + A + '"><circle cx="61" cy="8" r="3.4"/><circle cx="56.5" cy="11" r="3.4"/><circle cx="65.5" cy="11" r="3.4"/><circle cx="58.5" cy="14.5" r="3.4"/><circle cx="63.5" cy="14.5" r="3.4"/></g><circle cx="61" cy="11.5" r="2.4" fill="' + AV_BG + '"/>';
+    else if (acc === "headphone") accEl = '<path d="M30 22 C30 11 66 11 66 22" fill="none" stroke="' + A + '" stroke-width="4" stroke-linecap="round"/><rect x="25.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/><rect x="62.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/>';
+    else if (acc === "cat") accEl = '<path d="M28 22 L31 4 L44 15 Z" fill="' + white + '"/><path d="M68 22 L65 4 L52 15 Z" fill="' + white + '"/>';
+    else if (acc === "tophat") accEl = '<rect x="40" y="1" width="16" height="11" fill="' + A + '"/><rect x="36.5" y="10.5" width="23" height="3.6" rx="1.8" fill="' + A + '"/>';
+    else if (acc === "bunny") accEl = '<ellipse cx="42" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(-12 42 15)"/><ellipse cx="54" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(12 54 15)"/>';
+    else if (acc === "chef") accEl = '<path d="M34 20 C28 20 28 10 35 11 C36 5 44 4 46 8 C48 3 58 4 58 10 C66 9 66 20 60 20 Z" fill="' + A + '"/>';
+    else if (acc === "heartclip") accEl = '<path d="M61 16 C54 11 56 4 61 8 C66 4 68 11 61 16 Z" fill="' + A + '"/>';
+    else if (acc === "sprout") accEl = '<path d="M48 22 C48 14 48 12 48 10" stroke="' + A + '" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M48 12 C42 12 40 6 47 6 C49 10 48 12 48 12 Z" fill="' + A + '"/><path d="M48 14 C54 14 56 9 50 8 C47 11 48 14 48 14 Z" fill="' + A + '"/>';
+    else if (acc === "cherry") accEl = '<path d="M42 10 C46 14 48 16 50 20 M58 8 C54 13 52 16 50 20" stroke="' + A + '" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="41" cy="13" r="4" fill="' + A + '"/><circle cx="59" cy="11" r="4" fill="' + A + '"/>';
+    else if (acc === "bell") accEl = '<path d="M41 18 C41 8 55 8 55 18 Z" fill="' + A + '"/><circle cx="48" cy="20" r="2.5" fill="' + A + '"/>';
+    else if (acc === "bowtie") accEl = '<path d="M48 22 L36 15 L36 29 Z" fill="' + A + '"/><path d="M48 22 L60 15 L60 29 Z" fill="' + A + '"/><circle cx="48" cy="22" r="3.5" fill="#3a3a3a"/>';
+    else if (acc === "strawhat") accEl = '<ellipse cx="48" cy="12" rx="22" ry="6" fill="' + A + '"/><path d="M38 12 C38 2 58 2 58 12 Z" fill="' + A + '"/>';
+    else if (acc === "windkey") accEl = '<circle cx="48" cy="10" r="7" fill="none" stroke="' + A + '" stroke-width="3.5"/><line x1="48" y1="10" x2="48" y2="4" stroke="' + A + '" stroke-width="3" stroke-linecap="round"/><line x1="48" y1="17" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else if (acc === "propeller") accEl = '<ellipse cx="38" cy="8" rx="12" ry="4" fill="' + A + '"/><ellipse cx="58" cy="8" rx="12" ry="4" fill="' + A + '"/><circle cx="48" cy="9" r="3.5" fill="' + A + '"/><line x1="48" y1="12" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else accEl = '<line x1="48" y1="26" x2="48" y2="14" stroke="' + grey + '" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="11" r="5.5" fill="' + A + '"/>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
+      '<rect width="96" height="96" fill="' + AV_BG + '"/>' +
+      accEl +
+      '<rect x="9" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="78" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="17" y="13" width="62" height="46" rx="14" fill="' + white + '"/>' +
+      '<rect x="12" y="52" width="72" height="60" rx="16" fill="' + white + '"/>' +
+      '<circle cx="48" cy="76" r="5" fill="' + AV_BG + '"/>' +
+      eyesEl + mouthEl +
+      "</svg>";
+  }
+  function avSvgHtml(addr, S) {
+    var svg = avRobotSvg(addr, S);
+    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="robot">';
+  }
+  // 404 fallback (A-line task 4): avatar_hash present but the real avatar
+  // is gone (file deleted server-side) - the broken <img> swaps to the
+  // deterministic generator inline, so no white block ever shows.
+  window.__avFallback = function (img) {
+    var box = img && img.parentNode;
+    var addr = box && box.getAttribute("data-av");
+    if (!box || !addr) return;
+    img.remove();
+    box.setAttribute("data-avpend", "1");
+    box.textContent = (String(addr)[0] || "?").toUpperCase();
+    avHydrate(box.parentElement || box); // $$ does not match the root itself - scan from the parent
+  };
+
+  function accAvatarHtml(addr, isSub) {
+    // A-line hook, 0021 rework (bug fix: uploaded avatars invisible to
+    // other accounts): the old branch rendered a bare <img
+    // src=/api/avatar/...> - under the auth wall an <img> can never carry
+    // credentials, so every row except the own card 401'd into the
+    // generator forever. Rows now ALWAYS render a placeholder that
+    // avRemoteHydrate fills via the shared avatarObjectURL registry
+    // (authenticated fetch -> objectURL); hash present = ?v= bust,
+    // absent = plain endpoint whose 404 falls back to the generator.
+    var h = (window.__avatarHashes || {})[String(addr).toLowerCase()] || '';
+    // The unclipped wrapper hosts the unread dot: .im3-av itself is
+    // overflow-hidden (rounded mask), and a corner badge must NOT live
+    // under that mask (boss: the dot showed a bite out of it).
+    return '<span class="im3-av-wrap"><div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div></span>';
+  }
+  // avRemoteHydrate (0021): fill remote placeholders via the shared
+  // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
+  // isConnected guards the re-render race; a failed fetch (404 = the
+    // account has no avatar) hands the box to the generator path.
+  function avRemoteFillOne(el) {
+    var addr = el.getAttribute("data-av");
+    var hash = el.getAttribute("data-avhash") || "";
+    avatarObjectURL(addr, hash, false).then(function (url) {
+      if (!el.isConnected) return;
+      el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
+    }).catch(function () {
+      if (!el.isConnected) return;
+      el.setAttribute("data-avpend", "1");
+      avHydrate(el.parentElement || el);
+    });
+  }
+  function avRemoteHydrate(root) {
+    $$("[data-avremote]", root).forEach(avRemoteFillOne);
+  }
+  // A-case (boss-approved): the activity poll payload already carries each
+  // account's current avatar_hash, so sync it here - an uploaded avatar
+  // shows within one poll cycle with no restart or refresh. A changed hash
+  // costs one registry update plus exactly one targeted box re-hydration;
+  // unchanged rows cost zero requests and zero DOM writes.
+  function avSyncAvatarsFromActivity(subs) {
+    var reg = window.__avatarHashes = window.__avatarHashes || {};
+    (subs || []).forEach(function (s) {
+      var addr = String(s.address || "").toLowerCase();
+      if (!addr) return;
+      var nh = s.avatar_hash || "";
+      if ((reg[addr] || "") === nh) return;
+      reg[addr] = nh;
+      var box = null;
+      var nodes = document.querySelectorAll('#tab-accounts [data-avremote]');
+      for (var i = 0; i < nodes.length; i++) {
+        if (String(nodes[i].getAttribute("data-av")).toLowerCase() === addr) { box = nodes[i]; break; }
+      }
+      if (!box || !box.isConnected) return; // row not on the page - registry is enough
+      box.setAttribute("data-avhash", nh);
+      box.classList.remove("cl-av-img");
+      box.style.background = "";
+      box.removeAttribute("data-avpend");
+      box.textContent = (String(box.getAttribute("data-av"))[0] || "?").toUpperCase();
+      avRemoteFillOne(box);
+    });
+  }
+  // Hydrate pending generator avatars (async seed -> svg swap-in place).
+  function avHydrate(root) {
+    $$("[data-avpend]", root).forEach(function (el) {
+      avSeed(el.getAttribute("data-av"), function (S) {
+        if (S[0] === 0xff) { // hash failure fallback: solid + initial (spec)
+          var hue = (S[1] * 360) / 256;
+          el.style.background = avHsl(hue, 60, 60);
+          el.classList.add("cl-av-img");
+          el.removeAttribute("data-avpend");
+          return;
+        }
+        el.innerHTML = avSvgHtml(el.getAttribute("data-av"), S);
+        el.removeAttribute("data-avpend");
+      });
+    });
+  }
+
+  function accOverlayHtml(addr, isSub) {
+    var acts = "";
+    if (isSub) acts += '<button class="warn" data-remove-sub="' + esc(addr) + '">\u2715 ' + t("subs.removeBtn") + "</button>";
+    acts += '<button data-limits="' + esc(addr) + '">' + t("limits.open") + "</button>";
+    return '<div class="im3-overlay" data-ovl="' + esc(addr) + '">' +
+      acts +
+      '<button class="cl-close" data-ovl-back="' + esc(addr) + '">\u2715 ' + t("acc.back") + "</button></div>";
+  }
+  function accRowHtml(o) {
+    var av = accAvatarHtml(o.addr, o.isSub);
+    var latest = accLatestHtml(o.sub);
+    var sigLine = o.sig ? esc(o.sig) : "";
+    return '<div class="im3-row' + (o.isSub ? " im3-sub" : " im3-ext") + '" data-act-acct="' + esc(o.addr) + '" data-claddr="' + esc(o.addr) + '">' +
+      av +
+      '<div class="im3-main">' +
+        '<div class="im3-l1">' + o.badge +
+        '<span class="im3-addr"><span class="im3-addr-in">' + esc(o.addr) + "</span></span>" +
+        '<span class="act-pill-slot" data-act-slot="pill"></span></div>' +
+        '<div class="im3-line2">' + sigLine + "</div>" +
+        latest +
+      "</div>" +
+      (o.isSub ? '<button class="im3-gear" data-gear="' + esc(o.addr) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' : '') +
+      accOverlayHtml(o.addr, o.isSub) +
+      "</div>";
+  }
+  // Iris v6 marquee scan (verbatim semantics): overflow detection sets the
+  // shift distance and duration; the CSS keyframes do the ping-pong.
+  function im3MarqueeScan(root) {
+    $$(".im3-addr", root).forEach(function (el) {
+      var inn = el.querySelector(".im3-addr-in");
+      if (!inn) return;
+      var over = inn.scrollWidth - el.clientWidth;
+      if (over > 1) {
+        el.classList.add("mq");
+        el.style.setProperty("--mq-shift", (-over - 2) + "px");
+        el.style.setProperty("--mq-dur", Math.max(6, over / 18).toFixed(1) + "s");
+      } else { el.classList.remove("mq"); el.style.removeProperty("--mq-shift"); }
+    });
+  }
+  // 0.3.3-C ②③ (Iris spec v1.0): empty/failure states are expressed IN the
+  // row grammar - never as floating text outside the list; a failure row is
+  // a whole-row retry button (same interaction grain as tap-to-compose).
+  function im3StateRowHtml(kind, titleKey, subKey, retrySrc) {
+    var cls = kind === "err" ? "im3-err" : "im3-empty";
+    var av = kind === "err" ? "！" : "○";
+    var retry = retrySrc ? ' data-retry="' + retrySrc + '"' : "";
+    return '<div class="im3-row ' + cls + '"' + retry + ">" +
+      '<div class="im3-av ' + (kind === "err" ? "im3-av-err" : "im3-av-empty") + '">' + av + "</div>" +
+      '<div class="im3-main im3-state-main">' +
+      '<div class="im3-state-t">' + t(titleKey) + "</div>" +
+      '<div class="im3-state-s">' + t(subKey) + "</div></div></div>";
+  }
+  function wireErrRetry(root) {
+    $$("[data-retry]", root).forEach(function (row) {
+      row.addEventListener("click", function () {
+        if (row.getAttribute("data-retrying")) return;
+        row.setAttribute("data-retrying", "1");
+        var s = row.querySelector(".im3-state-s");
+        if (s) s.textContent = t("acc.retrying");
+        loadAccounts(); // whole-list rebuild - success clears the row, failure re-renders it
+      });
+    });
+  }
+  function accWireList(root) {
+    // Row tap = compose; gear tap = in-place overlay; back hides it.
+    $$(".im3-row", root).forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
+        var to = row.getAttribute("data-claddr");
+        if (!to) return; // register/pinned row opens its own flow, not compose
+        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
+      });
+      var gear = row.querySelector("[data-gear]");
+      if (gear) gear.addEventListener("click", function () {
+        $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
+        row.querySelector(".im3-overlay").classList.toggle("on");
+      });
+      var back = row.querySelector("[data-ovl-back]");
+      if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
+    });
+    $$("[data-compose], [data-remove-sub]", root).forEach(function (b) {
+      if (b.dataset.compose) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
+      if (b.dataset.removeSub) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: b.dataset.removeSub, role: "superior" } })); });
+    });
   }
 
   // ---- 0.3.3-C: accounts-page listification (mobile only) ----
@@ -1361,8 +2000,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       });
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
     var rows = [];
-    // 0.3.2 概览重构（boss 认定四）：自身行已撤——自身卡迁偏好页
-    // （renderPrefsOwnCard，手机卡样式双端）。
+    // 0.3.2 概览重构（boss 认定四）：自身行已撤——自身卡迁偏好页
+
+    // （renderPrefsOwnCard，手机卡样式双端）。
+
     // Subordinates render TWICE from one pass (superior feedback round 3):
     // PC = leading table rows right after the own row (no container; the
     // register button lives above the table — #subreg-pc in index.html);
@@ -1527,12 +2168,18 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       avRemoteHydrate(ctBox); // 0021: registry-backed real avatars
       im3MarqueeScan(ctBox);
     }
-    // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
-    renderPrefsOwnCard(ownSig, ownVisible);
-    // Fresh dots on return: pull immediately instead of waiting for the
-    // next 5s tick, so a visited conversation clears its dot in ~1s.
-    pullActivity();
-    applyActivity();
+    // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
+
+    renderPrefsOwnCard(ownSig, ownVisible);
+
+    // Fresh dots on return: pull immediately instead of waiting for the
+
+    // next 5s tick, so a visited conversation clears its dot in ~1s.
+
+    pullActivity();
+
+    applyActivity();
+
   }
 
   // composeTo switches to the Compose tab and prefills the To field with the
@@ -2004,7 +2651,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       const p = await api("/api/profile/self");
       $("#profile-visible").checked = !!p.visible;
       $("#profile-signature").value = p.signature || "";
-      renderPrefsOwnCard(p.signature || "", !!p.visible); // 0.3.2：偏好页自身卡
+      renderPrefsOwnCard(p.signature || "", !!p.visible); // 0.3.2：偏好页自身卡
+
       status.textContent = "";
       // Preferences toggles (v0.6): server prefs win, local fallback.
       mergePrefs(p.prefs);
@@ -3920,10 +4568,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var subList = document.querySelector(".sub-list");
     var ctBox = $("#acc-m-contacts");
     if (!ctBox) return;
-    // 1048e（boss rc2c 实测：滑动中被拽回顶部）：列表滚动中严禁重钉——真机滑动时
-    // 地址栏伸缩触发 resize，重钉按页顶几何重算会把滚动清零（maxHeight=none
-    // 未钳位即回落 0）。回到顶部后的下次 fit 自然恢复。
-    if (ctBox.scrollTop > 2) return;
+    // 1048e（boss rc2c 实测：滑动中被拽回顶部）：列表滚动中严禁重钉——真机滑动时
+
+    // 地址栏伸缩触发 resize，重钉按页顶几何重算会把滚动清零（maxHeight=none
+
+    // 未钳位即回落 0）。回到顶部后的下次 fit 自然恢复。
+
+    if (ctBox.scrollTop > 2) return;
+
     ctBox.style.maxHeight = "none";
     if (subList) subList.style.maxHeight = "none";
     var ctTop = ctBox.getBoundingClientRect().top;
@@ -4309,7 +4961,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // Populate the Compose To-field dropdown with known recipients (admins get
   // every account; regular accounts get their contacts). Builds a custom
   // dropdown (not a native datalist) so clicking a recipient clears the input
-  // and fills it — the behavior admin requested.
+  // and fills it — the behavior admin requested.
+
   // ---- 0.3.2 系统更新弹窗（0.3.1 方案放行；契约定稿=Devi 0922：推送表
   // {id,version,title,body_md,published_at,published}+last_read_push_id+四端点。
   // 触发=进系统总览页后取最新已发布推送，未读则弹；关闭即上报已读、不阻塞；
