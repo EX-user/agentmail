@@ -125,6 +125,8 @@ func TestAvatarLifecycle(t *testing.T) {
 	}
 
 	// 2b) 0021: /api/profile/self carries avatar_hash symmetrically.
+	// 0.3.4: and the self-describing avatar block (hash + fetch path +
+	// upload time) alongside it.
 	preq, _ := http.NewRequest("GET", ts.URL+"/api/profile/self", nil)
 	preq.SetBasicAuth("avuser@test.example", "avpassword1")
 	pres, err := c.Do(preq)
@@ -138,12 +140,29 @@ func TestAvatarLifecycle(t *testing.T) {
 	}
 	var prof struct {
 		AvatarHash string `json:"avatar_hash"`
+		Avatar     *struct {
+			Hash      string `json:"hash"`
+			URL       string `json:"url"`
+			UpdatedAt int64  `json:"updated_at"`
+		} `json:"avatar"`
 	}
 	if err := json.Unmarshal(pb, &prof); err != nil {
 		t.Fatalf("profile body: %v", err)
 	}
 	if prof.AvatarHash != up.AvatarHash {
 		t.Fatalf("profile hash = %q, want %q", prof.AvatarHash, up.AvatarHash)
+	}
+	if prof.Avatar == nil {
+		t.Fatalf("profile avatar block missing, want {hash,url,updated_at}")
+	}
+	if prof.Avatar.Hash != up.AvatarHash {
+		t.Fatalf("avatar.hash = %q, want %q", prof.Avatar.Hash, up.AvatarHash)
+	}
+	if want := "/api/avatar/avuser@test.example"; prof.Avatar.URL != want {
+		t.Fatalf("avatar.url = %q, want %q", prof.Avatar.URL, want)
+	}
+	if prof.Avatar.UpdatedAt <= 0 {
+		t.Fatalf("avatar.updated_at = %d, want upload time", prof.Avatar.UpdatedAt)
 	}
 
 	// 3) GET serves the bytes with ETag/immutable and honors If-None-Match.
@@ -226,6 +245,28 @@ func TestAvatarLifecycle(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("get after delete: want 404, got %d", res.StatusCode)
+	}
+
+	// 6b) 0.3.4: after delete the profile/self avatar block is gone too
+	// (absence = the generated-default signal, omitempty style).
+	pres2, err := c.Do(preq)
+	if err != nil {
+		t.Fatalf("profile self after delete: %v", err)
+	}
+	pb2, _ := io.ReadAll(pres2.Body)
+	pres2.Body.Close()
+	if pres2.StatusCode != http.StatusOK {
+		t.Fatalf("profile self after delete: %d %s", pres2.StatusCode, pb2)
+	}
+	var prof2 struct {
+		AvatarHash string         `json:"avatar_hash"`
+		Avatar     map[string]any `json:"avatar"`
+	}
+	if err := json.Unmarshal(pb2, &prof2); err != nil {
+		t.Fatalf("profile body after delete: %v", err)
+	}
+	if prof2.AvatarHash != "" || prof2.Avatar != nil {
+		t.Fatalf("after delete: avatar_hash=%q avatar=%v, want both absent", prof2.AvatarHash, prof2.Avatar)
 	}
 
 	// 7) Anonymous wall: both endpoints reject unauthenticated callers.

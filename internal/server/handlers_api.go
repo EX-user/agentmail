@@ -481,11 +481,15 @@ func (s *Server) handleThread(w http.ResponseWriter, r *http.Request) {
 // handleProfileSelf updates the authenticated account's directory visibility
 // and signature. Uses account Basic auth (like handleSend).
 //
-//	GET  /api/profile/self  -> {"address","visible","signature"}
+//	GET  /api/profile/self  -> {"address","visible","signature","prefs",
+//	    "files_used_bytes","attachments_count","attachments_expiring",
+//	    "avatar_hash"?,"avatar"?{"hash","url","updated_at"}}
 //	POST /api/profile/self  {"visible": bool, "signature": string}
 //	-> {"ok": true, "visible": bool, "signature": string}
 //
 // signature is trimmed and capped at 200 characters (MaxSignatureLen).
+// avatar_hash and the avatar block appear only when an avatar is uploaded
+// (absence = "use the generated default", the store's omitempty signal).
 func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 	who := accountFrom(r.Context())
 	if r.Method == http.MethodGet {
@@ -507,6 +511,17 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		// 0021: symmetric with the directory payloads - the own-card and
 		// row hydration both key off avatar_hash.
 		exposeAvatarHash(resp, acc)
+		// 0.3.4: self-describing avatar block (boss: add avatar-related
+		// description to the self endpoint) - hash, fetch path and upload
+		// time in one place so clients don't assemble the three. Address
+		// is stored lowercase and the avatar route is keyed the same way.
+		if acc.AvatarHash != "" {
+			resp["avatar"] = map[string]any{
+				"hash":       acc.AvatarHash,
+				"url":        "/api/avatar/" + acc.Address,
+				"updated_at": acc.AvatarAt,
+			}
+		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
