@@ -622,10 +622,8 @@
       "compose.subjectPh": "subject",
       "compose.bodyPh": "message body",
       "compose.imPh": "Write a message… (recipient & subject carry over)",
-      "compose.imQuote": "Quote the latest letter",
       "compose.imFull": "Full compose form",
       "compose.imBack": "Back to conversation",
-      "compose.imNoThread": "Nothing to quote yet.",
       "compose.imPlus": "Attachments, quote, full form",
       // ---- misc (phase 2) ----
       "nav.logoutTitle": "Sign out",
@@ -1238,10 +1236,8 @@
       "compose.subjectPh": "主题",
       "compose.bodyPh": "邮件正文",
       "compose.imPh": "写邮件…（对方与主题自动带出）",
-      "compose.imQuote": "引用最新一封",
       "compose.imFull": "完整写信页",
       "compose.imBack": "返回会话",
-      "compose.imNoThread": "还没有可引用的来信。",
       "compose.imPlus": "附件、引用与完整写信页",
       // ---- misc (phase 2) ----
       "nav.logoutTitle": "退出登录",

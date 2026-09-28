@@ -268,7 +268,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var on = imMode() && !!($("#compose-to").value || "").trim();
     var was = sec.classList.contains("im");
     sec.classList.toggle("im", on);
-    if (!on) return;
+    if (!on) { sec.classList.remove("im-cc-open"); return; }
     // The inline list lives in #thread-holder; if the drawer owns the node,
     // take it back (the drawer only opens from the full form, never in IM).
     var thread = document.getElementById("compose-thread");
@@ -1808,6 +1808,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       closeSheet();
       $("#btn-attach").click();
     });
+    // Boss freeze-round feedback: the ＋ panel carries Cc — the validated cc
+    // row (chips + autocomplete) un-hides in place; emptying the chips
+    // re-hides it via syncCcVisibility (dropping the im-cc-open exception).
+    document.getElementById("im-cc").addEventListener("click", function () {
+      closeSheet();
+      sec.classList.add("im-cc-open");
+      var ccRow = document.getElementById("compose-cc-row");
+      if (ccRow) ccRow.classList.remove("hidden");
+      var ccInput = $("#compose-cc");
+      if (ccInput) ccInput.focus();
+    });
     document.getElementById("im-refresh").addEventListener("click", function () {
       loadComposeThread();
     });
@@ -1833,33 +1844,6 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (!e.target.closest("#im-sheet") && !e.target.closest("#im-plus")) closeSheet();
     });
   })();
-  // Quote the newest letter into the bar body (＋ panel: 引用最新一封).
-  async function quoteLatestForIm() {
-    var sec = document.getElementById("tab-compose");
-    if (!sec || !sec.classList.contains("im")) return;
-    if (!threadNewest || !threadNewest.id) { toast(t("compose.imNoThread"), "error"); return; }
-    var cur = getSession();
-    var path = (cur && !cur.is_admin)
-      ? "/api/message?id=" + encodeURIComponent(threadNewest.id)
-      : "/admin/message?id=" + encodeURIComponent(threadNewest.id);
-    try {
-      var m = await api(path);
-      var text = String(m.body || threadNewest.preview || "").split("\n")
-        .map(function (l) { return "> " + l; }).join("\n");
-      if (text.length > 2000) text = text.slice(0, 2000) + "\n> …";
-      var bodyEl = $("#compose-body");
-      bodyEl.value = (bodyEl.value ? bodyEl.value + "\n\n" : "") + text;
-      composeInReplyTo = threadNewest.id;
-      renderInReplyTo();
-      syncImBar();
-      draftNoteTyping();
-      $("#im-input").focus();
-    } catch (e) {
-      toast(t("common.error", { msg: e.message }), "error");
-    }
-  }
-  $("#im-quote").addEventListener("click", quoteLatestForIm);
-
   // ---- mobile one-screen compose (superior 09-02): the recent-
   // conversation list folds into a fullscreen modal; the node is MOVED in
   // and out (listeners ride along), everything else fits the viewport.

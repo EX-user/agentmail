@@ -3020,6 +3020,10 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im .compose-form { flex: 0 0 auto; overflow-y: visible; }
   #tab-compose.im .compose-form > * { display: none; }
   #tab-compose.im .compose-form > #compose-attachments:not(:empty) { display: block; }
+  /* ＋ panel Cc entry: the validated cc row (chips + autocomplete) un-hides
+     in place; emptying the chips re-hides it via syncCcVisibility, which
+     also drops this exception's :not(.hidden) match. */
+  #tab-compose.im-cc-open .compose-form > #compose-cc-row:not(.hidden) { display: block; }
   /* the conversation header: label + peer + refresh (h3 stays retired) */
   #tab-compose.im #im-head {
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
@@ -3036,11 +3040,19 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     padding-right: 2px;
   }
   #tab-compose.im #thread-holder #compose-thread { display: block; max-height: none; margin-top: 0; }
-  /* v3 items: side split + no expand hint; order handled in JS */
-  #tab-compose.im .thread-item { margin: 0 0 7px; font-size: 12.5px; }
-  #tab-compose.im .thread-item.thread-out { margin-left: 14%; }
-  #tab-compose.im .thread-item.thread-in { margin-right: 14%; border-left: 2px solid var(--accent); }
-  #tab-compose.im .thread-item .thread-toggle { display: none; }
+  /* v3 items + boss freeze-round feedback: bubbles lean slightly IM-ward —
+     own letters shift right AND carry an accent-tinted fill, received stay
+     on the plain panel with the success bar, so the sender reads at a
+     glance (position + edge color + fill). The expand hint stays visible:
+     it is the affordance for the lazy-loaded full body. Order in JS. */
+  #tab-compose.im .thread-item { margin: 0 0 7px; font-size: 12.5px; border-left-width: 2px; }
+  #tab-compose.im .thread-item.thread-out {
+    margin-left: 14%;
+    border-left-color: var(--accent);
+    background: linear-gradient(color-mix(in srgb, var(--accent) 14%, transparent),
+                color-mix(in srgb, var(--accent) 14%, transparent)), var(--panel);
+  }
+  #tab-compose.im .thread-item.thread-in { margin-right: 14%; border-left-color: var(--success); }
   /* the one-line bar: last flex child of the tab, so it sits at the bottom
      edge in flow (keyboard-safe, no fixed-position fighting) */
   #tab-compose.im #im-bar {
