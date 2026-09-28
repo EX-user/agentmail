@@ -387,3 +387,81 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 	}
 	return out, nil
 }
+
+// MgmtContactLatest is one non-subordinate counterparty's latest exchange
+// with the login account (boss bug report 09-29: contact rows on the
+// accounts page showed the no-mail placeholder even with real traffic,
+// because the 0.3.3-C latest generation only ever ran for declared
+// subordinates). Correspondence alone drives it - visibility plays no
+// part; the same 0023 "related to me" gate applies (out requires me among
+// the recipients, in requires from == me).
+type MgmtContactLatest struct {
+	Address       string `json:"address"`
+	LatestSubject string `json:"latest_subject,omitempty"`
+	LatestAt      int64  `json:"latest_at,omitempty"`
+}
+
+// MgmtContactLatests returns, per non-subordinate counterparty that ever
+// exchanged mail with me, the ALL-TIME latest related-to-me message
+// (subject truncated to 100 runes exactly like the inbox preview).
+// Declared subordinates are excluded - their rows ride the subs-overview
+// payload. Address-sorted for deterministic output.
+func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
+	me = strings.ToLower(me)
+	subSet := map[string]bool{}
+	for _, e := range s.SubordinatesOf(me) {
+		subSet[strings.ToLower(e.Address)] = true
+	}
+	type cl struct {
+		subject string
+		at      int64
+	}
+	latest := map[string]*cl{}
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bMessages).ForEach(func(_, v []byte) error {
+			var m Message
+			if json.Unmarshal(v, &m) != nil {
+				return nil // skip corrupt records, keep scanning
+			}
+			from := strings.ToLower(m.From)
+			recips := map[string]bool{}
+			for _, a := range m.To {
+				recips[strings.ToLower(a)] = true
+			}
+			for _, a := range m.CC {
+				recips[strings.ToLower(a)] = true
+			}
+			touch := func(addr string) {
+				if addr == me || subSet[addr] {
+					return
+				}
+				c := latest[addr]
+				if c == nil {
+					c = &cl{}
+					latest[addr] = c
+				}
+				if m.ReceivedAt > c.at {
+					c.at = m.ReceivedAt
+					c.subject = truncateRunes(m.Subject, 100)
+				}
+			}
+			if from == me {
+				for r := range recips {
+					touch(r)
+				}
+			} else if recips[me] {
+				touch(from)
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MgmtContactLatest, 0, len(latest))
+	for a, c := range latest {
+		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestAt: c.at})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
+	return out, nil
+}

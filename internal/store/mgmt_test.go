@@ -373,3 +373,65 @@ func TestMgmtLatestRelatedToMe(t *testing.T) {
 		t.Fatalf("latest_subject = %q, want %q", out.Subs[0].LatestSubject, "related")
 	}
 }
+
+// TestMgmtContactLatests (bug fix 09-29 via boss): the accounts-page
+// latest line for NON-subordinate rows must be driven by correspondence
+// alone - visibility plays no part, and a sub-less account still gets
+// contact latest (the subs-overview early return never ran for it).
+func TestMgmtContactLatests(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare sub1: %v", err)
+	}
+	base := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC).Unix()
+	put := func(from, to, subj string, at int64, cc ...string) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, CC: cc, Subject: subj, Body: "b", ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	put("me@t", "ext1@t", "my-out-to-ext1", base-3600)
+	put("ext1@t", "me@t", "ext1-replied-newer", base-1800)
+	put("ext2@t", "me@t", "in-from-ext2", base-7200)
+	put("me@t", "other2@t", "i-mailed-them", base-50)
+	put("ext3@t", "stranger@t", "no-me-involved", base-100)
+	put("sub1@t", "me@t", "from-my-sub", base-100)
+
+	out, err := s.MgmtContactLatests("me@t")
+	if err != nil {
+		t.Fatalf("contacts latest: %v", err)
+	}
+	got := map[string]MgmtContactLatest{}
+	for _, c := range out {
+		got[c.Address] = c
+	}
+	if len(out) != 3 {
+		t.Fatalf("len(contacts) = %d (%v), want 3", len(out), out)
+	}
+	if c := got["ext1@t"]; c.LatestAt != base-1800 || c.LatestSubject != "ext1-replied-newer" {
+		t.Fatalf("ext1 = %+v, want newer reply", c)
+	}
+	if c := got["ext2@t"]; c.LatestAt != base-7200 || c.LatestSubject != "in-from-ext2" {
+		t.Fatalf("ext2 = %+v", c)
+	}
+	if c := got["other2@t"]; c.LatestAt != base-50 || c.LatestSubject != "i-mailed-them" {
+		t.Fatalf("other2 = %+v", c)
+	}
+	for _, absent := range []string{"ext3@t", "sub1@t", "me@t", "stranger@t"} {
+		if _, ok := got[absent]; ok {
+			t.Fatalf("%s must not appear (unrelated or subordinate)", absent)
+		}
+	}
+	// Deterministic order: addresses ascending.
+	for i := 1; i < len(out); i++ {
+		if out[i-1].Address >= out[i].Address {
+			t.Fatalf("contacts not sorted: %v", out)
+		}
+	}
+}

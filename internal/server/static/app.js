@@ -623,6 +623,12 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       byAddr[String(s.address).toLowerCase()] = s;
     });
     avSyncAvatarsFromActivity((actData && actData.subs) || []); // A-case: avatar spot-hydration on the same poll
+    // Contact rows (bug fix 09-29): correspondence-driven latest for
+    // non-subordinate rows; a declared sub entry wins the slot.
+    ((actData && actData.contacts) || []).forEach(function (c) {
+      var k = String(c.address).toLowerCase();
+      if (!byAddr[k]) byAddr[k] = c;
+    });
     $$("[data-act-acct]").forEach(function (el) {
       var s = byAddr[String(el.getAttribute("data-act-acct")).toLowerCase()];
       var pill = el.querySelector('[data-act-slot="pill"]');
@@ -691,6 +697,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     actPulling = true;
     try {
       var d = await api("/api/mgmt/subs-overview?days=7", { keepSession: true });
+      // boss bug 09-29: contact rows ride the same poll - correspondence-driven
+      // latest data for non-subordinate counterparties.
+      await api("/api/mgmt/contacts-latest", { keepSession: true }).then(function (dc) { d.contacts = (dc && dc.contacts) || []; }, function () { d.contacts = []; });
       actData = d;
       actLastPull = Date.now();
       applyActivity();
@@ -1338,7 +1347,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var pcSubRows = "";
     var clRows = "";
     var actByAddr = {};
-    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    ((actData && actData.contacts) || []).forEach(function (x) { var k = String(x.address).toLowerCase(); if (!actByAddr[k]) actByAddr[k] = x; });
     // boss rc2 feedback: IM-style ordering - the most recently interacted
     // account tops the list (latest_at desc; untouched rows keep their
     // relative order below via stable sort).
@@ -1414,9 +1424,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
           "</tr>"
         );
         rows.push(
-          '<tr class="line3-row"><td colspan="3"><div class="pc-line3">' + accLatestHtml(null) + "</div></td></tr>"
+          '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>"
         );
-        clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: null });
+        clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
       });
     } catch (e) {
       contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent

@@ -47,3 +47,26 @@ func (s *Server) handleMgmtSubsOverview(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+// handleMgmtContactLatests returns the accounts-page latest-message line
+// data for NON-subordinate rows (bug fix 09-29 via boss: contact rows with
+// real correspondence showed the no-mail placeholder - the 0.3.3-C latest
+// generation never ran for them). Pure correspondence drive: an address
+// appears iff it exchanged mail with the login account; visibility plays
+// no part.
+//
+//	GET /api/mgmt/contacts-latest (auth=self)
+//	  -> {"contacts":[{address, latest_subject, latest_at}...], "count":N}
+func (s *Server) handleMgmtContactLatests(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	me := accountFrom(r.Context())
+	list, err := s.store.MgmtContactLatests(me)
+	if err != nil {
+		internalError(w, "contacts latest: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"contacts": list, "count": len(list)})
+}

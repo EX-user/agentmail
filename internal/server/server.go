@@ -243,6 +243,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/subs/remove", s.requireInitialized(s.requireAccount(s.handleSubsRemove)))
 	mux.HandleFunc("/api/subs/", s.requireInitialized(s.requireAccount(s.handleSubsMessages)))
 	mux.HandleFunc("/api/mgmt/subs-overview", s.requireInitialized(s.requireAccount(s.handleMgmtSubsOverview)))
+	mux.HandleFunc("/api/mgmt/contacts-latest", s.requireInitialized(s.requireAccount(s.handleMgmtContactLatests)))
 	mux.HandleFunc("/api/register-subordinate", s.requireInitialized(s.requireAccount(s.handleRegisterSubordinate)))
 
 	// Boards (kanban) API — /api/boards/info and /api/boards/mine are
