@@ -3217,5 +3217,5 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
 /* 0.3.4 item 1: the avatar unread dot - server truth via the activity
    poll, in-place flip only (1046 no-touch discipline). Positioned
    INSIDE the box: the .im3-av overflow clips anything past the edge. */
-.im3-av { position: relative; }
-.im3-av.has-unread::after { content: ""; position: absolute; top: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+.im3-av-wrap { position: relative; display: inline-flex; flex: none; }
+.im3-av-wrap.has-unread::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }

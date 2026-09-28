@@ -644,7 +644,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       // the poll delivers latest_subject/latest_at after first render.
       // 0.3.4 item 1: the avatar unread dot flips on server truth -
       // any read path clears it within the next poll (same 5s cycle).
-      var av = el.querySelector(".im3-av");
+      var av = el.querySelector(".im3-av-wrap");
       if (av) {
         var has = !!unreadBy[String(el.getAttribute("data-act-acct")).toLowerCase()];
         if (av.classList.contains("has-unread") !== has) av.classList.toggle("has-unread", has);
@@ -1141,7 +1141,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // (authenticated fetch -> objectURL); hash present = ?v= bust,
     // absent = plain endpoint whose 404 falls back to the generator.
     var h = (window.__avatarHashes || {})[String(addr).toLowerCase()] || '';
-    return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div>';
+    // The unclipped wrapper hosts the unread dot: .im3-av itself is
+    // overflow-hidden (rounded mask), and a corner badge must NOT live
+    // under that mask (boss: the dot showed a bite out of it).
+    return '<span class="im3-av-wrap"><div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div></span>';
   }
   // avRemoteHydrate (0021): fill remote placeholders via the shared
   // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
