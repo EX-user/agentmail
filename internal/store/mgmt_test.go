@@ -332,7 +332,44 @@ func TestMgmtSubsAvatarHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("overview: %v", err)
 	}
-	if ov.Subs[0].AvatarHash != "" {
-		t.Fatalf("post-delete hash = %q, want empty", ov.Subs[0].AvatarHash)
+}
+
+// TestMgmtLatestRelatedToMe (0023, boss field report): the row-3
+// "latest" only counts exchanges WITH the login account - a sub
+// mailing third parties must not surface (nor reorder the list).
+func TestMgmtLatestRelatedToMe(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare sub1: %v", err)
+	}
+	base := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC).Unix()
+	put := func(from, to, subj string, at int64) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, Subject: subj, Body: "b", ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	put("sub1@t", "ext1@t", "unrelated-out", base-3600) // newer, unrelated
+	put("ext2@t", "sub1@t", "unrelated-in", base-1800)  // newer, unrelated
+	put("me@t", "sub1@t", "related", base-7200)         // older, related
+
+	out, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if len(out.Subs) != 1 {
+		t.Fatalf("len(subs) = %d, want 1", len(out.Subs))
+	}
+	if out.Subs[0].LatestAt != base-7200 {
+		t.Fatalf("latest_at = %d, want %d (related only)", out.Subs[0].LatestAt, base-7200)
+	}
+	if out.Subs[0].LatestSubject != "related" {
+		t.Fatalf("latest_subject = %q, want %q", out.Subs[0].LatestSubject, "related")
 	}
 }

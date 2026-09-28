@@ -204,7 +204,10 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 				if m.ReceivedAt > c.lastOut {
 					c.lastOut = m.ReceivedAt
 				}
-				if m.ReceivedAt > c.latestAt {
+				// 0023 (boss field report: unrelated traffic bumped rows): the
+				// row-3 "latest" is the latest exchange WITH the login account -
+				// a sub mailing third parties must not surface here.
+				if m.ReceivedAt > c.latestAt && recips[me] {
 					c.latestAt = m.ReceivedAt
 					c.latestSubject = truncateRunes(m.Subject, 100)
 				}
@@ -228,7 +231,8 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 					if m.ReceivedAt > c.lastIn {
 						c.lastIn = m.ReceivedAt
 					}
-					if m.ReceivedAt > c.latestAt {
+					// 0023: related-to-me only (see the out-side note).
+					if m.ReceivedAt > c.latestAt && from == me {
 						c.latestAt = m.ReceivedAt
 						c.latestSubject = truncateRunes(m.Subject, 100)
 					}
