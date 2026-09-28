@@ -3175,9 +3175,9 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im.im-full #im-bar { display: none; }
   #tab-compose.im.im-full #im-back {
     display: inline-flex; align-items: center; width: auto; align-self: flex-start;
-    min-height: 0; padding: 3px 12px; margin: 0 0 10px;
-    font-size: 12.5px; background: transparent;
-    border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+    min-height: 0; padding: 0; margin: 0 0 10px;
+    background: none; border: none; border-radius: 0;
+    color: var(--accent); font-weight: 700; font-size: 13px;
   }
   #tab-compose.im.im-full #im-back::before { content: "\2039\00a0"; font-size: 15px; line-height: 1; }
 }
