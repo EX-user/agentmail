@@ -142,10 +142,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     composeInReplyTo = null;
     renderInReplyTo();
     $("#compose-to").value = address || "";
-    // Entering compose from a Compose button starts a fresh letter: clear
-    // any leftover draft body (feedback). Plain tab switches keep the
-    // draft; Reply/Forward overwrite the body with their own prefill.
-    $("#compose-body").value = "";
+    // 0.3.5 件1: a Compose entry loads the peer's draft bucket (bucketing
+    // supersedes the old unconditional clear — the bucket IS the leftover
+    // draft now, keyed by recipient).
+    draftReconcile();
     navActivateCompose();
     loadComposeThread();
   }
@@ -161,8 +161,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var subj = (subject || "").trim();
     $("#compose-subject").value = subj ? "Re: " + subj : "";
     // Reply never prefills the body (To/Subject only — reviewer's model);
-    // entering it clears any leftover draft like the Compose button does.
+    // it anchors the peer's bucket so the user's edits store into it.
     $("#compose-body").value = "";
+    draftAnchor(toAddress);
     navActivateCompose();
     loadComposeThread();
     $("#compose-body").focus();
@@ -183,6 +184,114 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // visible directory + own contacts for regular accounts, all accounts for
   // admins — populated by ensureComposeAccounts.
   let composeRecipientList = [];
+
+  // ---- 0.3.5 件1: per-recipient draft buckets (boss design, both ends) ----
+  // The textarea is only a view; the stored truth is one bucket per
+  // normalized To (trim + lowercase + sorted multi-address join; cc never
+  // enters the key). Switching recipients stores the text back into the old
+  // bucket and loads the new one (no bucket -> empty, spec); a sent letter
+  // clears its bucket; Reply/Forward prefill anchors the bucket so the
+  // user's later edits store into it too.
+  function draftKey(toRaw) {
+    var parts = String(toRaw || "").split(",").map(function (s) { return s.trim().toLowerCase(); })
+      .filter(Boolean).sort();
+    return parts.length ? "am_draft_body:" + parts.join(",") : null;
+  }
+  var draftPrevKey = null, draftTimer = null, draftSwitchTimer = null;
+  function draftSaveNow() {
+    var key = draftKey($("#compose-to").value);
+    if (!key) return; // no recipient: the text stays on screen only
+    try {
+      var body = $("#compose-body").value;
+      if (body) localStorage.setItem(key, body);
+      else localStorage.removeItem(key);
+    } catch (e) { /* private mode / quota — the textarea keeps the text */ }
+  }
+  function draftNoteTyping() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(draftSaveNow, 400);
+  }
+  function draftReconcile() {
+    var key = draftKey($("#compose-to").value);
+    if (key === draftPrevKey) return;
+    var bodyEl = $("#compose-body");
+    if (draftPrevKey) {
+      try {
+        if (bodyEl.value) localStorage.setItem(draftPrevKey, bodyEl.value);
+        else localStorage.removeItem(draftPrevKey);
+      } catch (e) {}
+    }
+    var saved = null;
+    if (key) { try { saved = localStorage.getItem(key); } catch (e) {} }
+    bodyEl.value = saved || "";
+    draftPrevKey = key;
+    syncImBar();
+  }
+  // Reply/Follow-up/Forward prefill the body themselves — they anchor the
+  // bucket instead of reconciling (spec: 锚定后用户的手改也进桶).
+  function draftAnchor(toRaw) {
+    draftPrevKey = draftKey(toRaw);
+    clearTimeout(draftTimer);
+    syncImBar();
+  }
+
+  // ---- 0.3.5 件2: mobile IM mode (boss-approved v3 preview) ----
+  // With a recipient set on a phone the compose page reads like a chat: the
+  // thread list renders inline in IM order (oldest -> newest, own letters
+  // right, received left with the accent bar) and the one-line bar writes
+  // the body; subject and the reply anchor derive from the conversation on
+  // send. PC and recipient-less compose keep the full form (CSS gates
+  // everything under #tab-compose.im).
+  var threadNewest = null;
+  function imMode() { return window.innerWidth <= 800; }
+  function syncImBar() {
+    var bar = document.getElementById("im-input");
+    var bodyEl = $("#compose-body");
+    if (bar && bodyEl && bar.value !== bodyEl.value) bar.value = bodyEl.value;
+  }
+  function imPeerText() {
+    return t("compose.recentConv") + " · " + (($("#compose-to").value || "").trim() || "…");
+  }
+  function imPaintHead() {
+    var peer = document.getElementById("im-peer");
+    if (peer && peer.textContent !== imPeerText()) peer.textContent = imPeerText();
+    var fullBtn = document.getElementById("im-full");
+    if (fullBtn) {
+      var want = t(document.getElementById("tab-compose").classList.contains("im-full")
+        ? "compose.imBack" : "compose.imFull");
+      if (fullBtn.textContent !== want) fullBtn.textContent = want;
+    }
+  }
+  function syncImMode() {
+    var sec = document.getElementById("tab-compose");
+    if (!sec) return;
+    var on = imMode() && !!($("#compose-to").value || "").trim();
+    var was = sec.classList.contains("im");
+    sec.classList.toggle("im", on);
+    if (!on) return;
+    // The inline list lives in #thread-holder; if the drawer owns the node,
+    // take it back (the drawer only opens from the full form, never in IM).
+    var thread = document.getElementById("compose-thread");
+    var holder = document.getElementById("thread-holder");
+    if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
+  }
+  // The three header controls are hidden behind the conversation in IM mode:
+  // an empty subject becomes "Re: <latest subject>" and the anchor wires to
+  // the newest letter unless the user picked one explicitly (only EMPTY
+  // fields are derived, so the full form stays authoritative where shown).
+  function autoDeriveForIm() {
+    var sec = document.getElementById("tab-compose");
+    if (!sec || !sec.classList.contains("im")) return;
+    var subjEl = $("#compose-subject");
+    if (!(subjEl.value || "").trim() && threadNewest && threadNewest.subject) {
+      subjEl.value = "Re: " + threadNewest.subject;
+    }
+    if (!composeInReplyTo && threadNewest && threadNewest.id) {
+      composeInReplyTo = threadNewest.id;
+      renderInReplyTo();
+    }
+  }
 
   function renderComposeCc() {
     const tags = $("#cc-tags");
@@ -375,6 +484,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     composeInReplyTo = null;
     renderInReplyTo();
     $("#compose-to").value = "";
+    draftAnchor(null); // a forward is a new letter to no one yet
     var subj = (m.subject || "").trim();
     $("#compose-subject").value = subj ? "Fwd: " + subj : "";
     const files = (m.attachments && m.attachments.length) || m.files || 0;
@@ -813,6 +923,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   }
 
   $("#btn-send").addEventListener("click", async function () {
+    // 0.3.5 件2: the IM bar hides the three header controls — subject and
+    // the reply anchor ride on the conversation. This runs FIRST so the
+    // validation below reads the derived values (learned via probe: the
+    // stale-captured consts failed needSubject even after deriving).
+    autoDeriveForIm();
     const toRaw = $("#compose-to").value.trim();
     const subject = $("#compose-subject").value.trim();
     const bodyText = $("#compose-body").value;
@@ -861,7 +976,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
+      // 0.3.5 件1: a sent letter clears its draft bucket (boss addition).
+      try { var dk = draftKey(toRaw); if (dk) localStorage.removeItem(dk); } catch (dkE) {}
       $("#compose-cc").value = "";
+      syncImBar();
       composeCcChips = [];
       renderComposeCc();
       syncCcVisibility(); // collapse the now-empty Cc field back
@@ -920,6 +1038,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
               peer: to, from: m.from, unread: m.unread };
       }).sort(function (a, b) { return b.ts - a.ts; });
+      threadNewest = all.length ? all[0] : null; // auto anchor + quote source
+      var imOrder = imMode();
+      if (imOrder) all.reverse(); // IM reading order: oldest top, latest bottom
       if (!all.length) {
         threadEl.className = "thread-list muted";
         threadEl.textContent = "No conversation with " + to + " yet.";
@@ -960,7 +1081,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           $("#compose-subject").value = btn.dataset.subj;
           composeInReplyTo = btn.dataset.mid || null;
           renderInReplyTo();
-          $("#compose-body").focus();
+          if (imMode()) { syncImBar(); $("#im-input").focus(); }
+          else $("#compose-body").focus();
           $("#compose-status").textContent = "Replying to " + btn.dataset.target;
           syncComposeSplit();
         });
@@ -983,6 +1105,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           toggleThreadItem(item);
         });
       });
+      if (imOrder) threadEl.scrollTop = threadEl.scrollHeight; // start at the latest
     } catch (e) {
       threadEl.className = "thread-list";
       threadEl.textContent = "Error loading thread: " + e.message;
@@ -990,8 +1113,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   }
 
   // Reload the thread when the user leaves the To field (covers typing a peer
-  // manually then tabbing away).
-  $("#compose-to").addEventListener("change", loadComposeThread);
+  // manually then tabbing away); the draft bucket reconciles alongside —
+  // immediately on leave, debounced while typing (spec: 失焦/停顿防抖).
+  $("#compose-to").addEventListener("change", function () {
+    clearTimeout(draftSwitchTimer);
+    draftReconcile();
+    loadComposeThread();
+  });
+  $("#compose-to").addEventListener("input", function () {
+    clearTimeout(draftSwitchTimer);
+    draftSwitchTimer = setTimeout(function () { draftReconcile(); loadComposeThread(); }, 600);
+  });
 
   // v0.2.8 compose two-column (boss-approved): PC only (CSS gates <961px).
   // Recipient present -> split (left form / right thread); empty -> solo
@@ -1011,11 +1143,22 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   }
   $("#compose-to").addEventListener("input", syncComposeSplit);
   syncComposeSplit();
+  // 0.3.5 件1: every keystroke in the body drafts into the current bucket.
+  $("#compose-body").addEventListener("input", function () {
+    syncImBar();
+    draftNoteTyping();
+  });
+  // Flush the bucket when the tab hides/closes mid-typing (mobile switches).
+  window.addEventListener("pagehide", draftSaveNow);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") draftSaveNow();
+  });
+
   // v0.2.8.2 (boss live feedback): input events alone missed transitions
   // sometimes (value changed by autofill/other code paths). The split state
   // now reconciles against the To value on a fixed tick — the value is the
   // single source of truth, events only make it instant.
-  setInterval(syncComposeSplit, 400);
+  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); }, 400);
   document.addEventListener("focusin", syncComposeSplit);
   document.addEventListener("focusout", function () { setTimeout(syncComposeSplit, 0); });
 
@@ -1616,6 +1759,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     $("#compose-to").value = d.to || "";
     $("#compose-subject").value = d.subject ? t("compose.followUpPrefix") + " " + d.subject : "";
     $("#compose-body").value = "";
+    draftAnchor(d.to);
     navActivateCompose();
     loadComposeThread();
     $("#compose-body").focus();
@@ -1628,11 +1772,93 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   });
   document.addEventListener("compose:entered", function () {
     ensureComposeAccounts();
+    draftReconcile(); // re-entering loads the peer's bucket if untouched
     loadComposeThread();
     ensureComposeShowcaseVisibility();
     fitComposeOneScreen();
     setTimeout(fitComposeOneScreen, 250); // second pass: late fonts/layout
   });
+
+  // ---- 0.3.5 件2: the one-line IM bar + ＋ panel (boss-approved v3) ----
+  (function wireImBar() {
+    var sec = document.getElementById("tab-compose");
+    var bar = document.getElementById("im-bar");
+    var input = document.getElementById("im-input");
+    var send = document.getElementById("im-send");
+    var plus = document.getElementById("im-plus");
+    var sheet = document.getElementById("im-sheet");
+    if (!sec || !bar || !input || !send || !plus || !sheet) return;
+    input.addEventListener("input", function () {
+      $("#compose-body").value = input.value;
+      draftNoteTyping();
+    });
+    // Chat semantics: Enter sends, exactly like the ➤ button would.
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); send.click(); }
+    });
+    send.addEventListener("click", function () { $("#btn-send").click(); });
+    function closeSheet() { sheet.classList.add("hidden"); }
+    plus.addEventListener("click", function () {
+      if (sheet.classList.contains("hidden")) {
+        input.blur(); // drop the soft keyboard before the panel opens
+        sheet.classList.remove("hidden");
+      } else closeSheet();
+    });
+    document.getElementById("im-attach").addEventListener("click", function () {
+      closeSheet();
+      $("#btn-attach").click();
+    });
+    document.getElementById("im-refresh").addEventListener("click", function () {
+      loadComposeThread();
+    });
+    document.getElementById("im-full").addEventListener("click", function () {
+      sec.classList.toggle("im-full");
+      imPaintHead();
+      closeSheet();
+    });
+    plus.title = t("compose.imPlus");
+    plus.setAttribute("aria-label", t("compose.imPlus"));
+    send.setAttribute("aria-label", t("compose.send"));
+    document.getElementById("im-refresh").setAttribute("aria-label", t("compose.refreshThread"));
+    document.addEventListener("i18n:change", function () {
+      plus.title = t("compose.imPlus");
+      plus.setAttribute("aria-label", t("compose.imPlus"));
+      send.setAttribute("aria-label", t("compose.send"));
+      document.getElementById("im-refresh").setAttribute("aria-label", t("compose.refreshThread"));
+      imPaintHead();
+    });
+    // Tap outside the panel closes it (the ＋ button toggles itself).
+    document.addEventListener("click", function (e) {
+      if (sheet.classList.contains("hidden")) return;
+      if (!e.target.closest("#im-sheet") && !e.target.closest("#im-plus")) closeSheet();
+    });
+  })();
+  // Quote the newest letter into the bar body (＋ panel: 引用最新一封).
+  async function quoteLatestForIm() {
+    var sec = document.getElementById("tab-compose");
+    if (!sec || !sec.classList.contains("im")) return;
+    if (!threadNewest || !threadNewest.id) { toast(t("compose.imNoThread"), "error"); return; }
+    var cur = getSession();
+    var path = (cur && !cur.is_admin)
+      ? "/api/message?id=" + encodeURIComponent(threadNewest.id)
+      : "/admin/message?id=" + encodeURIComponent(threadNewest.id);
+    try {
+      var m = await api(path);
+      var text = String(m.body || threadNewest.preview || "").split("\n")
+        .map(function (l) { return "> " + l; }).join("\n");
+      if (text.length > 2000) text = text.slice(0, 2000) + "\n> …";
+      var bodyEl = $("#compose-body");
+      bodyEl.value = (bodyEl.value ? bodyEl.value + "\n\n" : "") + text;
+      composeInReplyTo = threadNewest.id;
+      renderInReplyTo();
+      syncImBar();
+      draftNoteTyping();
+      $("#im-input").focus();
+    } catch (e) {
+      toast(t("common.error", { msg: e.message }), "error");
+    }
+  }
+  $("#im-quote").addEventListener("click", quoteLatestForIm);
 
   // ---- mobile one-screen compose (superior 09-02): the recent-
   // conversation list folds into a fullscreen modal; the node is MOVED in
