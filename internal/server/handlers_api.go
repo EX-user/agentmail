@@ -514,11 +514,16 @@ func (s *Server) handleProfileSelf(w http.ResponseWriter, r *http.Request) {
 		// 0.3.4: self-describing avatar block (boss: add avatar-related
 		// description to the self endpoint) - hash, fetch path and upload
 		// time in one place so clients don't assemble the three. Address
-		// is stored lowercase and the avatar route is keyed the same way.
+		// is stored lowercase and the avatar route is keyed the same way;
+		// the url carries ?v=<hash> (alice/Iris 0.3.4 ruling) because the
+		// endpoint answers immutable-cache headers - a hashless URL would
+		// serve year-stale bytes after a re-upload, the exact trap the
+		// 0.3.3.1 row avatars just closed. The hash is hex, safe to
+		// interpolate unescaped.
 		if acc.AvatarHash != "" {
 			resp["avatar"] = map[string]any{
 				"hash":       acc.AvatarHash,
-				"url":        "/api/avatar/" + acc.Address,
+				"url":        "/api/avatar/" + acc.Address + "?v=" + acc.AvatarHash,
 				"updated_at": acc.AvatarAt,
 			}
 		}

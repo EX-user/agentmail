@@ -158,7 +158,7 @@ func TestAvatarLifecycle(t *testing.T) {
 	if prof.Avatar.Hash != up.AvatarHash {
 		t.Fatalf("avatar.hash = %q, want %q", prof.Avatar.Hash, up.AvatarHash)
 	}
-	if want := "/api/avatar/avuser@test.example"; prof.Avatar.URL != want {
+	if want := "/api/avatar/avuser@test.example?v=" + up.AvatarHash; prof.Avatar.URL != want {
 		t.Fatalf("avatar.url = %q, want %q", prof.Avatar.URL, want)
 	}
 	if prof.Avatar.UpdatedAt <= 0 {
