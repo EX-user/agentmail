@@ -300,6 +300,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     sec.classList.toggle("im", on);
     if (!on) {
       sec.classList.remove("im-cc-open");
+      sec.classList.remove("im-full"); // stale full-form state dies with IM mode
       if (ccMoveBack) ccMoveBack();
       if (sheetHomeRestore) sheetHomeRestore();
       if (attHomeRestore) attHomeRestore();
@@ -310,7 +311,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
     if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
-    if (sheetIntoCard) sheetIntoCard(); // panel rows + chips live in the card (v6)
+    // Full-form owns the page: the chips stay in the form until the card
+    // returns (syncImMode re-runs on many beats and would yank them back).
+    if (sheetIntoCard && !sec.classList.contains("im-full")) sheetIntoCard();
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The three header controls are hidden behind the conversation in IM mode:
@@ -1925,7 +1928,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         if (ccInput) ccInput.focus();
         return;
       }
-      if (!sheet.classList.contains("hidden") && !e.target.closest("#im-sheet")) closeSheet();
+      if (!sheet.classList.contains("hidden") && !e.target.closest("#im-sheet") &&
+          !e.target.closest("#im-back") && !e.target.closest("#im-full")) closeSheet();
     });
     function imSyncCcUi() {
       var btn = document.getElementById("im-cc");
@@ -1940,18 +1944,42 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // Boss: the subject must be visible and reachable, never silent — the
     // line above the bar opens the full form with the subject focused.
     subjLine.addEventListener("click", function () {
-      closeSheet();
-      sec.classList.add("im-full");
-      imPaintHead();
+      enterFullForm();
       var subjEl = $("#compose-subject");
       if (subjEl) subjEl.focus();
     });
-    document.getElementById("im-full").addEventListener("click", function () {
-      sec.classList.toggle("im-full");
-      ccMoveBack(); // the full form needs every row home
-      imPaintHead();
+    // Boss: the switch is lossless BOTH ways - body text, Cc, in-reply-to
+    // and attachments all ride along (shared nodes/values; only the chrome
+    // moves). The card sleeps while the full form owns the page; the 回来
+    // button (compose.imBack) brings the conversation back.
+    function enterFullForm() {
+      sec.classList.add("im-full");
+      input.blur(); // drop the soft keyboard
+      ccMoveBack(); // cc row home (chips + value ride with the node)
+      attHomeRestore(); // attachment chips home into the form
       closeSheet();
+      imPaintHead();
+    }
+    function exitFullForm() {
+      sec.classList.remove("im-full");
+      syncImBar(); // body text rides back into the bar
+      sheetIntoCard(); // chips back into the card
+      // Cc with content stays resident in the card (what the form showed,
+      // the bar keeps showing); emptied cc leaves just the button.
+      if (composeCcChips.length > 0 && ccHome) {
+        if (!sheet.contains(ccHome)) sheet.appendChild(ccHome);
+        ccHome.classList.remove("hidden");
+        setSheet(true);
+      }
+      imSyncCcUi();
+      imPaintHead();
+    }
+    document.getElementById("im-full").addEventListener("click", function () {
+      if (sec.classList.contains("im-full")) exitFullForm();
+      else enterFullForm();
     });
+    var backBtn = document.getElementById("im-back");
+    if (backBtn) backBtn.addEventListener("click", exitFullForm);
     plus.title = t("compose.imPlus");
     plus.setAttribute("aria-label", t("compose.imPlus"));
     send.setAttribute("aria-label", t("compose.send"));
@@ -1966,7 +1994,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // Tap outside the panel closes it (the ＋ button toggles itself).
     document.addEventListener("click", function (e) {
       if (sheet.classList.contains("hidden")) return;
-      if (!e.target.closest("#im-sheet") && !e.target.closest("#im-plus")) closeSheet();
+      if (!e.target.closest("#im-sheet") && !e.target.closest("#im-plus") &&
+          !e.target.closest("#im-back") && !e.target.closest("#im-full")) closeSheet();
     });
   })();
   // ---- mobile one-screen compose (superior 09-02): the recent-

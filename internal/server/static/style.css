@@ -3014,7 +3014,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
    the items keep their validated capsule/truncation/button DNA. The form
    folds away and a one-line bar writes the body. PC and recipient-less
    compose are untouched (the class only exists on phones with a To). ---- */
-#im-bar, #im-sheet, #im-head, #im-subject { display: none; }
+#im-bar, #im-sheet, #im-head, #im-subject, #im-back { display: none; }
 #thread-holder { display: none; } /* parking spot for the thread node (was inline) */
 @media (max-width: 800px) {
   #tab-compose.im .compose-form { flex: 0 0 auto; overflow-y: visible; }
@@ -3155,5 +3155,12 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   /* 完整写信页 within a conversation: the validated form returns in full */
   #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
+  /* the irt row carries an inline display:flex - only !important hides it
+     while the conversation owns the page (it returns in the full form) */
+  #tab-compose.im:not(.im-full) #compose-inreplyto-row { display: none !important; }
   #tab-compose.im.im-full #thread-holder, #tab-compose.im.im-full #im-head { display: none; }
+  /* boss: full form owns the page - the floating card sleeps; a 回来
+     button rides at the top of the form (compose.imBack) */
+  #tab-compose.im.im-full #im-bar { display: none; }
+  #tab-compose.im.im-full #im-back { display: inline-flex; margin: 0 0 10px; }
 }
