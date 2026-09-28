@@ -3104,6 +3104,13 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     flex: 1 1 40%; min-width: 0; padding: 4px 8px; font-size: 12px;
   }
   #tab-compose.im #thread-holder #im-sheet:not(.hidden) #compose-cc-row { flex: 1 1 100%; }
+  /* 控件本体不透明、背板保持透明（boss 终裁）：滚过的内容只从控件之间的
+     空隙透出，永远不与控件文字打架。 */
+  #tab-compose.im #thread-holder #im-sheet:not(.hidden) button,
+  #tab-compose.im #thread-holder #im-sheet:not(.hidden) #compose-cc-row input,
+  #tab-compose.im #thread-holder #im-sheet:not(.hidden) #compose-cc-row .cc-chip {
+    background: var(--panel);
+  }
   #tab-compose.im #compose-thread { padding-bottom: 84px; } /* 最新信滚出浮层带的余量 */
   /* 完整写信页 within a conversation: the validated form returns in full */
   #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
