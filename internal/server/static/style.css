@@ -151,6 +151,16 @@ button.row-action {
   font-size: 13px;
 }
 button.row-action:hover { background: var(--panel-2); border-color: var(--accent); }
+/* boss PC round: compose reads as the row primary action; the gear opens
+   the mobile-style popover (remove + limits); badges trail the pill slot. */
+button.row-action.act-compose { background: var(--accent); color: #fff; border-color: var(--accent); border-radius: 999px; padding: 5px 18px; }
+button.row-action.act-compose:hover { background: var(--accent); filter: brightness(1.08); }
+button.row-gear { background: transparent; color: var(--muted, #888); border: 1px solid var(--border); border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1; }
+button.row-gear:hover { color: var(--accent); border-color: var(--accent); }
+.actions-cell { position: relative; }
+.gear-pop { position: absolute; right: 10px; top: calc(100% - 6px); z-index: 40; display: flex; flex-direction: column; gap: 6px; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 132px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.gear-pop[hidden] { display: none; }
+.pc-badges { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
 button.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 
 tr.row-disabled td { opacity: 0.5; }

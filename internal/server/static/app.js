@@ -436,7 +436,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="5">' + t("acc.noAccounts") + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3">' + t("acc.noAccounts") + '</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -454,10 +454,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">' + t("act.enable") + '</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">' + t("act.disable") + '</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
-          '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
+          '<td class="addr-cell" data-label="' + t("col.address") + '"><span class="pc-av-line"><span class="pc-addr">' + esc(a.address) + '</span><span class="pc-badges">' + tags.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(a.signature || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(a.signature || "") + "</span></span></td>" +
-          '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">' + t("act.compose") + '</button><button class="row-action" data-reset="' + esc(a.address) + '">' + t("act.resetPw") + '</button>' +
           toggleBtn + "</td>" +
           "</tr>";
@@ -480,7 +478,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       maybeMarqueeSigs();
 
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="5">Error: ' + esc(e.message) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="3">Error: ' + esc(e.message) + "</td></tr>";
     }
   }
 
@@ -1337,11 +1335,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // payload as the mobile list; CSS scopes it to >800px.
         '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
         '<span class="pc-addr">' + esc(e.address) + '</span>' +
-        '<span class="act-pill-slot" data-act-slot="pill"></span></span></td>' +
-        '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
+        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
         '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
-        "<td data-label=\"Created\"></td>" +
-        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-action" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
+        '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
         "</tr>";
       // Mobile container card (one-screen plan): badges + address share one
       // line (address marquees on overflow), signature max one line (same),
@@ -1352,7 +1349,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
 
     rows.push(
       '<tr class="agentreg-row">' +
-      '<td colspan="5" class="agentreg-cell">' +
+      '<td colspan="3" class="agentreg-cell">' +
       '<div class="agentreg-card">' +
       '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
       '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
@@ -1382,11 +1379,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span></span></td>" +
-          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '</span><span class="pc-badges">' + badge.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
-          "<td data-label=\"Created\"></td>" +
-          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"
         );
         clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: null });
@@ -1405,6 +1400,25 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     $$("[data-compose]", tbody).forEach(function (b) {
       b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
     });
+    // boss PC round: the gear opens the row popover (remove + limits),
+    // mobile-style; one open at a time, click-away closes (wired once).
+    $$("[data-gear]", tbody).forEach(function (g) {
+      g.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var pop = g.parentElement.querySelector(".gear-pop");
+        if (!pop) return;
+        var wasHidden = pop.hidden;
+        $$(".gear-pop", tbody).forEach(function (x) { x.hidden = true; });
+        pop.hidden = !wasHidden;
+      });
+    });
+    if (!window.__gearAwayWired) {
+      window.__gearAwayWired = 1;
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".gear-pop, [data-gear]")) return;
+        $$(".gear-pop", document).forEach(function (x) { x.hidden = true; });
+      });
+    }
     // v0.6.5: remove-subordinate buttons (PC rows + mobile cards) — the
     // destructive twin of compose, guarded by a consequence-aware confirm.
     $$("[data-remove-sub]", tbody).forEach(function (b) {
