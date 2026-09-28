@@ -3074,41 +3074,52 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   /* the one-line bar: last flex child of the tab, so it sits at the bottom
      edge in flow (keyboard-safe, no fixed-position fighting) */
+  /* v6 (boss: 输入部分重新做): ONE composer card - attachment chips, the
+     main row (plus/minus, input, send) and the pull-out rows (Cc, panel
+     entries) all live inside a single solid rounded card. Every input and
+     display is preserved; nothing floats loose any more. */
   #tab-compose.im #im-bar {
-    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
-    background: transparent; border: none; border-radius: 0;
-    box-shadow: none;
-    padding: 7px 8px 7px 13px; margin: 8px 0 2px;
+    display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.4);
+    padding: 8px; margin: 6px 8px 8px;
   }
-  #tab-compose.im #im-bar #im-plus {
-    width: 27px; height: 27px; min-height: 0; padding: 0; flex: 0 0 auto;
-    border-radius: 50%; border: 1px solid var(--border); background: transparent;
-    color: var(--muted); font-size: 16px; line-height: 1;
-  }
-  #tab-compose.im #im-bar #im-input {
-    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: none;
-    background: transparent; color: var(--text); font-size: 13px; outline: none;
-  }
-  #tab-compose.im #im-bar #im-send {
+  #tab-compose.im #im-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #tab-compose.im #im-main #im-plus {
     width: 30px; height: 30px; min-height: 0; padding: 0; flex: 0 0 auto;
-    border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 13px;
+    border-radius: 50%; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); font-size: 17px; line-height: 1;
   }
+  #tab-compose.im #im-main #im-input {
+    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: none;
+    background: transparent; color: var(--text); font-size: 13.5px; outline: none;
+  }
+  #tab-compose.im #im-main #im-send {
+    width: 34px; height: 34px; min-height: 0; padding: 0; flex: 0 0 auto;
+    border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 14px;
+  }
+  #tab-compose.im #im-bar #compose-attachments { margin: 0; }
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) button {
+    flex: 1 1 30%; min-width: 0; padding: 5px 8px; font-size: 12px;
+    background: rgba(127,127,127,.14); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--accent);
+  }
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row {
+    flex: 1 1 100%; display: flex; align-items: center; gap: 6px; margin: 0;
+  }
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row input {
+    background: transparent; border: 1px solid var(--border); border-radius: 10px;
+    padding: 5px 9px; font-size: 12.5px; min-height: 0;
+  }
+  #tab-compose.im #im-bar #compose-attachments:not(:empty) { display: block; }
   /* ＋ panel: Cc / attachments / full form. Boss v3: the panel must not
      take a slice of the page (it read as occluding the capsules) — it
      FLOATS at the bottom of the scroll list (sticky, fully transparent),
      so capsule content stays visible through and around it. */
-  #tab-compose.im #thread-holder { position: relative; }
-  #tab-compose.im #thread-holder #im-sheet:not(.hidden) {
-    position: sticky; bottom: 0; z-index: 5;
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) {
     display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px;
-    background: transparent; border: 1px solid var(--border); border-radius: 16px;
-    padding: 6px; margin: 6px 0 0;
+    border-top: 1px solid var(--border); padding: 6px 2px 2px; margin: 0;
   }
-  /* 紧凑版（boss：之前还行）：cc 行整行，两入口并排各半，不再竖排大块 */
-  #tab-compose.im #thread-holder #im-sheet:not(.hidden) button {
-    flex: 1 1 40%; min-width: 0; padding: 4px 8px; font-size: 12px;
-  }
-  #tab-compose.im #thread-holder #im-sheet:not(.hidden) #compose-cc-row { flex: 1 1 100%; }
   /* 控件本体不透明、背板保持透明（boss 终裁）：滚过的内容只从控件之间的
      空隙透出，永远不与控件文字打架。 */
   #tab-compose.im #thread-holder #im-sheet:not(.hidden) button,

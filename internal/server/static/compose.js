@@ -245,7 +245,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   var threadNewest = null;
   var ccMoveBack = null; // wireImBar assigns: the Cc row's ride-home (module handle)
   var sheetHomeRestore = null; // wireImBar assigns: the panel's ride-home
-  var sheetIntoList = null; // wireImBar assigns: the panel floats in the list (boss v3)
+  var sheetIntoCard = null; // wireImBar assigns: panel + attachment chips live in the card (v6)
+  var attHomeRestore = null; // wireImBar assigns: the attachment chips' ride-home
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -301,6 +302,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       sec.classList.remove("im-cc-open");
       if (ccMoveBack) ccMoveBack();
       if (sheetHomeRestore) sheetHomeRestore();
+      if (attHomeRestore) attHomeRestore();
       return;
     }
     // The inline list lives in #thread-holder; if the drawer owns the node,
@@ -308,7 +310,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
     if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
-    if (sheetIntoList) sheetIntoList(); // the panel floats at the list bottom
+    if (sheetIntoCard) sheetIntoCard(); // panel rows + chips live in the card (v6)
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The three header controls are hidden behind the conversation in IM mode:
@@ -1838,7 +1840,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var plus = document.getElementById("im-plus");
     var sheet = document.getElementById("im-sheet");
     var subjLine = document.getElementById("im-subject");
+    window.__canary = { sec: !!sec, bar: !!bar, input: !!input, send: !!send, plus: !!plus, sheet: !!sheet, subjLine: !!subjLine };
     if (!sec || !bar || !input || !send || !plus || !sheet || !subjLine) return;
+    window.__canary.passed = true;
     input.addEventListener("input", function () {
       $("#compose-body").value = input.value;
       draftNoteTyping();
@@ -1863,9 +1867,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         if (holderEl) holderEl.scrollTop = holderEl.scrollHeight;
       }
     }
-    plus.addEventListener("click", function () {
-      setSheet(sheet.classList.contains("hidden"));
-    });
+
     document.getElementById("im-attach").addEventListener("click", function () {
       closeSheet();
       $("#btn-attach").click();
@@ -1881,9 +1883,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var ccHomeNext = ccHome ? ccHome.nextSibling : null;
     var sheetHomeParent = sheet.parentNode;
     var sheetHomeNext = sheet.nextSibling;
-    sheetIntoList = function () { // sticky float: lives inside the scroll list
-      var list = document.getElementById("thread-holder");
-      if (sheet && list && !list.contains(sheet)) list.appendChild(sheet);
+    var attHome = document.getElementById("compose-attachments");
+    var attHomeParent = attHome ? attHome.parentNode : null;
+    var attHomeNext = attHome ? attHome.nextSibling : null;    attHomeRestore = function () { // ride home whenever IM mode is off
+      if (attHome && attHomeParent && attHome.parentNode !== attHomeParent) {
+        attHomeParent.insertBefore(attHome, attHomeNext);
+      }
+    };
+    sheetIntoCard = function () { // v6: panel rows + attachment chips live in the card
+      if (sheet && bar && !bar.contains(sheet)) bar.appendChild(sheet);
+      if (attHome && bar && !bar.contains(attHome)) bar.insertBefore(attHome, sheet);
     };
     sheetHomeRestore = function () {
       if (sheet && sheetHomeParent && sheet.parentNode !== sheetHomeParent) {
@@ -1899,21 +1908,32 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // the row OUT to reside by the bar (发信后即消 - a send dissolves it);
     // while the row exists its button hides. One reconciler keeps the pair
     // honest wherever the row state changes.
+    // 委托式接线（v6）：bar/面板节点在模式切换里会被搬移/重排，直接挂点
+    // 有被换元素的风险——document 级委托对任何 DOM 身份变化免疫。
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("#im-plus")) {
+        setSheet(sheet.classList.contains("hidden"));
+        return;
+      }
+      if (e.target.closest("#im-cc")) {
+        if (ccHome) {
+          sheet.appendChild(ccHome);
+          ccHome.classList.remove("hidden");
+        }
+        imSyncCcUi();
+        var ccInput = $("#compose-cc");
+        if (ccInput) ccInput.focus();
+        return;
+      }
+      if (!sheet.classList.contains("hidden") && !e.target.closest("#im-sheet")) closeSheet();
+    });
     function imSyncCcUi() {
       var btn = document.getElementById("im-cc");
       if (btn && ccHome && sheet && sheet.contains(ccHome)) {
         btn.classList.toggle("hidden", !ccHome.classList.contains("hidden"));
       }
     }
-    document.getElementById("im-cc").addEventListener("click", function () {
-      if (ccHome) {
-        sheet.appendChild(ccHome);
-        ccHome.classList.remove("hidden");
-      }
-      imSyncCcUi();
-      var ccInput = $("#compose-cc");
-      if (ccInput) ccInput.focus();
-    });
+
     document.getElementById("im-refresh").addEventListener("click", function () {
       loadComposeThread();
     });

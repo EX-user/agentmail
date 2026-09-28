@@ -861,15 +861,17 @@
         <button type="button" id="im-refresh" class="row-action" title="↻">↻</button>
       </div>
       <div id="im-subject" role="button" tabindex="0"></div>
-      <div id="im-sheet" class="hidden">
-        <button type="button" id="im-cc" class="row-action" data-i18n="compose.addCc">＋ Cc</button>
-        <button type="button" id="im-attach" class="row-action" data-i18n="compose.attach">📎 Attach</button>
-        <button type="button" id="im-full" class="row-action" data-i18n="compose.imFull">Full compose form</button>
-      </div>
       <div id="im-bar">
-        <button type="button" id="im-plus" title="＋">＋</button>
-        <input type="text" id="im-input" data-i18n-ph="compose.imPh" placeholder="Write a message…" autocomplete="off" />
-        <button type="button" id="im-send" title="➤">➤</button>
+        <div id="im-main">
+          <button type="button" id="im-plus" title="＋">＋</button>
+          <input type="text" id="im-input" data-i18n-ph="compose.imPh" placeholder="Write a message…" autocomplete="off" />
+          <button type="button" id="im-send" title="➤">➤</button>
+        </div>
+        <div id="im-sheet" class="hidden">
+          <button type="button" id="im-cc" class="row-action" data-i18n="compose.addCc">＋ Cc</button>
+          <button type="button" id="im-attach" class="row-action" data-i18n="compose.attach">📎 Attach</button>
+          <button type="button" id="im-full" class="row-action" data-i18n="compose.imFull">Full compose form</button>
+        </div>
       </div>
     </section>
   </main>
