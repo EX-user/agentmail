@@ -244,6 +244,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // everything under #tab-compose.im).
   var threadNewest = null;
   var ccMoveBack = null; // wireImBar assigns: the Cc row's ride-home (module handle)
+  var sheetHomeRestore = null; // wireImBar assigns: the panel's ride-home
+  var sheetIntoList = null; // wireImBar assigns: the panel floats in the list (boss v3)
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -298,6 +300,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (!on) {
       sec.classList.remove("im-cc-open");
       if (ccMoveBack) ccMoveBack();
+      if (sheetHomeRestore) sheetHomeRestore();
       return;
     }
     // The inline list lives in #thread-holder; if the drawer owns the node,
@@ -305,6 +308,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
     if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    if (sheetIntoList) sheetIntoList(); // the panel floats at the list bottom
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The three header controls are hidden behind the conversation in IM mode:
@@ -1861,6 +1865,17 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var ccHome = document.getElementById("compose-cc-row");
     var ccHomeParent = ccHome ? ccHome.parentNode : null;
     var ccHomeNext = ccHome ? ccHome.nextSibling : null;
+    var sheetHomeParent = sheet.parentNode;
+    var sheetHomeNext = sheet.nextSibling;
+    sheetIntoList = function () { // sticky float: lives inside the scroll list
+      var list = document.getElementById("thread-holder");
+      if (sheet && list && !list.contains(sheet)) list.appendChild(sheet);
+    };
+    sheetHomeRestore = function () {
+      if (sheet && sheetHomeParent && sheet.parentNode !== sheetHomeParent) {
+        sheetHomeParent.insertBefore(sheet, sheetHomeNext);
+      }
+    };
         ccMoveBack = function () { // module handle: syncImMode calls it off-mode
       if (ccHome && ccHomeParent && ccHome.parentNode !== ccHomeParent) {
         ccHomeParent.insertBefore(ccHome, ccHomeNext);

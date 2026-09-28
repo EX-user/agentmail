@@ -3088,14 +3088,18 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     width: 30px; height: 30px; min-height: 0; padding: 0; flex: 0 0 auto;
     border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 13px;
   }
-  /* ＋ panel: Cc / attachments / full form. Boss: the backing plate reads
-     as an ugly opaque block — the controls sit straight on the chat
-     surface, so the panel itself goes fully transparent. */
-  #tab-compose.im #im-sheet:not(.hidden) {
-    display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
+  /* ＋ panel: Cc / attachments / full form. Boss v3: the panel must not
+     take a slice of the page (it read as occluding the capsules) — it
+     FLOATS at the bottom of the scroll list (sticky, fully transparent),
+     so capsule content stays visible through and around it. */
+  #tab-compose.im #thread-holder { position: relative; }
+  #tab-compose.im #thread-holder #im-sheet:not(.hidden) {
+    position: sticky; bottom: 0; z-index: 5;
+    display: flex; flex-direction: column; gap: 6px;
     background: transparent; border: none; border-radius: 0;
-    box-shadow: none; padding: 2px 4px; margin: 8px 0 2px;
+    box-shadow: none; padding: 2px 4px; margin: 6px 0 0;
   }
+  #tab-compose.im #compose-thread { padding-bottom: 96px; } /* 最新信滚出浮层带的余量 */
   /* 完整写信页 within a conversation: the validated form returns in full */
   #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
