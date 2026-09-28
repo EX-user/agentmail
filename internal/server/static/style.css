@@ -3113,6 +3113,17 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #im-bar .attach-size { flex: 0 0 auto; font-size: 11px; }
   #tab-compose.im #im-bar .attach-card button { min-height: 0; padding: 0 4px; flex: 0 0 auto; }
+  /* boss: attachments read as ONE rounded box, rows split by dashed
+     rules - not a pile of separate chips */
+  #tab-compose.im #im-bar #compose-attachments:not(:empty) {
+    border: 1px solid var(--border); border-radius: 12px; padding: 2px;
+  }
+  #tab-compose.im #im-bar #compose-attachments:not(:empty) .attach-card {
+    border: none; border-radius: 8px; background: transparent;
+  }
+  #tab-compose.im #im-bar #compose-attachments:not(:empty) .attach-card + .attach-card {
+    border-top: 1px dashed var(--border); border-radius: 0 0 8px 8px;
+  }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) button {
     flex: 1 1 30%; min-width: 0; padding: 5px 8px; font-size: 12px;
     background: rgba(127,127,127,.14); border: 1px solid var(--border);
@@ -3162,5 +3173,11 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   /* boss: full form owns the page - the floating card sleeps; a 回来
      button rides at the top of the form (compose.imBack) */
   #tab-compose.im.im-full #im-bar { display: none; }
-  #tab-compose.im.im-full #im-back { display: inline-flex; margin: 0 0 10px; }
+  #tab-compose.im.im-full #im-back {
+    display: inline-flex; align-items: center; width: auto; align-self: flex-start;
+    min-height: 0; padding: 3px 12px; margin: 0 0 10px;
+    font-size: 12.5px; background: transparent;
+    border: 1px solid var(--border); border-radius: 999px; color: var(--muted);
+  }
+  #tab-compose.im.im-full #im-back::before { content: "\2039\00a0"; font-size: 15px; line-height: 1; }
 }

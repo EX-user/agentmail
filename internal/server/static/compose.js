@@ -57,8 +57,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       api("/api/sent?limit=30", { keepSession: true }).catch(function () { return { messages: [] }; })
     ]).then(function (res) {
       var items = [];
-      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "←", ts: m.received_at || 0 }); });
-      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || "(no subject)", dir: "→", ts: m.received_at || 0 }); });
+      (res[0].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || t("thread.noSubject"), dir: "←", ts: m.received_at || 0 }); });
+      (res[1].messages || []).forEach(function (m) { items.push({ id: m.id || m.message_id, subj: m.subject || t("thread.noSubject"), dir: "→", ts: m.received_at || 0 }); });
       items.sort(function (a, b) { return b.ts - a.ts; });
       items = items.slice(0, 30);
       irtLabels = items.map(function (it) {
@@ -1075,16 +1075,27 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       // contacts that fell outside the 50-message windows.
       const cur = getSession();
       const isRegular = cur && !cur.is_admin;
-      const threadRes = isRegular
-        ? await api("/api/thread?with=" + encodeURIComponent(to) + "&limit=50")
-        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + composeDomain) +
-            "&with=" + encodeURIComponent(to) + "&limit=50");
-      const all = (threadRes.messages || []).map(function (m) {
-        return m.dir === "out"
-          ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: to }
-          : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
-              peer: to, from: m.from, unread: m.unread };
-      }).sort(function (a, b) { return b.ts - a.ts; });
+      // Boss: To may hold several addresses. The server window is single-
+      // peer, so a multi-value To fans out per address and merges the
+      // letters into one timeline (each letter keeps its own peer).
+      const peers = to.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      const fetchPeer = function (peer) {
+        return isRegular
+          ? api("/api/thread?with=" + encodeURIComponent(peer) + "&limit=50")
+          : api("/admin/thread?account=" + encodeURIComponent("admin@" + composeDomain) +
+              "&with=" + encodeURIComponent(peer) + "&limit=50");
+      };
+      const results = await Promise.all(peers.map(fetchPeer));
+      const all = [];
+      results.forEach(function (threadRes, i) {
+        (threadRes.messages || []).forEach(function (m) {
+          all.push(m.dir === "out"
+            ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: peers[i] }
+            : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
+                peer: peers[i], from: m.from, unread: m.unread });
+        });
+      });
+      all.sort(function (a, b) { return b.ts - a.ts; });
       threadNewest = all.length ? all[0] : null; // auto anchor + quote source
       var imOrder = imMode();
       if (imOrder) all.reverse(); // IM reading order: oldest top, latest bottom
@@ -1099,23 +1110,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         const unreadMark = (m.dir === "in" && m.unread) ? '<span class="unread-dot" title="unread">●</span>' : "";
         const subjCls = (m.dir === "in" && m.unread) ? " thread-subj-unread" : "";
         // Quick action button: "Reply" for received, "Follow up" for sent.
-        // Clicking fills To + Subject in the compose form above.
+        // Clicking merges the peer into To and sets the in-reply-to anchor;
+        // the subject field stays untouched (boss: it lives in the body).
         const actionLabel = m.dir === "in" ? t("thread.reply") : t("thread.followUp");
         const actionTarget = m.dir === "in" ? (m.from || m.peer) : m.peer;
-        const subjBase = m.subject || "";
-        // Always prepend the prefix on each reply/follow-up (matches standard
-        // mail clients like Gmail/Outlook, where Re:Re:… is expected). Earlier
-        // the code skipped the prefix when one was already present, which made
-        // a reply-to-a-reply lose the stacking.
-        const newSubj = m.dir === "in"
-          ? "Re: " + subjBase
-          : "Follow-up: " + subjBase;
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
-          '" data-subj="' + esc(newSubj) + '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
+          '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">' + esc(t("thread.expand")) + '</span> ' + actionBtn + '</div>' +
-          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(m.subject || "(no subject)") + "</div>" +
+          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(m.subject || t("thread.noSubject")) + "</div>" +
           '<div class="thread-prev">' + esc(m.preview || "") + "</div>" +
           '<div class="thread-full hidden"></div>' +
           "</div>";
@@ -1124,8 +1128,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       $$(".thread-action", threadEl).forEach(function (btn) {
         btn.addEventListener("click", function (e) {
           e.stopPropagation(); // don't trigger the item's expand toggle
-          $("#compose-to").value = btn.dataset.target;
-          $("#compose-subject").value = btn.dataset.subj;
+          // Boss: reply/follow-up live in the body (and the in-reply-to
+          // anchor) - the subject field stays untouched. To merges,
+          // multi-value aware: existing addresses keep, target joins once.
+          var toEl = $("#compose-to");
+          var have = (toEl.value || "").split(",").map(function (s) { return s.trim(); })
+            .filter(Boolean);
+          var tgt = (btn.dataset.target || "").trim();
+          if (tgt && have.indexOf(tgt) === -1) have.push(tgt);
+          toEl.value = have.join(", ");
           composeInReplyTo = btn.dataset.mid || null;
           renderInReplyTo();
           if (imMode()) { syncImBar(); $("#im-input").focus(); }
