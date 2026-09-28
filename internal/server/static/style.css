@@ -3082,9 +3082,11 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
     background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
     box-shadow: 0 8px 22px rgba(0,0,0,.4);
-    padding: 8px; margin: 6px 8px 8px;
+    padding: 4px 8px; margin: 6px 8px 8px;
   }
   #tab-compose.im #im-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  /* 收起态行内垂直居中（boss 附图：上下富余） */
+  #tab-compose.im #im-bar #im-main { align-items: center; padding: 2px 0; }
   #tab-compose.im #im-main #im-plus {
     width: 30px; height: 30px; min-height: 0; padding: 0; flex: 0 0 auto;
     border-radius: 50%; border: 1px solid var(--border); background: transparent;
@@ -3099,14 +3101,33 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 14px;
   }
   #tab-compose.im #im-bar #compose-attachments { margin: 0; }
+  /* 附件卡提密（boss：信息密度低）：单行 chip——📎 名（省略）·大小·× 同排 */
+  #tab-compose.im #im-bar .attach-card {
+    display: flex; align-items: center; gap: 7px;
+    padding: 3px 9px; border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(127,127,127,.10); min-width: 0;
+  }
+  #tab-compose.im #im-bar .attach-clip { flex: 0 0 auto; }
+  #tab-compose.im #im-bar .attach-name {
+    flex: 0 1 auto; min-width: 0; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; font-size: 12px;
+  }
+  #tab-compose.im #im-bar .attach-size { flex: 0 0 auto; font-size: 11px; }
+  #tab-compose.im #im-bar .attach-card button { min-height: 0; padding: 0 4px; flex: 0 0 auto; }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) button {
     flex: 1 1 30%; min-width: 0; padding: 5px 8px; font-size: 12px;
     background: rgba(127,127,127,.14); border: 1px solid var(--border);
     border-radius: 10px; color: var(--accent);
   }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row {
-    flex: 1 1 100%; display: flex; align-items: center; gap: 6px; margin: 0;
+    flex: 1 1 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 0;
   }
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row .cc-input-wrap { flex: 1 1 auto; min-width: 130px; }
+  /* chips 自成一行流式排布，永不折断字样 */
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) #cc-tags {
+    flex: 1 1 100%; order: 3; display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  #tab-compose.im #im-bar #im-sheet:not(.hidden) #cc-tags .cc-chip { white-space: nowrap; }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row input {
     background: transparent; border: 1px solid var(--border); border-radius: 10px;
     padding: 5px 9px; font-size: 12.5px; min-height: 0;
