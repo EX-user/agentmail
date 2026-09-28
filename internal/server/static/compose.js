@@ -1820,6 +1820,14 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     fitComposeOneScreen();
     setTimeout(fitComposeOneScreen, 250); // second pass: late fonts/layout
   });
+  // boss 0.3.4 ask #3: a letter arriving while the user sits on the
+  // compose page must surface on its own. The "new mail" beat (the badge
+  // poll's signal - the same instant the accounts-row dots light up)
+  // re-pulls the open peer's thread. No-to state: loadComposeThread
+  // no-ops into its placeholder, so the listener stays dumb.
+  document.addEventListener("inbox:newmail", function () {
+    loadComposeThread();
+  });
 
   // ---- 0.3.5 件2: the one-line IM bar + ＋ panel (boss-approved v3) ----
   (function wireImBar() {
