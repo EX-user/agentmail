@@ -998,11 +998,34 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     if (diff === 1) return t("acc.yesterday");
     return t("acc.daysAgo", { n: diff });
   }
+  // boss mobile-list round (0.3.4): no "Latest:" prefix; a no-information
+  // subject (IM-style sends fill it) shows the body snippet instead - the
+  // set is the union of both locales' vocabularies. latest_body rides the
+  // same payload once the Go side lands; until then the subject fallback
+  // keeps the line honest.
+  var noinfoCache = null;
+  function noinfoSet() {
+    if (noinfoCache) return noinfoCache;
+    var out = {};
+    ["zh", "en"].forEach(function (l) {
+      var d = window.I18N && window.I18N.dict && window.I18N.dict(l);
+      var raw = (d && d["acc.noinfoSubjects"]) || "";
+      raw.split(",").forEach(function (w) {
+        w = w.trim().toLowerCase();
+        if (w) out[w] = 1;
+      });
+    });
+    noinfoCache = out;
+    return out;
+  }
   function accLatestHtml(s) {
     if (!s || !(+s.latest_at)) return '<div class="im3-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div>";
     var dir = s.latest_dir === "out" ? t("acc.latestOut") : t("acc.latestIn");
-    var subj = s.latest_subject ? "\u300c" + s.latest_subject + "\u300d" : "";
-    return '<div class="im3-line3">' + esc(t("acc.latestPre")) + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
+    var shown = s.latest_subject || "";
+    if (shown && !shown.trim()) shown = s.latest_body || shown;
+    if (shown && noinfoSet()[shown.trim().toLowerCase()]) shown = s.latest_body || shown;
+    var subj = shown ? "\u300c" + shown + "\u300d" : "";
+    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
   }
   // ---- 0.3.3-A: default avatar mixed generator (Iris spec v1.1) ----
   // Deterministic: address (lowercase) -> SHA-256 -> seed bytes S[0..3].
@@ -1335,7 +1358,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // payload as the mobile list; CSS scopes it to >800px.
         '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
         '<span class="pc-addr">' + esc(e.address) + '</span>' +
-        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
+        '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span>" +
+        '<div class="im3-line3 pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td>" +
         '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
         '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
         '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
@@ -1379,7 +1403,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // below feeds #acc-m-contacts (the phone-only scrollable list).
         rows.push(
           "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '</span><span class="pc-badges">' + badge.trim() + "</span></span></td>" +
+          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '</span><span class="pc-badges">' + badge.trim() + "</span></span>" +
+          '<div class="im3-line3 pc-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
           "</tr>"

@@ -161,6 +161,10 @@ button.row-gear:hover { color: var(--accent); border-color: var(--accent); }
 .gear-pop { position: absolute; right: 10px; top: calc(100% - 6px); z-index: 40; display: flex; flex-direction: column; gap: 6px; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 132px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 .gear-pop[hidden] { display: none; }
 .pc-badges { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+/* boss PC round: the row's latest-message line mirrors the mobile list item
+   (time dir . subject) - applyActivity patches it in place like on phones. */
+.pc-line3 { margin-top: 3px; font-size: 12px; color: var(--muted, #888); max-width: 560px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-line3 .cl-none { color: var(--muted, #aaa); }
 button.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 
 tr.row-disabled td { opacity: 0.5; }

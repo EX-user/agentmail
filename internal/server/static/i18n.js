@@ -556,7 +556,7 @@
 
       "acc.badgeExt": "external",
       "acc.latestNone": "No messages yet",
-      "acc.latestPre": "Latest: ",
+      "acc.noinfoSubjects": "SMS,Message,—",
       "acc.latestIn": "in", "acc.latestOut": "out",
       "acc.settings": "Settings", "acc.back": "Back",
       "acc.regTitle": "Register a mailbox for your AI agent",
@@ -1179,7 +1179,7 @@
 
       "acc.badgeExt": "外部",
       "acc.latestNone": "暂无往来",
-      "acc.latestPre": "最新：",
+      "acc.noinfoSubjects": "短信,消息,空",
       "acc.latestIn": "收", "acc.latestOut": "发",
       "acc.settings": "设置", "acc.back": "返回",
       "acc.regTitle": "为你的 AI agent 注册邮箱",
@@ -1342,5 +1342,5 @@
   current = detectLang();
 
   // Export for app.js (loaded after this file; both plain scripts).
-  window.I18N = { t: t, setLang: setLang, applyI18nDOM: applyI18nDOM, setSiteCopy: setSiteCopy, lang: function () { return current || detectLang(); } };
+  window.I18N = { t: t, setLang: setLang, applyI18nDOM: applyI18nDOM, setSiteCopy: setSiteCopy, lang: function () { return current || detectLang(); }, dict: function (lang) { return (DICT[lang] && DICT[lang]) || null; } };
 })();
