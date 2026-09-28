@@ -1075,27 +1075,21 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       // contacts that fell outside the 50-message windows.
       const cur = getSession();
       const isRegular = cur && !cur.is_admin;
-      // Boss: To may hold several addresses. The server window is single-
-      // peer, so a multi-value To fans out per address and merges the
-      // letters into one timeline (each letter keeps its own peer).
-      const peers = to.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-      const fetchPeer = function (peer) {
-        return isRegular
-          ? api("/api/thread?with=" + encodeURIComponent(peer) + "&limit=50")
-          : api("/admin/thread?account=" + encodeURIComponent("admin@" + composeDomain) +
-              "&with=" + encodeURIComponent(peer) + "&limit=50");
-      };
-      const results = await Promise.all(peers.map(fetchPeer));
-      const all = [];
-      results.forEach(function (threadRes, i) {
-        (threadRes.messages || []).forEach(function (m) {
-          all.push(m.dir === "out"
-            ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: peers[i] }
-            : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
-                peer: peers[i], from: m.from, unread: m.unread });
-        });
-      });
-      all.sort(function (a, b) { return b.ts - a.ts; });
+      // Boss: on the conversation page a letter has exactly ONE recipient.
+      // A multi-value To (allowed on the full form) is CLIPPED to its first
+      // address the moment the conversation view loads.
+      const firstPeer = to.split(",")[0].trim();
+      if (firstPeer && firstPeer !== to) $("#compose-to").value = firstPeer;
+      const threadRes = isRegular
+        ? await api("/api/thread?with=" + encodeURIComponent(firstPeer || to) + "&limit=50")
+        : await api("/admin/thread?account=" + encodeURIComponent("admin@" + composeDomain) +
+            "&with=" + encodeURIComponent(firstPeer || to) + "&limit=50");
+      const all = (threadRes.messages || []).map(function (m) {
+        return m.dir === "out"
+          ? { dir: "out", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at, peer: firstPeer || to }
+          : { dir: "in", id: m.id, subject: m.subject, preview: m.preview, ts: m.received_at,
+              peer: firstPeer || to, from: m.from, unread: m.unread };
+      }).sort(function (a, b) { return b.ts - a.ts; });
       threadNewest = all.length ? all[0] : null; // auto anchor + quote source
       var imOrder = imMode();
       if (imOrder) all.reverse(); // IM reading order: oldest top, latest bottom
@@ -1129,14 +1123,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         btn.addEventListener("click", function (e) {
           e.stopPropagation(); // don't trigger the item's expand toggle
           // Boss: reply/follow-up live in the body (and the in-reply-to
-          // anchor) - the subject field stays untouched. To merges,
-          // multi-value aware: existing addresses keep, target joins once.
-          var toEl = $("#compose-to");
-          var have = (toEl.value || "").split(",").map(function (s) { return s.trim(); })
-            .filter(Boolean);
-          var tgt = (btn.dataset.target || "").trim();
-          if (tgt && have.indexOf(tgt) === -1) have.push(tgt);
-          toEl.value = have.join(", ");
+          // anchor) - the subject field stays untouched. To snaps to the
+          // one peer being replied to (the conversation page is single-to).
+          $("#compose-to").value = btn.dataset.target;
           composeInReplyTo = btn.dataset.mid || null;
           renderInReplyTo();
           if (imMode()) { syncImBar(); $("#im-input").focus(); }
@@ -1973,6 +1962,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     }
     function exitFullForm() {
       sec.classList.remove("im-full");
+      // Boss: the conversation page is single-To - a multi-value To the
+      // user typed on the full form clips to its first address here too.
+      var toEl = $("#compose-to");
+      var first = (toEl.value || "").split(",")[0].trim();
+      if (first && first !== toEl.value) toEl.value = first;
       syncImBar(); // body text rides back into the bar
       sheetIntoCard(); // chips back into the card
       // Cc with content stays resident in the card (what the form showed,
