@@ -3027,9 +3027,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im #im-sheet #compose-cc-row { display: block; margin: 0; }
   #tab-compose.im #im-sheet #compose-cc-row input { background: transparent; }
   /* the conversation header: label + peer + refresh (h3 stays retired) */
-  /* boss 红框终解：头行＋主题行与输入条连成一条不透明 chrome 横带（全幅），
-     列表的裁切边整条压进横带里；列表底缘再叠加渐隐遮罩，胶囊不再半行字
-     硬切，也就没有任何「内容被盖住」的观感。 */
+  /* 头行/主题行 v6 起休眠；列表即页面主体，输入卡悬浮压其底部。 */
   /* boss: the 往来邮件/subject text rows retire outright (v4) */
   #tab-compose.im #im-head { display: none; }
   #tab-compose.im #im-head #im-peer {
@@ -3068,21 +3066,22 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     background: var(--bg);
     margin: 0 -10px; padding: 2px 12px 4px;
   }
-  #tab-compose.im #thread-holder {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
-  }
-  /* the one-line bar: last flex child of the tab, so it sits at the bottom
-     edge in flow (keyboard-safe, no fixed-position fighting) */
+  /* v7 (boss 终裁): the card FLOATS over the tail of the list - absolute,
+     never moves with scroll (no snapping). The list extends behind it, so
+     capsules scrolling past peek out on both flanks (boss: 面板可以不
+     透明，但左右要能看到后面的消息). Same width as before: full width
+     minus the 8px side insets. */
   /* v6 (boss: 输入部分重新做): ONE composer card - attachment chips, the
      main row (plus/minus, input, send) and the pull-out rows (Cc, panel
      entries) all live inside a single solid rounded card. Every input and
      display is preserved; nothing floats loose any more. */
+  #tab-compose.im { position: relative; } /* overlay anchor */
   #tab-compose.im #im-bar {
-    display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
+    position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5;
+    display: flex; flex-direction: column; gap: 6px;
     background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
     box-shadow: 0 8px 22px rgba(0,0,0,.4);
-    padding: 4px 8px; margin: 6px 8px 8px;
+    padding: 4px 8px;
   }
   #tab-compose.im #im-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
   /* 收起态行内垂直居中（boss 附图：上下富余） */
@@ -3148,7 +3147,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im #thread-holder #im-sheet:not(.hidden) #compose-cc-row .cc-chip {
     background: var(--panel);
   }
-  #tab-compose.im #compose-thread { padding-bottom: 84px; } /* 最新信滚出浮层带的余量 */
+  #tab-compose.im #compose-thread { padding-bottom: 84px; } /* 最新信滚出浮层卡（卡高62+阴影余量22） */
   /* 完整写信页 within a conversation: the validated form returns in full */
   #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
