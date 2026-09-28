@@ -283,7 +283,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // boss 09-29: no auto-anchoring and no phantom inherit - the send path
     // stamps the no-information subject word when empty, so the line shows
     // exactly that (the line predicts what will go out).
-    return { text: t("compose.noSubjectWord"), auto: true };    return { text: "", auto: false };
+    return { text: t("compose.noSubjectWord"), auto: true };
   }
   function imPaintHead() {
     var peer = document.getElementById("im-peer");
