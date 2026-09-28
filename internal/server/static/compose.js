@@ -265,6 +265,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   var sheetHomeRestore = null; // wireImBar assigns: the panel's ride-home
   var sheetIntoCard = null; // wireImBar assigns: panel + attachment chips live in the card (v6)
   var attHomeRestore = null; // wireImBar assigns: the attachment chips' ride-home
+  var imCcPlacement = null; // wireImBar assigns: cc-above-the-bar (boss 09-30)
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -426,6 +427,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     if (imBtn && imSheet && imSheet.contains(row)) {
       imBtn.classList.toggle("hidden", !row.classList.contains("hidden"));
     }
+    if (imCcPlacement) imCcPlacement();
   }
 
   // ---- recipient autocomplete (alice's task): typing filters the known
@@ -1168,8 +1170,12 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">' + esc(t("thread.expand")) + '</span> ' + actionBtn + '</div>' +
-          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(noSubjectInfo(m.subject) ? t("thread.noSubject") : m.subject) + "</div>" +
-          '<div class="thread-prev">' + esc(m.preview || "") + "</div>" +
+          (noSubjectInfo(m.subject)
+            ? // boss 09-30: a no-information subject gets NO redundant (no
+              // subject) label - the preview line carries the unread dot.
+              '<div class="thread-prev' + subjCls + '">' + unreadMark + esc(m.preview || "") + "</div>"
+            : '<div class="thread-subj' + subjCls + '">' + esc(m.subject) + "</div>" +
+              '<div class="thread-prev">' + esc(m.preview || "") + "</div>") +
           '<div class="thread-full hidden"></div>' +
           "</div>";
       }).join("");
@@ -1288,7 +1294,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // sometimes (value changed by autofill/other code paths). The split state
   // now reconciles against the To value on a fixed tick — the value is the
   // single source of truth, events only make it instant.
-  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); imIrtPaint(); }, 400);
+  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); imIrtPaint(); if (imCcPlacement) imCcPlacement(); }, 400);
   document.addEventListener("focusin", syncComposeSplit);
   document.addEventListener("focusout", function () { setTimeout(syncComposeSplit, 0); });
 
@@ -1990,6 +1996,20 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         ccHomeParent.insertBefore(ccHome, ccHomeNext);
       }
     };
+    // boss 09-30: with cc present the row lives ABOVE the input line (in the
+    // card), not inside the ＋ panel's expanded zone; the ＋Cc pull-out stays
+    // for ADDING (empty state). Authority: syncCcVisibility + the 400ms tick;
+    // the full form keeps the row home while it owns the page.
+    imCcPlacement = function () {
+      if (!sec.classList.contains("im") || sec.classList.contains("im-full")) return;
+      var main = document.getElementById("im-main");
+      if (composeCcChips.length > 0) {
+        if (main && !bar.contains(ccHome)) bar.insertBefore(ccHome, main);
+        ccHome.classList.remove("hidden");
+      } else if (bar.contains(ccHome)) {
+        ccMoveBack();
+      }
+    };
     // Boss semantics (v2 correction): ＋ pops the buttons; tapping Cc pulls
     // the row OUT to reside by the bar (发信后即消 - a send dissolves it);
     // while the row exists its button hides. One reconciler keeps the pair
@@ -2057,13 +2077,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (first && first !== toEl.value) toEl.value = first;
       syncImBar(); // body text rides back into the bar
       sheetIntoCard(); // chips back into the card
-      // Cc with content stays resident in the card (what the form showed,
-      // the bar keeps showing); emptied cc leaves just the button.
-      if (composeCcChips.length > 0 && ccHome) {
-        if (!sheet.contains(ccHome)) sheet.appendChild(ccHome);
-        ccHome.classList.remove("hidden");
-        setSheet(true);
-      }
+      // Cc with content now parks ABOVE the input line (boss 09-30) via the
+      // shared placement - the panel no longer force-opens for it.
+      if (imCcPlacement) imCcPlacement();
       imSyncCcUi();
       imPaintHead();
     }
