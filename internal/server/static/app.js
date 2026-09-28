@@ -1049,12 +1049,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   function accLatestHtml(s) {
     if (!s || !(+s.latest_at)) return '<div class="im3-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div>";
-    var dir = s.latest_dir === "out" ? t("acc.latestOut") : t("acc.latestIn");
     var shown = s.latest_subject || "";
     if (shown && !shown.trim()) shown = s.latest_body || shown;
     if (shown && noinfoSet()[shown.trim().toLowerCase()]) shown = s.latest_body || shown;
     var subj = shown ? "\u300c" + shown + "\u300d" : "";
-    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
+    // boss 09-29: the direction word is dropped from line3 (time + content
+    // carry the row); latest_dir stays in the payloads for other uses.
+    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
   }
   // ---- 0.3.3-A: default avatar mixed generator (Iris spec v1.1) ----
   // Deterministic: address (lowercase) -> SHA-256 -> seed bytes S[0..3].

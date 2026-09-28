@@ -277,6 +277,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // The single source of the IM send-title: the user's subject wins; empty
   // inherits "Re: <newest subject>" from the conversation (same rule the
   // send-time derive applies — the line predicts exactly what will go out).
+  // boss 09-29: conversation mode scrolls in #thread-holder (the inner list
+  // has no overflow) - seat BOTH to the bottom wherever we are in the move.
+  function scrollImThreadBottom() {
+    if (!imMode()) return;
+    var holder = document.getElementById("thread-holder");
+    if (holder) holder.scrollTop = holder.scrollHeight;
+    var t = document.getElementById("compose-thread");
+    if (t) t.scrollTop = t.scrollHeight;
+  }
+
   function predictedImSubject() {
     var s = ($("#compose-subject").value || "").trim();
     if (s) return { text: s, auto: false };
@@ -335,7 +345,10 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var holder = document.getElementById("thread-holder");
     var drawer = document.getElementById("thread-modal");
     var drawerOwns = !!(drawer && !drawer.classList.contains("hidden") && drawer.contains(thread));
-    if (!drawerOwns && thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    if (!drawerOwns && thread && holder && !holder.contains(thread)) {
+      holder.appendChild(thread);
+      if (imMode()) scrollImThreadBottom(); // entering IM: land on the latest
+    }
     // Full-form owns the page: the chips stay in the form until the card
     // returns (syncImMode re-runs on many beats and would yank them back).
     if (sheetIntoCard && !sec.classList.contains("im-full")) sheetIntoCard();
@@ -1213,7 +1226,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           toggleThreadItem(item);
         });
       });
-      if (imOrder) threadEl.scrollTop = threadEl.scrollHeight; // start at the latest
+      if (imOrder) {
+        // boss 09-29: entering from the accounts row must land on the latest
+        // letter. The HOLDER is the scroller in conversation mode (the inner
+        // list has no overflow), and the im-mode node move/class flip can
+        // land after this render - seat now and re-seat on the next frame
+        // and once more after the tick's node move.
+        scrollImThreadBottom();
+        requestAnimationFrame(scrollImThreadBottom);
+        setTimeout(scrollImThreadBottom, 250);
+      } // start at the latest
     } catch (e) {
       threadEl.className = "thread-list";
       threadEl.textContent = "Error loading thread: " + e.message;
