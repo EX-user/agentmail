@@ -1505,6 +1505,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     }
     // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
     renderPrefsOwnCard(ownSig, ownVisible);
+    // Fresh dots on return: pull immediately instead of waiting for the
+    // next 5s tick, so a visited conversation clears its dot in ~1s.
+    pullActivity();
     applyActivity();
   }
 
