@@ -252,9 +252,35 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   function imPeerText() {
     return t("compose.recentConv") + " · " + (($("#compose-to").value || "").trim() || "…");
   }
+  // The single source of the IM send-title: the user's subject wins; empty
+  // inherits "Re: <newest subject>" from the conversation (same rule the
+  // send-time derive applies — the line predicts exactly what will go out).
+  function predictedImSubject() {
+    var s = ($("#compose-subject").value || "").trim();
+    if (s) return { text: s, auto: false };
+    if (threadNewest && threadNewest.subject) return { text: "Re: " + threadNewest.subject, auto: true };
+    return { text: "", auto: false };
+  }
   function imPaintHead() {
     var peer = document.getElementById("im-peer");
     if (peer && peer.textContent !== imPeerText()) peer.textContent = imPeerText();
+    var subjLine = document.getElementById("im-subject");
+    if (subjLine) {
+      var ps = predictedImSubject();
+      var want = ps.text ? (t("compose.imSubject") + ps.text + (ps.auto ? t("compose.imSubjectAuto") : ""))
+                         : (t("compose.imSubject") + t("compose.imSubjectNone"));
+      if (subjLine.textContent !== want) {
+        subjLine.textContent = "";
+        var lbl = document.createElement("span");
+        lbl.textContent = t("compose.imSubject");
+        var val = document.createElement("span");
+        val.className = "im-subj-v";
+        val.textContent = ps.text ? ps.text + (ps.auto ? t("compose.imSubjectAuto") : "")
+                                  : t("compose.imSubjectNone");
+        subjLine.appendChild(lbl);
+        subjLine.appendChild(val);
+      }
+    }
     var fullBtn = document.getElementById("im-full");
     if (fullBtn) {
       var want = t(document.getElementById("tab-compose").classList.contains("im-full")
@@ -1787,7 +1813,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var send = document.getElementById("im-send");
     var plus = document.getElementById("im-plus");
     var sheet = document.getElementById("im-sheet");
-    if (!sec || !bar || !input || !send || !plus || !sheet) return;
+    var subjLine = document.getElementById("im-subject");
+    if (!sec || !bar || !input || !send || !plus || !sheet || !subjLine) return;
     input.addEventListener("input", function () {
       $("#compose-body").value = input.value;
       draftNoteTyping();
@@ -1821,6 +1848,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     });
     document.getElementById("im-refresh").addEventListener("click", function () {
       loadComposeThread();
+    });
+    // Boss: the subject must be visible and reachable, never silent — the
+    // line above the bar opens the full form with the subject focused.
+    subjLine.addEventListener("click", function () {
+      closeSheet();
+      sec.classList.add("im-full");
+      imPaintHead();
+      var subjEl = $("#compose-subject");
+      if (subjEl) subjEl.focus();
     });
     document.getElementById("im-full").addEventListener("click", function () {
       sec.classList.toggle("im-full");

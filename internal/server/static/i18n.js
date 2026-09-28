@@ -624,7 +624,10 @@
       "compose.imPh": "Write a message… (recipient & subject carry over)",
       "compose.imFull": "Full compose form",
       "compose.imBack": "Back to conversation",
-      "compose.imPlus": "Attachments, quote, full form",
+      "compose.imPlus": "Attachments, Cc, full form",
+      "compose.imSubject": "Subject: ",
+      "compose.imSubjectAuto": " (auto)",
+      "compose.imSubjectNone": "not set — tap to fill",
       // ---- misc (phase 2) ----
       "nav.logoutTitle": "Sign out",
       "modal.close": "Close",
@@ -1238,7 +1241,10 @@
       "compose.imPh": "写邮件…（对方与主题自动带出）",
       "compose.imFull": "完整写信页",
       "compose.imBack": "返回会话",
-      "compose.imPlus": "附件、引用与完整写信页",
+      "compose.imPlus": "附件、抄送与完整写信页",
+      "compose.imSubject": "主题：",
+      "compose.imSubjectAuto": "（自动）",
+      "compose.imSubjectNone": "未设置，点此填写",
       // ---- misc (phase 2) ----
       "nav.logoutTitle": "退出登录",
       "modal.close": "关闭",

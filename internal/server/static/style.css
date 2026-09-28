@@ -3014,7 +3014,7 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
    the items keep their validated capsule/truncation/button DNA. The form
    folds away and a one-line bar writes the body. PC and recipient-less
    compose are untouched (the class only exists on phones with a To). ---- */
-#im-bar, #im-sheet, #im-head { display: none; }
+#im-bar, #im-sheet, #im-head, #im-subject { display: none; }
 #thread-holder { display: none; } /* parking spot for the thread node (was inline) */
 @media (max-width: 800px) {
   #tab-compose.im .compose-form { flex: 0 0 auto; overflow-y: visible; }
@@ -3053,6 +3053,18 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
                 color-mix(in srgb, var(--accent) 14%, transparent)), var(--panel);
   }
   #tab-compose.im .thread-item.thread-in { margin-right: 14%; border-left-color: var(--success); }
+  /* the visible subject line (boss: the silent Re:-fill was baffling) —
+     it always shows exactly what the next send will carry: the user's own
+     subject, the predicted "Re: <newest> (auto)", or a tap-to-fill prompt */
+  #tab-compose.im #im-subject {
+    display: flex; align-items: baseline; gap: 6px; flex: 0 0 auto;
+    margin: 6px 2px 0; font-size: 11.5px; color: var(--muted);
+    cursor: pointer; min-width: 0;
+  }
+  #tab-compose.im #im-subject:active { color: var(--text); }
+  #tab-compose.im #im-subject .im-subj-v {
+    min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
   /* the one-line bar: last flex child of the tab, so it sits at the bottom
      edge in flow (keyboard-safe, no fixed-position fighting) */
   #tab-compose.im #im-bar {
