@@ -244,6 +244,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // everything under #tab-compose.im).
   var threadNewest = null;
   var ccMoveBack = null; // wireImBar assigns: the Cc row's ride-home (module handle)
+  var ccIntoPanel = null; // wireImBar assigns: the Cc row moves in with IM mode
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -305,6 +306,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
     if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    if (ccIntoPanel) ccIntoPanel(); // the Cc row lives in the panel during IM
     if (!was) loadComposeThread(); // re-render in IM order + scroll to latest
   }
   // The three header controls are hidden behind the conversation in IM mode:
@@ -1849,21 +1851,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var ccHome = document.getElementById("compose-cc-row");
     var ccHomeParent = ccHome ? ccHome.parentNode : null;
     var ccHomeNext = ccHome ? ccHome.nextSibling : null;
+    ccIntoPanel = function () { // module handle: the row moves in with IM mode
+      if (ccHome && sheet && !sec.classList.contains("im-full") &&
+          !sheet.contains(ccHome)) sheet.appendChild(ccHome);
+    };
     ccMoveBack = function () { // module handle: syncImMode calls it off-mode
       if (ccHome && ccHomeParent && ccHome.parentNode !== ccHomeParent) {
         ccHomeParent.insertBefore(ccHome, ccHomeNext);
       }
     };
-    document.getElementById("im-cc").addEventListener("click", function () {
-      // the panel STAYS OPEN hosting the row (anchored with the writing zone)
-      if (ccHome) {
-        sheet.appendChild(ccHome);
-        ccHome.classList.remove("hidden");
-      }
-      sheet.classList.remove("hidden");
-      var ccInput = $("#compose-cc");
-      if (ccInput) ccInput.focus();
-    });
     document.getElementById("im-refresh").addEventListener("click", function () {
       loadComposeThread();
     });
