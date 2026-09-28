@@ -402,6 +402,24 @@ func TestMgmtContactLatests(t *testing.T) {
 	put("me@t", "other2@t", "i-mailed-them", base-50)
 	put("ext3@t", "stranger@t", "no-me-involved", base-100)
 	put("sub1@t", "me@t", "from-my-sub", base-100)
+	// latest_body pins (boss retest: contact rows must be able to show the
+	// body for empty / no-information subjects): an empty-subject form and a
+	// has-subject form, plus the 100-rune truncation.
+	putB := func(from, to, subj, body string, at int64) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, Subject: subj, Body: body, ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	putB("ext4@t", "me@t", "", "empty-subject-body-text", base-60)
+	putB("me@t", "ext5@t", "out-with-subject", "out-body-text", base-55)
+	putB("ext6@t", "me@t", "long-body-letter", strings.Repeat("字", 120), base-50)
 
 	out, err := s.MgmtContactLatests("me@t")
 	if err != nil {
@@ -411,8 +429,8 @@ func TestMgmtContactLatests(t *testing.T) {
 	for _, c := range out {
 		got[c.Address] = c
 	}
-	if len(out) != 3 {
-		t.Fatalf("len(contacts) = %d (%v), want 3", len(out), out)
+	if len(out) != 6 {
+		t.Fatalf("len(contacts) = %d (%v), want 6", len(out), out)
 	}
 	if c := got["ext1@t"]; c.LatestAt != base-1800 || c.LatestSubject != "ext1-replied-newer" || c.LatestDir != "in" {
 		t.Fatalf("ext1 = %+v, want newer reply (in)", c)
@@ -425,6 +443,17 @@ func TestMgmtContactLatests(t *testing.T) {
 	}
 	if c := got["other2@t"]; c.LatestAt != base-50 || c.LatestSubject != "i-mailed-them" {
 		t.Fatalf("other2 = %+v", c)
+	}
+	// latest_body rides the same winning message as subject/dir, in both
+	// subject forms, truncated at 100 runes like the subs-overview feed.
+	if c := got["ext4@t"]; c.LatestBody != "empty-subject-body-text" || c.LatestSubject != "" {
+		t.Fatalf("ext4 = %+v, want empty-subject form (body carried, subject empty)", c)
+	}
+	if c := got["ext5@t"]; c.LatestBody != "out-body-text" || c.LatestSubject != "out-with-subject" {
+		t.Fatalf("ext5 = %+v, want has-subject form (body still carried)", c)
+	}
+	if c := got["ext6@t"]; len([]rune(c.LatestBody)) != 100 || c.LatestSubject != "long-body-letter" {
+		t.Fatalf("ext6 = %+v, want 100-rune truncated body", c)
 	}
 	for _, absent := range []string{"ext3@t", "sub1@t", "me@t", "stranger@t"} {
 		if _, ok := got[absent]; ok {

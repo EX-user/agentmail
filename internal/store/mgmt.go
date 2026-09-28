@@ -408,7 +408,11 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 type MgmtContactLatest struct {
 	Address       string `json:"address"`
 	LatestSubject string `json:"latest_subject,omitempty"`
-	LatestAt      int64  `json:"latest_at,omitempty"`
+	// Body of the latest letter (truncated) - the client swaps it in for
+	// empty / "no information" subjects on the contact rows (the same trait
+	// subordinate rows already have via subs-overview; boss retest report).
+	LatestBody string `json:"latest_body,omitempty"`
+	LatestAt   int64  `json:"latest_at,omitempty"`
 	// Direction of the LATEST message ("in"|"out", relative to me) - the
 	// client's accLatestHtml renders the arrow from it, same as the
 	// subs-overview payload (review note: without it every contact row
@@ -429,6 +433,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 	}
 	type cl struct {
 		subject string
+		body    string
 		at      int64
 		dir     string
 	}
@@ -459,6 +464,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 				if m.ReceivedAt > c.at {
 					c.at = m.ReceivedAt
 					c.subject = truncateRunes(m.Subject, 100)
+					c.body = truncateRunes(m.Body, 100)
 					c.dir = dir
 				}
 			}
@@ -477,7 +483,7 @@ func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
 	}
 	out := make([]MgmtContactLatest, 0, len(latest))
 	for a, c := range latest {
-		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestAt: c.at, LatestDir: c.dir})
+		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestBody: c.body, LatestAt: c.at, LatestDir: c.dir})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
 	return out, nil
