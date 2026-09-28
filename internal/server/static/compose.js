@@ -243,6 +243,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // send. PC and recipient-less compose keep the full form (CSS gates
   // everything under #tab-compose.im).
   var threadNewest = null;
+  var ccMoveBack = null; // wireImBar assigns: the Cc row's ride-home (module handle)
   function imMode() { return window.innerWidth <= 800; }
   function syncImBar() {
     var bar = document.getElementById("im-input");
@@ -294,7 +295,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var on = imMode() && !!($("#compose-to").value || "").trim();
     var was = sec.classList.contains("im");
     sec.classList.toggle("im", on);
-    if (!on) { sec.classList.remove("im-cc-open"); return; }
+    if (!on) {
+      sec.classList.remove("im-cc-open");
+      if (ccMoveBack) ccMoveBack();
+      return;
+    }
     // The inline list lives in #thread-holder; if the drawer owns the node,
     // take it back (the drawer only opens from the full form, never in IM).
     var thread = document.getElementById("compose-thread");
@@ -1073,13 +1078,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         return;
       }
       threadEl.innerHTML = all.map(function (m) {
-        const arrow = m.dir === "out" ? "→ sent" : "← received";
+        const arrow = m.dir === "out" ? t("thread.sentLabel") : t("thread.receivedLabel"); // 历史残留收编 i18n（boss）
         const cls = m.dir === "out" ? "thread-out" : "thread-in";
         const unreadMark = (m.dir === "in" && m.unread) ? '<span class="unread-dot" title="unread">●</span>' : "";
         const subjCls = (m.dir === "in" && m.unread) ? " thread-subj-unread" : "";
         // Quick action button: "Reply" for received, "Follow up" for sent.
         // Clicking fills To + Subject in the compose form above.
-        const actionLabel = m.dir === "in" ? "↩ Reply" : "↪ Follow up";
+        const actionLabel = m.dir === "in" ? t("thread.reply") : t("thread.followUp");
         const actionTarget = m.dir === "in" ? (m.from || m.peer) : m.peer;
         const subjBase = m.subject || "";
         // Always prepend the prefix on each reply/follow-up (matches standard
@@ -1838,11 +1843,24 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // Boss freeze-round feedback: the ＋ panel carries Cc — the validated cc
     // row (chips + autocomplete) un-hides in place; emptying the chips
     // re-hides it via syncCcVisibility (dropping the im-cc-open exception).
+    // Boss: the Cc input must not float at the top of the page — it anchors
+    // with the writing zone (inside the sheet, above the bar). The node moves
+    // (listeners ride along, house pattern); moving back restores the form.
+    var ccHome = document.getElementById("compose-cc-row");
+    var ccHomeParent = ccHome ? ccHome.parentNode : null;
+    var ccHomeNext = ccHome ? ccHome.nextSibling : null;
+    ccMoveBack = function () { // module handle: syncImMode calls it off-mode
+      if (ccHome && ccHomeParent && ccHome.parentNode !== ccHomeParent) {
+        ccHomeParent.insertBefore(ccHome, ccHomeNext);
+      }
+    };
     document.getElementById("im-cc").addEventListener("click", function () {
-      closeSheet();
-      sec.classList.add("im-cc-open");
-      var ccRow = document.getElementById("compose-cc-row");
-      if (ccRow) ccRow.classList.remove("hidden");
+      // the panel STAYS OPEN hosting the row (anchored with the writing zone)
+      if (ccHome) {
+        sheet.appendChild(ccHome);
+        ccHome.classList.remove("hidden");
+      }
+      sheet.classList.remove("hidden");
       var ccInput = $("#compose-cc");
       if (ccInput) ccInput.focus();
     });
@@ -1860,6 +1878,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     });
     document.getElementById("im-full").addEventListener("click", function () {
       sec.classList.toggle("im-full");
+      ccMoveBack(); // the full form needs every row home
       imPaintHead();
       closeSheet();
     });

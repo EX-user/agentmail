@@ -3020,10 +3020,12 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im .compose-form { flex: 0 0 auto; overflow-y: visible; }
   #tab-compose.im .compose-form > * { display: none; }
   #tab-compose.im .compose-form > #compose-attachments:not(:empty) { display: block; }
-  /* ＋ panel Cc entry: the validated cc row (chips + autocomplete) un-hides
-     in place; emptying the chips re-hides it via syncCcVisibility, which
-     also drops this exception's :not(.hidden) match. */
-  #tab-compose.im-cc-open .compose-form > #compose-cc-row:not(.hidden) { display: block; }
+  /* ＋ panel Cc entry: the validated cc row MOVES into the sheet (anchors
+     with the writing zone, boss) — chips + autocomplete untouched; emptying
+     the chips re-hides it via syncCcVisibility. Input goes transparent on
+     the panel surface (boss: the opaque block was ugly). */
+  #tab-compose.im #im-sheet #compose-cc-row { display: block; margin: 0; }
+  #tab-compose.im #im-sheet #compose-cc-row input { background: transparent; }
   /* the conversation header: label + peer + refresh (h3 stays retired) */
   #tab-compose.im #im-head {
     display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
