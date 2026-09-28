@@ -3088,11 +3088,13 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     width: 30px; height: 30px; min-height: 0; padding: 0; flex: 0 0 auto;
     border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 13px;
   }
-  /* ＋ panel: quote / attachments / full form */
+  /* ＋ panel: Cc / attachments / full form. Boss: the backing plate reads
+     as an ugly opaque block — the controls sit straight on the chat
+     surface, so the panel itself goes fully transparent. */
   #tab-compose.im #im-sheet:not(.hidden) {
     display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    box-shadow: 0 -6px 18px rgba(0,0,0,.3); padding: 10px; margin: 8px 0 2px;
+    background: transparent; border: none; border-radius: 0;
+    box-shadow: none; padding: 2px 4px; margin: 8px 0 2px;
   }
   /* 完整写信页 within a conversation: the validated form returns in full */
   #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
