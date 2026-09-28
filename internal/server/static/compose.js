@@ -1129,6 +1129,13 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (!all.length) {
         threadEl.className = "thread-list muted";
         threadEl.textContent = "No conversation with " + to + " yet.";
+        // boss 09-29 addendum: a peer with NO conversation lands in the full
+        // compose form - the conversation view has nothing to show. The
+        // explicit back button still works (no reload runs on exit).
+        if (imOrder) {
+          var secN = document.getElementById("tab-compose");
+          if (secN && secN.classList.contains("im")) secN.classList.add("im-full");
+        }
         return;
       }
       threadEl.innerHTML = all.map(function (m) {
