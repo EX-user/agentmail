@@ -2153,13 +2153,24 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var refresh = document.getElementById("btn-refresh-thread");
     var refreshHome = refresh ? refresh.parentNode : null;
     if (!btn || !thread || !modal || !holder || !bodyBox) return;
+    // boss 09-30: the drawer is a 往来邮件 LIST - newest at TOP (like the PC
+    // rail and the pre-0.3.5 full page). The conversation view keeps chat
+    // order (newest at bottom), so the shared node flips on open and flips
+    // back on close; the drawer body then rests on its top edge.
+    function flipThreadOrder() {
+      var kids = Array.prototype.slice.call(thread.children);
+      for (var i = kids.length - 1; i >= 0; i--) thread.appendChild(kids[i]);
+    }
     function open() {
       bodyBox.appendChild(thread); // move the node in — listeners ride along
       if (refresh && tools) tools.appendChild(refresh); // 刷新会话 lives in the drawer
+      if (imMode()) flipThreadOrder();
       modal.classList.remove("hidden");
+      bodyBox.scrollTop = 0; // newest-first list starts at its top
       fitComposeOneScreen();
     }
     function close() {
+      if (imMode()) flipThreadOrder(); // restore chat order for the inline view
       holder.appendChild(thread); // back to the (hidden) inline anchor
       modal.classList.add("hidden");
     }
