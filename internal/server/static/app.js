@@ -1525,9 +1525,16 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     });
   }
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; }
-  var AV_BG = "#cfcfcf", AV_INK_ON_WHITE = "#9a9a9a";
-  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#c6b6e0", "#ecb8a8", "#a8d0cc", "#d8b8b8", "#c2d6a8", "#d8c2e0"];
-  var AV_SMALL_ACCENTS = ["#e6b8c2", "#a9c6de", "#c6b6e0", "#ecb8a8", "#d8b8b8"];
+  var AV_BGS = ["#cfcfcf", "#c4cbcf", "#cfc9c4", "#c9cfc4"]; // boss 09-30 ②: 4-shade body grayscale, drawn per address
+  var AV_INK_ON_WHITE = "#9a9a9a";
+  // big-item palette rebalanced the same way: pink/lavender 6/10 -> 2/10,
+  // steel/sage/tan/olive mid-tones fill the freed slots.
+  var AV_ACCENTS = ["#a9c6de", "#8fa8b8", "#b8d4b8", "#eed3a4", "#b8a88f", "#ecb8a8", "#a8d0cc", "#9ab8a8", "#e6b8c2", "#d8b8b8"];
+  // boss 09-30: the old 5-swatch small palette was 4/5 pink-family, so 80%
+  // of rows read pink and neighbors ran together. Rebalanced to 7 with the
+  // pink share cut to 2/7 and cool/sage/stone mid-tones added (Iris to
+  // review the values).
+  var AV_SMALL_ACCENTS = ["#a9c6de", "#ecb8a8", "#9ab8b0", "#c9c2b0", "#b0b8c9", "#e6b8c2", "#d8b8b8"];
   var AV_EYES = ["?", "#", "\u00d7", "bar"];
   var AV_MOUTHS = ["line", "wave", "dot", "v"];
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
@@ -1540,6 +1547,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var pick = function (n, mod) { return S[n % 4] % mod; };
     var white = "#ffffff";
     var grey = AV_INK_ON_WHITE;
+    var AV_BG = AV_BGS[pick(2, AV_BGS.length)]; // per-address body shade (②)
     var accDef = AV_ACCS[pick(0, AV_ACCS.length)];
     var accent = accDef[1] ? AV_SMALL_ACCENTS[pick(1, AV_SMALL_ACCENTS.length)] : AV_ACCENTS[pick(1, AV_ACCENTS.length)];
     var eyeL = AV_EYES[pick(1, AV_EYES.length)];
