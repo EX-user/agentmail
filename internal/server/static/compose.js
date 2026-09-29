@@ -342,6 +342,20 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (ccMoveBack) ccMoveBack();
       if (sheetHomeRestore) sheetHomeRestore();
       if (attHomeRestore) attHomeRestore();
+      // boss 09-30 bug 3 (PC thread panel sometimes completely blank):
+      // leaving the mode must also UNPARK the node. The on-path seats it in
+      // #thread-holder (display:none off-phones), and this branch used to
+      // reconcile classes only - so a window that crossed 800px with a
+      // recipient set and came back kept the PC split rail empty until a
+      // reload (bench: A split visible -> B 700 im inHolder:true -> C 1280
+      // still inHolder:true). Markup home is right after the holder.
+      var t3 = document.getElementById("compose-thread");
+      var h3 = document.getElementById("thread-holder");
+      var d3 = document.getElementById("thread-modal");
+      var drawerOwns3 = !!(d3 && !d3.classList.contains("hidden") && d3.contains(t3));
+      if (t3 && h3 && h3.contains(t3) && !drawerOwns3) {
+        h3.parentNode.insertBefore(t3, h3.nextSibling);
+      }
       return;
     }
     // The inline list lives in #thread-holder; if the drawer owns the node,
