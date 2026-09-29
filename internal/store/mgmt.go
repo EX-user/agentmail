@@ -68,9 +68,10 @@ type MgmtSubSummary struct {
 
 // MgmtNode is one graph node. Kind: self | sub | external.
 type MgmtNode struct {
-	Address string `json:"address"`
-	Kind    string `json:"kind"`
-	Volume  int    `json:"volume"` // 7d window in+out
+	Address    string `json:"address"`
+	Kind       string `json:"kind"`
+	Volume     int    `json:"volume"`                // 7d window in+out
+	AvatarHash string `json:"avatar_hash,omitempty"` // 0.3.5: real-avatar key for the graph node (empty = box shape)
 }
 
 // MgmtEdge is one graph edge between two nodes. Directional counts are
@@ -354,6 +355,14 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 	sort.Strings(extList)
 	for _, a := range extList {
 		nodes = append(nodes, MgmtNode{Address: a, Kind: "external", Volume: extVolume[a]})
+	}
+	// 0.3.5 (boss item 7): graph nodes carry the real-avatar hash - the
+	// client upgrades nodes that have one to the circular image shape.
+	// Best-effort per node: an unreadable account just keeps the box.
+	for i := range nodes {
+		if acc, err := s.GetAccount(nodes[i].Address); err == nil {
+			nodes[i].AvatarHash = acc.AvatarHash
+		}
 	}
 	out.Graph.Nodes = nodes
 

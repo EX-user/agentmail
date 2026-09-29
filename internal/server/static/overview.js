@@ -8,7 +8,7 @@
 //   emits:    nav:activate {tab:"accounts"}
 //             mgmt:browse-account {address, folder?}
 // The i18n dictionary stays a classic global (window.I18N).
-import { $, $$, esc, api, getSession, toast, fmtTime } from "./core.js";
+import { $, $$, esc, api, getSession, toast, fmtTime, basicAuth } from "./core.js";
 
 (function () {
   "use strict";
@@ -186,9 +186,36 @@ var mgmtNodeSet = null;
           value: Math.max(1, n.volume || 1), scaling: nodeScaling,
           mass: 1 + 3 * Math.min(1, (n.volume || 0) / (mgmtMaxVol || 1)),
           title: shortAddr(n.address) + (kind !== "external" ? " · " + wl + " " + (n.volume || 0) : ""),
-          _kind: kind
+          _kind: kind, _border: border, _bg: bg
         };
       }));
+
+      // 0.3.5 (boss item 7): real avatars on the graph - nodes whose
+      // payload carries avatar_hash upgrade from the box shape to a
+      // circular image once their bytes arrive (auth via basicAuth; the
+      // objectURL is cached per addr|hash so re-renders cost nothing,
+      // and a failed fetch keeps the box shape).
+      var avUrlCache = window.__graphAvUrls || (window.__graphAvUrls = {});
+      vn.get().forEach(function (n) {
+        if (!n.avatar_hash) return;
+        var addr = String(n.id || "").toLowerCase();
+        var key = addr + "|" + n.avatar_hash;
+        var isMeN = (n.kind || "external") === "self";
+        var upgrade = function (url) {
+          vn.update({ id: n.id, shape: "circularImage", image: url,
+            size: isMeN ? 26 : 16,
+            color: { background: n._bg, border: n._border }, borderWidth: isMeN ? 2 : 1 });
+        };
+        var hit = avUrlCache[key];
+        if (hit === "none") return;
+        if (hit) { upgrade(hit); return; }
+        fetch("/api/avatar/" + encodeURIComponent(addr) + "?v=" + n.avatar_hash,
+          { headers: { Authorization: basicAuth() } })
+          .then(function (r) { if (!r.ok) throw 0; return r.blob(); })
+          .then(function (b) { var u = URL.createObjectURL(b); avUrlCache[key] = u; upgrade(u); })
+          .catch(function () { avUrlCache[key] = "none"; });
+      });
+
       var ve = [];
       // Data-adaptive normalization: every scale is RELATIVE to the largest
       // count in the current graph. Mapping mode is the floating button's
