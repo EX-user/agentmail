@@ -70,7 +70,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // after a newer one would resurrect the dot until the next tick (the
   // reported "badge clears with a lag"). Only the latest call may write.
   let badgeSeq = 0;
-  var prevInboxUnread = 0;
+  var prevLatestId = null;
   async function refreshInboxBadge() {
     if (!getSession()) { setInboxBadge(0); return; }
     // Background tabs skip the tick — the badge refreshes on visibility
@@ -81,11 +81,23 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       const d = await api("/api/inbox?limit=1");
       if (seq !== badgeSeq) return; // a newer refresh superseded this one
       var cur = d.unread_count || 0;
-      if (cur > prevInboxUnread) {
+      // New-mail gate keyed on the latest message id, not the unread count:
+      // the approved 0.3.4 "opening the conversation reads it" semantics
+      // consume letters between polls, so a count high-water deflates and a
+      // genuine arrival that merely recovers the level (4 > 4) never fires —
+      // the open conversation misses its own peer's letter. An id the poll
+      // has not seen is arrival itself; consumption never changes it.
+      var latestMail = (d.messages && d.messages[0]) || null;
+      var latestId = latestMail ? (latestMail.id || "") : "";
+      if (prevLatestId === null) {
+        prevLatestId = latestId; // first sample: baseline only, no event
+      } else if (latestId && latestId !== prevLatestId) {
         // New mail detected — notify manage.js incremental merger (v0.2.1).
-        document.dispatchEvent(new CustomEvent("inbox:newmail"));
+        // boss 09-30: carry the latest sender so a listener scoped to one
+        // conversation can tell its peer's mail from a bystander's.
+        prevLatestId = latestId;
+        document.dispatchEvent(new CustomEvent("inbox:newmail", { detail: { from: latestMail ? (latestMail.from || "") : "" } }));
       }
-      prevInboxUnread = cur;
       setInboxBadge(cur);
     } catch (_) { /* badge is best-effort */ }
   }

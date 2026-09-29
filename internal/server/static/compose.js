@@ -1111,11 +1111,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       titleEl.textContent = t("compose.recentConv");
       threadEl.className = "thread-list muted";
       threadEl.textContent = "Fill in \"To\" to load the thread.";
+      threadEl.setAttribute("data-peer", "");
       return;
     }
     titleEl.textContent = t("compose.recentConv");
     threadEl.className = "thread-list";
-    threadEl.textContent = t("common.loading");
+    // boss 09-30: a same-peer refresh (the newmail beat) must not blank the
+    // visible list into "loading" - the fresh render swaps in silently when
+    // the data arrives. A peer CHANGE still shows the loading placeholder.
+    if (threadEl.getAttribute("data-peer") !== to.toLowerCase()) threadEl.textContent = t("common.loading");
 
     try {
       // Server-side thread endpoint (v0.5.2): server merges both directions
@@ -1180,6 +1184,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           '<div class="thread-full hidden"></div>' +
           "</div>";
       }).join("");
+      threadEl.setAttribute("data-peer", to.toLowerCase()); // same-peer refreshes swap silently
       // 0.3.4 IM semantics (boss 09-29): opening the conversation reads
       // it - each unread incoming letter is fetched once (the detail GET
       // marks it read server-side), so the next accounts poll clears the
@@ -1920,7 +1925,14 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // poll's signal - the same instant the accounts-row dots light up)
   // re-pulls the open peer's thread. No-to state: loadComposeThread
   // no-ops into its placeholder, so the listener stays dumb.
-  document.addEventListener("inbox:newmail", function () {
+  document.addEventListener("inbox:newmail", function (ev) {
+    // boss 09-30: a bystander's letter must not flash the open conversation.
+    // Reload only when the new mail is FROM the open peer (either side of a
+    // display-name form); a no-to state keeps the placeholder, not a reload.
+    var to2 = ($("#compose-to").value || "").trim().toLowerCase();
+    if (!to2) return;
+    var from2 = String((ev.detail || {}).from || "").toLowerCase();
+    if (from2 && to2.indexOf(from2) < 0 && from2.indexOf(to2) < 0) return;
     loadComposeThread();
   });
 
