@@ -1143,6 +1143,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // boss 09-30: a same-peer refresh (the newmail beat) must not blank the
     // visible list into "loading" - the fresh render swaps in silently when
     // the data arrives. A peer CHANGE still shows the loading placeholder.
+    // 0.3.4.2 follow-up (089c43b): harvest BEFORE any wipe - the wipe
+    // destroys the rendered boxes and a post-wipe harvest finds nothing.
+    // The bank feeds the render site's avRestore (the silent path would
+    // re-harvest the very same nodes, so one early harvest serves both).
+    var avBankT = window.__avHarvest ? window.__avHarvest(threadEl) : null;
     if (threadEl.getAttribute("data-peer") !== to.toLowerCase()) threadEl.textContent = t("common.loading");
 
     try {
@@ -1223,8 +1228,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       threadEl.setAttribute("data-peer", to.toLowerCase()); // same-peer refreshes swap silently
       // 0.3.4.2: same decode-free recycle as 06586e1 - polls re-render this
       // list constantly, harvested avatar boxes keep their decoded bitmaps.
-      if (imOrder && window.__avHarvest && window.__avRestore) {
-        var avBankT = window.__avHarvest(threadEl);
+      if (imOrder && window.__avRestore) {
         threadEl.innerHTML = html;
         window.__avRestore(threadEl, avBankT);
         if (window.__avHydrate) window.__avHydrate(threadEl);
