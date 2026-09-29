@@ -1210,7 +1210,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       // dots everywhere. Self-limiting: afterwards there is nothing to
       // fetch. Regular accounts only (admin previews never write state).
       if (isRegular) {
+        // 0.3.5 (boss "5,6,7 quick"): reading happens when the user can
+        // SEE - the read-on-open body-fetch must not run for a hidden
+        // compose page, or the peer's letter is consumed before the badge
+        // ever lights (reddot A1/A2 reproduced on the shipped bytes). The
+        // letters keep their dots; the next VISIBLE render reads them.
+        var tabEl = document.getElementById("tab-compose");
+        var seen = !!tabEl && !tabEl.classList.contains("hidden") && document.visibilityState === "visible";
         all.filter(function (m) { return m.dir === "in" && m.unread; }).forEach(function (m) {
+          if (!seen) return;
           api("/api/message?id=" + encodeURIComponent(m.id), { keepSession: true }).catch(function () {});
         });
       }
