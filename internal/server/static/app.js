@@ -4655,14 +4655,45 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // the whole text). The track carries the text twice; each copy has the
   // same trailing gap, so translateX(-50%) is exactly one period.
   // Reduced-motion users keep the ellipsis.
+  // boss 0930 (跑马灯几乎完全不动): this scan used to be destructive -
+  // remove the marquee class, measure, re-add on overflow - so EVERY scan
+  // restarted every engaged marquee from zero, and the scan rides high
+  // Frequency events (window resize, the header-growth sentinel's synthetic
+  // resize, ovw:rendered). Worse, a scan while the Accounts page is hidden
+  // (ovw:rendered fires on Overview renders) measures an all-zero layout
+  // and STRIPPED the class without being able to re-add it - the marquee
+  // stayed dead until the next full re-render happened to run visible.
+  // Two changes, both measurement-only: (1) cells that are not rendered
+  // are left untouched - a hidden scan can no longer kill what it cannot
+  // see; (2) track-grammar cells (sig-txt present) are measured in place -
+  // the first copy's border-box width minus its own padding equals the raw
+  // overflow the class-off measurement used to produce - so an already
+  // running marquee is never re-classed and resizes become true no-ops.
+  // Cells without sig-txt keep the legacy remove-then-measure dance.
   function maybeMarqueeSigs() {
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     $$(".sig-cell, .mq").forEach(function (cell) {
-      cell.classList.remove("marquee"); // dup hidden again -> measure raw overflow
+      var txt = cell.querySelector(".sig-txt");
+      var cw = cell.clientWidth;
+      if (!cw && !(txt && txt.getBoundingClientRect().width)) return; // display:none - leave state alone
+      if (txt) {
+        var has = cell.classList.contains("marquee");
+        var pad = has ? (parseFloat(getComputedStyle(txt).paddingRight) || 0) : 0; // marquee-on pads each copy with the gap
+        var over = Math.ceil(txt.getBoundingClientRect().width) - pad - cw;
+        if (over > 8) {
+          var dur = Math.max(8, (over + 48) / 28) + "s"; // linear period over (overflow + one gap), ~28px/s
+          if (cell.style.getPropertyValue("--wm-dur") !== dur) cell.style.setProperty("--wm-dur", dur);
+          if (!has) cell.classList.add("marquee");
+        } else if (has) {
+          cell.classList.remove("marquee");
+          cell.style.removeProperty("--wm-dur");
+        }
+        return;
+      }
+      cell.classList.remove("marquee"); // legacy grammar: dup hidden again -> measure raw overflow
       cell.style.removeProperty("--wm-dur");
       const diff = cell.scrollWidth - cell.clientWidth;
       if (diff > 8) {
-        // Linear period over (overflow + one gap), ~28px/s.
         cell.style.setProperty("--wm-dur", Math.max(8, (diff + 48) / 28) + "s");
         cell.classList.add("marquee");
       }
