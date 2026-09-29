@@ -29,14 +29,14 @@ type Duty struct {
 	sessionID      string // current bound session ("" = start a new one next wake)
 	failStreak     int
 	lastAlert      time.Time
-	lastBeat       time.Time     // duty-window anchor: process start or last time-beat wake
-	startedAt      time.Time     // process start, for the uptime stamp in heartbeats
-	urgentHit      atomic.Bool   // set when an urgent mail interrupted the current wake
-	urgentCh       chan struct{} // capacity-1: fires an immediate re-check after an urgent interrupt
-	superiors      []string      // fallback escalation addresses: declared superiors via /api/subs (refreshed every 10 min)
-	compactPending atomic.Bool  // notice due: next wake carries the persist-memory notice; compact in place after it (atomic: also written by watchActions)
-	stopHit        atomic.Bool   // a board 停止 click cancelled the CURRENT wake (skip failure accounting)
-	currentCancel  atomic.Value  // context.CancelFunc of the in-flight wake (may be nil between wakes)
+	lastBeat       time.Time          // duty-window anchor: process start or last time-beat wake
+	startedAt      time.Time          // process start, for the uptime stamp in heartbeats
+	urgentHit      atomic.Bool        // set when an urgent mail interrupted the current wake
+	urgentCh       chan struct{}      // capacity-1: fires an immediate re-check after an urgent interrupt
+	superiors      []string           // fallback escalation addresses: declared superiors via /api/subs (refreshed every 10 min)
+	compactPending atomic.Bool        // notice due: next wake carries the persist-memory notice; compact in place after it (atomic: also written by watchActions)
+	stopHit        atomic.Bool        // a board 停止 click cancelled the CURRENT wake (skip failure accounting)
+	currentCancel  atomic.Value       // context.CancelFunc of the in-flight wake (may be nil between wakes)
 	actCh          <-chan boardAction // board mouse actions for this account
 
 	// time_beat (clock-scheduled beats, boss spec 2026-09-05): slots are
@@ -658,7 +658,9 @@ func (d *Duty) checkOnce(ctx context.Context) {
 				return
 			case <-tick.C:
 				events, age, ok := wakeEventStats(tag)
-				board.Set(tag, "working", heartbeatLine(time.Since(hbStart), events, age, ok))
+				line := heartbeatLine(time.Since(hbStart), events, age, ok)
+				board.Set(tag, "working", line)
+				d.hb("working", line)
 			}
 		}
 	}()

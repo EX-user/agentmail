@@ -206,3 +206,28 @@ func TestLineTeeCountersAndRegistry(t *testing.T) {
 		t.Errorf("after empty line: n=%d, want 2", n)
 	}
 }
+
+func TestBoardCurrentStateFeedsKeepalive(t *testing.T) {
+	// Boss troubleshooting 2026-09-29: the frontend never saw "working".
+	// Root cause: the 20s keepalive hardcoded "waiting" (overwriting
+	// in-wake faces) and no hb("working") was ever emitted. The keepalive
+	// now carries Board.CurrentState — pin the accessor it relies on.
+	tag := "cst-current-state-test"
+	board.AddRow(tag, time.Now(), 0, 0)
+	defer func() { board.rows = nil }() // rows is package-private; reset for hermeticity
+
+	if got := board.CurrentState(tag); got != "waiting" {
+		t.Fatalf("fresh row state = %q, want waiting", got)
+	}
+	board.Set(tag, "working", "wake 1m0s · alive · events=3 · last event 2s ago")
+	if got := board.CurrentState(tag); got != "working" {
+		t.Fatalf("after working Set, CurrentState = %q, want working", got)
+	}
+	board.Set(tag, "", "detail-only update must keep the face")
+	if got := board.CurrentState(tag); got != "working" {
+		t.Fatalf("detail-only Set changed state to %q, want working kept", got)
+	}
+	if got := board.CurrentState("no-such-tag"); got != "" {
+		t.Fatalf("unknown tag state = %q, want empty", got)
+	}
+}

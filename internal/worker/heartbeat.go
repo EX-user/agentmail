@@ -25,8 +25,8 @@ const (
 
 // hb mirrors one board.Set: the state signal follows the board face.
 func (d *Duty) hb(state, detail string) {
-	if d.hbDisabled.Load() {
-		return
+	if d.hbDisabled.Load() || state == "" {
+		return // unknown face: skip this tick (the next one re-reads the board)
 	}
 	now := time.Now()
 	if state == d.hbState && now.UnixNano()-d.hbLast.Load() < hbUploadInterval.Nanoseconds() {
@@ -66,6 +66,7 @@ func (d *Duty) hb(state, detail string) {
 // still (idle accounts are exactly the ones a monitoring face must see
 // alive).
 func (d *Duty) heartbeatLoop(ctx context.Context) {
+	tag := localPart(d.cfg.Address)
 	t := time.NewTicker(hbUploadInterval)
 	defer t.Stop()
 	for {
@@ -73,7 +74,10 @@ func (d *Duty) heartbeatLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			d.hb("waiting", "keepalive")
+			// Keepalive carries the board's CURRENT face — a hardcoded
+			// "waiting" would overwrite arming/working back to waiting
+			// mid-wake (the exact bug behind "前端从未看到 working").
+			d.hb(board.CurrentState(tag), "keepalive")
 		}
 	}
 }
