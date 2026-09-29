@@ -793,6 +793,15 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // (the v0.3.4.2 empty-list bug class is structurally impossible here).
   // Moved nodes keep avatar bitmaps, listeners and hover/scroll state.
   function reorderAccountsDom(want) {
+    // boss 09-29 (marquee jumps on every order flip): re-parenting a node
+    // restarts its CSS animations - the over-wide signature marquee visibly
+    // snapped back to its start each move. Snapshot the running clocks and
+    // restore them right after the re-insertion; same-task restore means no
+    // visible restart.
+    var mqClocks = [];
+    $$(".sig-cell .sig-track, .mq .sig-track").forEach(function (t) {
+      t.getAnimations().forEach(function (a) { mqClocks.push([t, a.animationName, a.currentTime]); });
+    });
     var wantList = want.map(function (a) { return String(a).toLowerCase(); });
     var wantSet = {};
     wantList.forEach(function (a) { wantSet[a] = 1; });
@@ -864,6 +873,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         }
       }
     }
+    mqClocks.forEach(function (c) {
+      c[0].getAnimations().forEach(function (a) { if (a.animationName === c[1]) a.currentTime = c[2]; });
+    });
     return moved;
   }
   function applyActivity() {
@@ -2174,6 +2186,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     );    // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
     var avBank = avHarvest(tbody);
+    var openGearAddr = "";
+    // boss 09-29 (gear pop dies on rebuild): a letter-driven rebuild rewrote
+    // the tbody while the popover was open - the click looked dead. Capture
+    // the open pop's row and restore it after the rewire (same shape as the
+    // settings-card overlay preservation).
+    $$(".gear-pop", tbody).forEach(function (x) {
+      if (!x.hidden) { var gtr = x.closest("tr"); if (gtr) openGearAddr = String(gtr.getAttribute("data-act-acct") || "").toLowerCase(); }
+    });
     tbody.innerHTML = rows.join("");
     avRestore(tbody, avBank);
     avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
@@ -2196,6 +2216,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         pop.hidden = !wasHidden;
       });
     });
+    if (openGearAddr) {
+      $$("tr[data-act-acct]", tbody).forEach(function (tr) {
+        if (String(tr.getAttribute("data-act-acct") || "").toLowerCase() === openGearAddr) {
+          var gp = tr.querySelector(".gear-pop");
+          if (gp) gp.hidden = false;
+        }
+      });
+    }
     if (!window.__gearAwayWired) {
       window.__gearAwayWired = 1;
       document.addEventListener("click", function (ev) {
