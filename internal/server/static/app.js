@@ -1525,16 +1525,16 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     });
   }
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; }
-  var AV_BGS = ["#cfcfcf", "#c4cbcf", "#cfc9c4", "#c9cfc4"]; // boss 09-30 ②: 4-shade body grayscale, drawn per address
+  var AV_BGS = ["#cfcfcf", "#c4c4c4", "#d8d8d8", "#bdbdbd"]; // boss 09-30 ②: 4-shade body grayscale (Iris final: neutral grays), drawn per address
   var AV_INK_ON_WHITE = "#9a9a9a";
   // big-item palette rebalanced the same way: pink/lavender 6/10 -> 2/10,
   // steel/sage/tan/olive mid-tones fill the freed slots.
-  var AV_ACCENTS = ["#a9c6de", "#8fa8b8", "#b8d4b8", "#eed3a4", "#b8a88f", "#ecb8a8", "#a8d0cc", "#9ab8a8", "#e6b8c2", "#d8b8b8"];
+  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#a8d0cc", "#ecb8a8", "#c9dfd4", "#d8c8b8", "#a8c8a0", "#c6b6e0"]; // Iris final swatches: pink 1/10, lavender 1/10
   // boss 09-30: the old 5-swatch small palette was 4/5 pink-family, so 80%
   // of rows read pink and neighbors ran together. Rebalanced to 7 with the
   // pink share cut to 2/7 and cool/sage/stone mid-tones added (Iris to
   // review the values).
-  var AV_SMALL_ACCENTS = ["#a9c6de", "#ecb8a8", "#9ab8b0", "#c9c2b0", "#b0b8c9", "#e6b8c2", "#d8b8b8"];
+  var AV_SMALL_ACCENTS = ["#a9c6de", "#a8d0cc", "#c9dfd4", "#eed3a4", "#d8c8b8", "#a8c8a0", "#e6b8c2"]; // Iris final swatches: pink 1/7
   var AV_EYES = ["?", "#", "\u00d7", "bar"];
   var AV_MOUTHS = ["line", "wave", "dot", "v"];
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
