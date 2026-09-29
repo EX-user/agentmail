@@ -3093,6 +3093,13 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
      main row (plus/minus, input, send) and the pull-out rows (Cc, panel
      entries) all live inside a single solid rounded card. Every input and
      display is preserved; nothing floats loose any more. */
+  /* boss 09-30 bug 2: below the floating header a 16px band of bare body
+     background showed (main's page margin, measured 82->98, elementFromPoint
+     = BODY). In conversation mode the list IS the page body (v6 ruling), so
+     the margin dies with the mode and returns the moment the mode or the
+     tab goes away (:has tracks both; support envelope is below color-mix,
+     already assumed by the v3 bubble gradient). */
+  body:has(#tab-compose.im:not(.hidden)) main { margin-top: 0; }
   #tab-compose.im { position: relative; } /* overlay anchor */
   #tab-compose.im #im-bar {
     position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5;

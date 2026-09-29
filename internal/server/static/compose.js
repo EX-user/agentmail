@@ -331,6 +331,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var on = imMode() && !!($("#compose-to").value || "").trim();
     var was = sec.classList.contains("im");
     sec.classList.toggle("im", on);
+    // boss 09-30 bug 2: the mode itself moves the page geometry (main's top
+    // margin dies with .im), so a fit measured for the other state is stale
+    // by exactly that margin - the box stops 16px short of the nav. Refit on
+    // every flip; the fit reads the live geometry.
+    if (on !== was) fitComposeOneScreen();
     if (!on) {
       sec.classList.remove("im-cc-open");
       sec.classList.remove("im-full"); // stale full-form state dies with IM mode
