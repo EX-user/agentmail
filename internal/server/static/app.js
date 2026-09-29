@@ -2198,6 +2198,12 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var errContactsRow = contactsFailed ? im3StateRowHtml("err", "acc.errContacts", "acc.retryTap", "contacts") : "";
       var emptyRow = (!subsFailed && !contactsFailed && subsList.length === 0 && contactRaw === 0) ? im3StateRowHtml("empty", "acc.emptyTitle", "acc.emptySub", null) : "";
       var avBankM = avHarvest(ctBox);
+      // boss 09-29 (settings-card flash-close, Iris 8d9963c): the fallback
+      // rebuild wiped the open .im3-overlay (its .on lived only in the old
+      // DOM) - capture the open card's address and re-apply it after the
+      // rewire.
+      var onOvl = ctBox.querySelector(".im3-overlay.on");
+      var openOvl = onOvl ? onOvl.getAttribute("data-ovl") : null;
       ctBox.innerHTML = regRow + errSubsRow + clRows + errContactsRow + emptyRow;
       avRestore(ctBox, avBankM);
       var regEl = ctBox.querySelector("[data-reg]");
@@ -2206,6 +2212,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         if (b) b.click();
       });
       accWireList(ctBox);
+      if (openOvl) {
+        var reOvl = ctBox.querySelector('.im3-overlay[data-ovl="' + openOvl + '"]');
+        if (reOvl) reOvl.classList.add("on"); // settings card survives the rebuild
+      }
       wireErrRetry(ctBox);
       avHydrate(ctBox);
       avRemoteHydrate(ctBox); // 0021: registry-backed real avatars
