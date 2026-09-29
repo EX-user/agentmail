@@ -235,10 +235,12 @@ func (d *Duty) compactOnce(ctx context.Context) error {
 		// but whose summary went undetected does NOT)
 		d.logf("compact FAILED after %s: %v", time.Since(start).Round(time.Second), err)
 		board.Set(tag, "waiting", "compact failed — session kept")
+		d.hb("waiting", "compact failed — session kept")
 		return err
 	}
 	d.logf("compact ok in %s: session %s continues with its summary", time.Since(start).Round(time.Second), sess)
 	board.Set(tag, "waiting", "compact done: session continues")
+	d.hb("waiting", "compact done: session continues")
 	return nil
 }
 
