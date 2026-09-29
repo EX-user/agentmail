@@ -1683,12 +1683,39 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
   // isConnected guards the re-render race; a failed fetch (404 = the
     // account has no avatar) hands the box to the generator path.
+  // boss 09-29 production flicker: real traffic flips the unified order almost
+  // every poll, each flip rewrites the list, and a rewritten avatar <img> costs
+  // a re-decode frame - generated avatars flickered continuously. Harvest the
+  // rendered avatar boxes before a rebuild and re-attach their (already
+  // decoded) nodes after: unchanged rows never flash, and the data-avdone
+  // guard keeps hydration off recycled nodes so only genuinely new or
+  // changed addresses cost work.
+  function avHarvest(container) {
+    var bank = {};
+    $$("[data-avdone]", container).forEach(function (b) {
+      bank[String(b.getAttribute("data-av")).toLowerCase() + "|" + (b.getAttribute("data-avhash") || "")] = b;
+    });
+    return bank;
+  }
+  function avRestore(container, bank) {
+    if (!bank) return;
+    $$("[data-avremote]", container).forEach(function (b) {
+      var old = bank[String(b.getAttribute("data-av")).toLowerCase() + "|" + (b.getAttribute("data-avhash") || "")];
+      if (!old || !old.hasAttribute("data-avdone")) return;
+      while (b.firstChild) b.removeChild(b.firstChild);
+      while (old.firstChild) b.appendChild(old.firstChild);
+      b.setAttribute("data-avdone", "1");
+      b.removeAttribute("data-avpend");
+    });
+  }
   function avRemoteFillOne(el) {
+    if (el.hasAttribute("data-avdone")) return; // recycled node: bitmap already decoded
     var addr = el.getAttribute("data-av");
     var hash = el.getAttribute("data-avhash") || "";
     avatarObjectURL(addr, hash, false).then(function (url) {
       if (!el.isConnected) return;
       el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
+      el.setAttribute("data-avdone", "1");
     }).catch(function () {
       if (!el.isConnected) return;
       el.setAttribute("data-avpend", "1");
@@ -1721,6 +1748,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       box.classList.remove("cl-av-img");
       box.style.background = "";
       box.removeAttribute("data-avpend");
+      box.removeAttribute("data-avdone");
       box.textContent = (String(box.getAttribute("data-av"))[0] || "?").toUpperCase();
       avRemoteFillOne(box);
     });
@@ -1737,6 +1765,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
           return;
         }
         el.innerHTML = avSvgHtml(el.getAttribute("data-av"), S);
+        el.setAttribute("data-avdone", "1");
         el.removeAttribute("data-avpend");
       });
     });
@@ -1989,7 +2018,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       "</tr>"
     );    // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
+    var avBank = avHarvest(tbody);
     tbody.innerHTML = rows.join("");
+    avRestore(tbody, avBank);
     avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
     avRemoteHydrate(tbody); // 0021: registry-backed real avatars
     preloadLimits(selfAddr, subsList.map(function (e) { return e.address; }));
@@ -2038,7 +2069,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var errSubsRow = subsFailed ? im3StateRowHtml("err", "acc.errSubs", "acc.retryTap", "subs") : "";
       var errContactsRow = contactsFailed ? im3StateRowHtml("err", "acc.errContacts", "acc.retryTap", "contacts") : "";
       var emptyRow = (!subsFailed && !contactsFailed && subsList.length === 0 && contactRaw === 0) ? im3StateRowHtml("empty", "acc.emptyTitle", "acc.emptySub", null) : "";
+      var avBankM = avHarvest(ctBox);
       ctBox.innerHTML = regRow + errSubsRow + clRows + errContactsRow + emptyRow;
+      avRestore(ctBox, avBankM);
       var regEl = ctBox.querySelector("[data-reg]");
       if (regEl) regEl.addEventListener("click", function () {
         var b = document.getElementById("btn-subreg");
