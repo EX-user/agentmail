@@ -1510,36 +1510,59 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // ripple). Every parameter derives from the seed — no Math.random, the
   // same address renders the same avatar across sessions and devices.
   var __avHashCache = {};
-  // crypto.subtle exists only in secure contexts (https / localhost); on any
-  // other origin the seed must come from a software hash. The old
-  // prefix+length fallback collapsed same-domain address families into
-  // identical robots (25 same-shape addresses -> ~7 distinct, identical runs
-  // of 3+). cyrb128: 4 avalanche rounds per char over the FULL string.
-  function avSoftSeed(a) {
-    var h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762, i, k;
-    for (i = 0; i < a.length; i++) {
-      k = a.charCodeAt(i);
-      h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
-      h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+  // One seed path for every origin. WebCrypto digest is secure-context-only,
+  // which forked the same address into different robots across entry points
+  // (boss: avatars MUST be identical from every entry). This software SHA-256
+  // produces the exact bytes crypto.subtle.digest returned, so every avatar
+  // already rendered on secure origins keeps its look; insecure origins join
+  // the canonical stream instead of a degenerate fallback. First 4 digest
+  // bytes seed the generator.
+  function avSha256(a) {
+    var bytes = new TextEncoder().encode(a), bitLen = bytes.length * 8;
+    var msg = Array.prototype.slice.call(bytes);
+    msg.push(0x80);
+    while (msg.length % 64 !== 56) msg.push(0);
+    var hi = Math.floor(bitLen / 4294967296), lo = bitLen >>> 0;
+    msg.push((hi >>> 24) & 255, (hi >>> 16) & 255, (hi >>> 8) & 255, hi & 255,
+             (lo >>> 24) & 255, (lo >>> 16) & 255, (lo >>> 8) & 255, lo & 255);
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    var K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+             0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+             0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+             0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+             0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+             0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+             0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+             0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    for (var i = 0; i < msg.length; i += 64) {
+      var w = [], t, s0, s1;
+      for (t = 0; t < 16; t++) w[t] = (msg[i + 4*t] << 24) | (msg[i + 4*t + 1] << 16) | (msg[i + 4*t + 2] << 8) | msg[i + 4*t + 3];
+      for (t = 16; t < 64; t++) {
+        s0 = rr(w[t-15], 7) ^ rr(w[t-15], 18) ^ (w[t-15] >>> 3);
+        s1 = rr(w[t-2], 17) ^ rr(w[t-2], 19) ^ (w[t-2] >>> 10);
+        w[t] = (w[t-16] + s0 + w[t-7] + s1) | 0;
+      }
+      var av = H[0], bv = H[1], cv = H[2], dv = H[3], ev = H[4], fv = H[5], gv = H[6], hv = H[7];
+      for (t = 0; t < 64; t++) {
+        var S1 = rr(ev, 6) ^ rr(ev, 11) ^ rr(ev, 25);
+        var ch = (ev & fv) ^ (~ev & gv);
+        var t1 = (hv + S1 + ch + K[t] + w[t]) | 0;
+        var S0 = rr(av, 2) ^ rr(av, 13) ^ rr(av, 22);
+        var mj = (av & bv) ^ (av & cv) ^ (bv & cv);
+        var t2 = (S0 + mj) | 0;
+        hv = gv; gv = fv; fv = ev; ev = (dv + t1) | 0; dv = cv; cv = bv; bv = av; av = (t1 + t2) | 0;
+      }
+      H[0] = (H[0] + av) | 0; H[1] = (H[1] + bv) | 0; H[2] = (H[2] + cv) | 0; H[3] = (H[3] + dv) | 0;
+      H[4] = (H[4] + ev) | 0; H[5] = (H[5] + fv) | 0; H[6] = (H[6] + gv) | 0; H[7] = (H[7] + hv) | 0;
     }
-    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
-    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
-    var w = (h1 ^ h2 ^ h3 ^ h4) >>> 0;
-    return new Uint8Array([(w >>> 24) & 255, (w >>> 16) & 255, (w >>> 8) & 255, w & 255]);
+    return new Uint8Array([(H[0] >>> 24) & 255, (H[0] >>> 16) & 255, (H[0] >>> 8) & 255, H[0] & 255]);
   }
   function avSeed(addr, cb) {
     var a = String(addr).toLowerCase();
     if (__avHashCache[a]) { cb(__avHashCache[a]); return; }
-    var subtle = (window.crypto && window.crypto.subtle) || null;
-    if (!subtle) { __avHashCache[a] = avSoftSeed(a); cb(__avHashCache[a]); return; }
-    subtle.digest("SHA-256", new TextEncoder().encode(a)).then(function (buf) {
-      __avHashCache[a] = new Uint8Array(buf.slice(0, 4));
-      cb(__avHashCache[a]);
-    }).catch(function () {
-      // crypto failure degrades to the same full-string soft hash - never the degenerate prefix seed
-      __avHashCache[a] = avSoftSeed(a);
-      cb(__avHashCache[a]);
-    });
+    __avHashCache[a] = avSha256(a);
+    cb(__avHashCache[a]);
   }
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; }
   var AV_BGS = ["#cfcfcf", "#c4c4c4", "#d8d8d8", "#bdbdbd"]; // boss 09-30 ②: 4-shade body grayscale (Iris final: neutral grays), drawn per address
