@@ -878,6 +878,158 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     });
     return moved;
   }
+  // insertMissingAccountsDom is the redraw-on-demand path (boss 0930:
+  // 按需重画 - "why redraw the whole row when the heartbeat only concerns
+  // the pill"). A letter from a BRAND-NEW counterparty used to cost a full
+  // loadAccounts rebuild: reorderAccountsDom cannot place what the DOM
+  // lacks, so the fallback rebuilt every row just to add one - open states
+  // and marquee clocks went through the snapshot/restore band-aids and the
+  // page flickered once per addition. This routine adds ONLY the missing
+  // rows: present rows keep their nodes (identity, listeners, avatar
+  // bitmaps, running marquee clocks) and the new rows come from the SAME
+  // templates the full rebuild uses (ctPcRowsHtml / accRowHtml), so the
+  // two paths cannot diverge.
+  // One contract on both surfaces, verify-first mutate-second (the same
+  // shape as reorderAccountsDom - a partial insert is structurally
+  // impossible): no removals (every rendered row must be wanted),
+  // furniture intact (register card PC-last / phone-first, no unknown
+  // children, no duplicates), the two surfaces must agree on the missing
+  // set, and every missing address must be a plain CONTACT with an
+  // activity edge (new subordinates belong to the register flow; edgeless
+  // rows cannot be ordered). Any mismatch returns false and the caller
+  // keeps its debounced full-rebuild fallback.
+  function insertMissingAccountsDom(want) {
+    var ctx = acctCtx;
+    if (!ctx) return false;
+    var wantList = want.map(function (a) { return String(a).toLowerCase(); });
+    var wantSet = {};
+    wantList.forEach(function (a) { wantSet[a] = 1; });
+    // fresh activity view: ordering keys + the new rows' latest line
+    var actByAddr = {};
+    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    ((actData && actData.contacts) || []).forEach(function (x) { var k = String(x.address).toLowerCase(); if (!actByAddr[k]) actByAddr[k] = x; });
+    var entryAt = function (addr) { var x = actByAddr[String(addr).toLowerCase()]; return (+(x && x.latest_at)) || 0; };
+    var tbPc = null;
+    $$("#tab-accounts tbody").forEach(function (t) { if (!tbPc && t.querySelector(".subrow-pc, .ct-row")) tbPc = t; });
+    var cb = document.getElementById("acc-m-contacts");
+    if (!tbPc || !cb) return false;
+    // ---- verify PC: furniture + no extras + collect the missing set ----
+    var main = {}, line3 = {}, unknown = 0, reg = null;
+    Array.prototype.forEach.call(tbPc.children, function (tr) {
+      if (tr.nodeType !== 1) { unknown++; return; }
+      var k = String(tr.getAttribute("data-act-acct") || "").toLowerCase();
+      if (tr.classList.contains("agentreg-row")) { reg = tr; return; }
+      if (tr.classList.contains("line3-row")) {
+        if (k && !line3[k]) line3[k] = tr; else unknown++;
+      } else if (k && (tr.classList.contains("subrow-pc") || tr.classList.contains("ct-row"))) {
+        if (main[k]) unknown++; else main[k] = tr;
+      } else unknown++;
+    });
+    if (!reg || unknown) return false;
+    var extra = Object.keys(main).concat(Object.keys(line3)).filter(function (a) { return !wantSet[a]; });
+    if (extra.length) return false;
+    var missing = wantList.filter(function (a) { return !main[a] || !line3[a]; });
+    if (!missing.length) return false; // nothing to add: order alone is reorderAccountsDom's job
+    for (var mi = 0; mi < missing.length; mi++) {
+      if (ctx.subsSet[missing[mi]]) return false; // new subordinate: the register flow owns its reload
+      if (!actByAddr[missing[mi]]) return false;  // no activity edge - cannot order it, let the rebuild decide
+    }
+    // ---- verify phone: furniture + the SAME missing set on both surfaces ----
+    if (!cb.querySelector(".im3-row[data-claddr]")) return false;
+    var rowsM = {}, unknownM = 0, regM = null;
+    Array.prototype.forEach.call(cb.children, function (el) {
+      if (el.nodeType !== 1) { unknownM++; return; }
+      if (el.hasAttribute("data-reg")) { regM = el; return; }
+      var k = String(el.getAttribute("data-claddr") || "").toLowerCase();
+      if (el.classList.contains("im3-row") && k && !rowsM[k]) rowsM[k] = el;
+      else unknownM++;
+    });
+    if (!regM || unknownM) return false;
+    var extraM = Object.keys(rowsM).filter(function (a) { return !wantSet[a]; });
+    if (extraM.length) return false;
+    var missingM = wantList.filter(function (a) { return !rowsM[a]; });
+    if (missingM.join("|") !== missing.join("|")) return false; // surfaces disagree - rebuild decides
+    // ---- build everything before mutating (all-or-nothing) ----
+    var builds = missing.map(function (c) {
+      var pcC = ctPcRowsHtml(c, ctx.listedSet, ctx.listedSig, actByAddr);
+      return {
+        addr: c, at: entryAt(c),
+        main: pcC.main, line3: pcC.line3,
+        card: accRowHtml({ addr: c, badge: pcC.badge, sig: ctx.listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null })
+      };
+    });
+    // moving the present rows re-parents them - CSS animations restart on
+    // re-insertion, so snapshot the running clocks and restore after
+    // (same-task restore, no visible restart; same shape as the mover).
+    var clocks = [];
+    $$(".sig-cell .sig-track, .mq .sig-track, .im3-row[data-claddr] .im3-addr-in").forEach(function (t) {
+      t.getAnimations().forEach(function (a) { clocks.push([t, a.animationName, a.currentTime]); });
+    });
+    // ---- mutate PC: present rows into want order, reg stays last ----
+    var presentSeq = wantList.filter(function (a) { return main[a] && line3[a]; });
+    var curSeq = [...tbPc.querySelectorAll(".subrow-pc, .ct-row")].map(function (r) { return String(r.getAttribute("data-act-acct")).toLowerCase(); });
+    if (curSeq.join("|") !== presentSeq.join("|")) { // already in order: skip the re-parent, animations keep running untouched
+      var frag = document.createDocumentFragment();
+      presentSeq.forEach(function (a) { frag.appendChild(main[a]); frag.appendChild(line3[a]); });
+      frag.appendChild(reg);
+      tbPc.appendChild(frag);
+    }
+    // ---- mutate phone: present cards into want order, pinned reg first ----
+    var presentM = wantList.filter(function (a) { return rowsM[a]; });
+    var curM = [...cb.querySelectorAll(".im3-row[data-claddr]")].map(function (r) { return String(r.getAttribute("data-claddr")).toLowerCase(); });
+    if (curM.join("|") !== presentM.join("|")) {
+      var fragM = document.createDocumentFragment();
+      presentM.forEach(function (a) { fragM.appendChild(rowsM[a]); });
+      cb.appendChild(fragM);
+      if (cb.firstElementChild !== regM) cb.insertBefore(regM, cb.firstChild);
+    }
+    // ---- insert the missing rows at their sorted position ----
+    // Stable-sort semantics: walk to the first row with a strictly smaller
+    // key, so ties keep the new row AFTER existing equals; previously
+    // inserted builds carry equal-or-larger keys and are skipped the same
+    // way.
+    builds.forEach(function (b) {
+      var ref = null;
+      Array.prototype.forEach.call(tbPc.children, function (tr) {
+        if (ref || tr.nodeType !== 1) return;
+        if (!(tr.classList.contains("subrow-pc") || tr.classList.contains("ct-row"))) return;
+        if (entryAt(String(tr.getAttribute("data-act-acct") || "").toLowerCase()) < b.at) ref = tr;
+      });
+      var tpl = document.createElement("template");
+      tpl.innerHTML = b.main + b.line3;
+      var pair = Array.prototype.slice.call(tpl.content.children);
+      if (ref) { tbPc.insertBefore(pair[0], ref); tbPc.insertBefore(pair[1], ref); }
+      else { tbPc.insertBefore(pair[0], reg); tbPc.insertBefore(pair[1], reg); }
+      $$("[data-compose]", pair[0]).forEach(function (btn) {
+        btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: btn.dataset.compose } })); });
+      });
+      avHydrate(pair[0]);
+      avRemoteHydrate(pair[0]); // 0021: registry-backed real avatars
+      var tplM = document.createElement("template");
+      tplM.innerHTML = b.card;
+      var card = tplM.content.firstElementChild;
+      var refM = null;
+      Array.prototype.forEach.call(cb.children, function (el) {
+        if (refM || el.nodeType !== 1) return;
+        if (!el.classList.contains("im3-row") || !el.hasAttribute("data-claddr")) return;
+        if (entryAt(String(el.getAttribute("data-claddr") || "").toLowerCase()) < b.at) refM = el;
+      });
+      if (refM) cb.insertBefore(card, refM); else cb.appendChild(card);
+      wireIm3Row(card, cb);
+      $$("[data-compose], [data-remove-sub]", card).forEach(function (btn) {
+        if (btn.dataset.compose) btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: btn.dataset.compose } })); });
+        if (btn.dataset.removeSub) btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: btn.dataset.removeSub, role: "superior" } })); });
+      });
+      avHydrate(card);
+      avRemoteHydrate(card);
+      im3MarqueeScan(card); // the new card's own address marquee
+    });
+    maybeMarqueeSigs(); // engage the new PC address/sig tracks (idempotent)
+    clocks.forEach(function (c) {
+      c[0].getAnimations().forEach(function (a) { if (a.animationName === c[1]) a.currentTime = c[2]; });
+    });
+    return true;
+  }
   function applyActivity() {
 
 
@@ -1018,7 +1170,16 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var have = [...box.querySelectorAll(".im3-row")]
         .map(function (r) { return String(r.getAttribute("data-claddr") || "").toLowerCase(); })
         .filter(function (a) { return a && wantSet[a]; });
-      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; });
+      // boss 0930 按需重画 round: `have` is FILTERED to wantSet members, so
+      // stale rows (a contact that vanished from the activity view) were
+      // invisible to this check - a removed counterparty's row sat in the
+      // DOM forever because same never went false. Count BOTH surfaces'
+      // rendered data rows against want: extras must trigger the decision
+      // path too (reorder refuses them, the inserter refuses them, the
+      // rebuild fallback finally cleans up).
+      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; })
+        && box.querySelectorAll(".im3-row[data-claddr]").length === want.length
+        && $$("#tab-accounts tbody tr.subrow-pc, #accounts-table tbody tr.ct-row").length === want.length;
       // 0024 batch guard: the reorder reload has no exit once it starts
       // against an empty actData (rows exist, panel later hidden, pulls
       // visibility-gated) - the 150ms loop rebuilt the whole list ~27x/5s
@@ -1029,7 +1190,11 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // one shared routine (PC + phone, logic identical); the debounced
         // rebuild below is only the fallback for rows the move cannot place
         // (brand-new contact, stale row, state row) - never the flicker path.
-        if (!reorderAccountsDom(want)) {
+        // boss 0930 按需重画: the missing-row case - the one shape the mover
+        // cannot place - now takes the incremental inserter first; the
+        // debounced rebuild stays as the fallback for every shape the
+        // inserter cannot verify.
+        if (!reorderAccountsDom(want) && !insertMissingAccountsDom(want)) {
           applyActivity._reloading = true;
           setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
         }
@@ -1601,25 +1766,31 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   function accWireList(root) {
     // Row tap = compose; gear tap = in-place overlay; back hides it.
-    $$(".im3-row", root).forEach(function (row) {
-      row.addEventListener("click", function (ev) {
-        if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
-        var to = row.getAttribute("data-claddr");
-        if (!to) return; // register/pinned row opens its own flow, not compose
-        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
-      });
-      var gear = row.querySelector("[data-gear]");
-      if (gear) gear.addEventListener("click", function () {
-        $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
-        row.querySelector(".im3-overlay").classList.toggle("on");
-      });
-      var back = row.querySelector("[data-ovl-back]");
-      if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
-    });
+    $$(".im3-row", root).forEach(function (row) { wireIm3Row(row, root); });
     $$("[data-compose], [data-remove-sub]", root).forEach(function (b) {
       if (b.dataset.compose) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
       if (b.dataset.removeSub) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: b.dataset.removeSub, role: "superior" } })); });
     });
+  }
+  // wireIm3Row wires ONE mobile card - the per-row unit the full render
+  // loops over and the incremental inserter calls for a single new card
+  // (looping accWireList over the whole box again would double-wire every
+  // existing listener). root is the list container: the gear handler must
+  // still be able to close OTHER rows' overlays.
+  function wireIm3Row(row, root) {
+    row.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
+      var to = row.getAttribute("data-claddr");
+      if (!to) return; // register/pinned row opens its own flow, not compose
+      document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
+    });
+    var gear = row.querySelector("[data-gear]");
+    if (gear) gear.addEventListener("click", function () {
+      $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
+      row.querySelector(".im3-overlay").classList.toggle("on");
+    });
+    var back = row.querySelector("[data-ovl-back]");
+    if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
   }
 
   // ---- 0.3.3-C: accounts-page listification (mobile only) ----
@@ -2001,25 +2172,31 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   function accWireList(root) {
     // Row tap = compose; gear tap = in-place overlay; back hides it.
-    $$(".im3-row", root).forEach(function (row) {
-      row.addEventListener("click", function (ev) {
-        if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
-        var to = row.getAttribute("data-claddr");
-        if (!to) return; // register/pinned row opens its own flow, not compose
-        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
-      });
-      var gear = row.querySelector("[data-gear]");
-      if (gear) gear.addEventListener("click", function () {
-        $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
-        row.querySelector(".im3-overlay").classList.toggle("on");
-      });
-      var back = row.querySelector("[data-ovl-back]");
-      if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
-    });
+    $$(".im3-row", root).forEach(function (row) { wireIm3Row(row, root); });
     $$("[data-compose], [data-remove-sub]", root).forEach(function (b) {
       if (b.dataset.compose) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
       if (b.dataset.removeSub) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: b.dataset.removeSub, role: "superior" } })); });
     });
+  }
+  // wireIm3Row wires ONE mobile card - the per-row unit the full render
+  // loops over and the incremental inserter calls for a single new card
+  // (looping accWireList over the whole box again would double-wire every
+  // existing listener). root is the list container: the gear handler must
+  // still be able to close OTHER rows' overlays.
+  function wireIm3Row(row, root) {
+    row.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
+      var to = row.getAttribute("data-claddr");
+      if (!to) return; // register/pinned row opens its own flow, not compose
+      document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
+    });
+    var gear = row.querySelector("[data-gear]");
+    if (gear) gear.addEventListener("click", function () {
+      $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
+      row.querySelector(".im3-overlay").classList.toggle("on");
+    });
+    var back = row.querySelector("[data-ovl-back]");
+    if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
   }
 
   // loadAccountsRegular renders the regular-user Accounts view: themselves
@@ -2027,6 +2204,34 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // (from /api/contacts). No admin/disabled/uuid columns — those are sensitive
   // and not relevant to a personal view.
   var mqPhase = null; // boss 09-29: marquee clocks across a pending rewrite (see mqSnap)
+  // acctCtx = the directory/subs view the last full render built its rows
+  // from. The incremental inserter (insertMissingAccountsDom) reuses it to
+  // build a missing contact's row without refetching; every full render
+  // refreshes it, so it is at most one render behind - self-correcting.
+  var acctCtx = null;
+  // ctPcRowsHtml builds ONE contact's PC row pair (main + line3) plus the
+  // badge the mobile card shares. The full rebuild and the incremental
+  // inserter (insertMissingAccountsDom) must produce byte-identical rows -
+  // two copies of the template would drift and the two refresh paths would
+  // visibly diverge - so both go through this one builder.
+  function ctPcRowsHtml(c, listedSet, listedSig, actByAddr) {
+    // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
+    // 从属集内的地址打「外部」标（与 listed 并存不互斥）。
+    var badge2 = '<span class="badge-ext">' + t("acc.badgeExt") + "</span>" +
+      (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
+    return {
+      badge: badge2.trim(),
+      main: '<tr class="ct-row" data-act-acct="' + esc(c) + '">' +
+        '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge2.trim() + "</span></span></td>" +
+        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
+        "</tr>",
+      // boss PC round: the latest message runs the FULL row width (one
+      // colspan-3 line under the entry), still patched in place by
+      // applyActivity via the data-act-acct hook.
+      line3: '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>"
+    };
+  }
   async function loadAccountsRegular(selfAddr) {
     // The "+ Register new account" button is admin-only.
     const accSecRegular = document.getElementById("tab-accounts");
@@ -2078,6 +2283,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         if (e.avatar_hash) window.__avatarHashes[String(e.address || "").toLowerCase()] = e.avatar_hash;
       });
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
+    acctCtx = { listedSet: listedSet, listedSig: listedSig, subsSet: subAddrs }; // refresh the inserter's view
     var rows = [];
     // 0.3.2 概览重构（boss 认定四）：自身行已撤——自身卡迁偏好页
 
@@ -2155,23 +2361,16 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
         // 从属集内的地址打「外部」标（与 listed 并存不互斥）。纯前端推导
         // （requestSubs 从属集在手），数据面零改动（Devi 已确认口径）。
-        var badge2 = '<span class="badge-ext">' + t("acc.badgeExt") + "</span>" +
-          (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
         // Every address row gets the same shape (feedback: subordinate
         // rows with and without mail history must look identical):
         // badge column, Compose action; Created only where known.
         // The address carries the marquee track for the mobile one-screen
         // plan (phones merge badges+address into one line); the twin card
         // below feeds #acc-m-contacts (the phone-only scrollable list).
-        rows.push(
-          '<tr class="ct-row" data-act-acct="' + esc(c) + '">' +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge2.trim() + "</span></span></td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
-          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
-          "</tr>");
-        rows.push(
-          '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>");
-        clRows += accRowHtml({ addr: c, badge: badge2.trim(), sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
+        var pcC = ctPcRowsHtml(c, listedSet, listedSig, actByAddr);
+        rows.push(pcC.main);
+        rows.push(pcC.line3);
+        clRows += accRowHtml({ addr: c, badge: pcC.badge, sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
       }
     });
     // Register card LAST: with one unified ordering it must not split the
