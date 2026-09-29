@@ -1510,17 +1510,34 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // ripple). Every parameter derives from the seed — no Math.random, the
   // same address renders the same avatar across sessions and devices.
   var __avHashCache = {};
+  // crypto.subtle exists only in secure contexts (https / localhost); on any
+  // other origin the seed must come from a software hash. The old
+  // prefix+length fallback collapsed same-domain address families into
+  // identical robots (25 same-shape addresses -> ~7 distinct, identical runs
+  // of 3+). cyrb128: 4 avalanche rounds per char over the FULL string.
+  function avSoftSeed(a) {
+    var h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762, i, k;
+    for (i = 0; i < a.length; i++) {
+      k = a.charCodeAt(i);
+      h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+      h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+    }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    var w = (h1 ^ h2 ^ h3 ^ h4) >>> 0;
+    return new Uint8Array([(w >>> 24) & 255, (w >>> 16) & 255, (w >>> 8) & 255, w & 255]);
+  }
   function avSeed(addr, cb) {
     var a = String(addr).toLowerCase();
     if (__avHashCache[a]) { cb(__avHashCache[a]); return; }
     var subtle = (window.crypto && window.crypto.subtle) || null;
-    if (!subtle) { __avHashCache[a] = new Uint8Array([a.length, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]); cb(__avHashCache[a]); return; }
+    if (!subtle) { __avHashCache[a] = avSoftSeed(a); cb(__avHashCache[a]); return; }
     subtle.digest("SHA-256", new TextEncoder().encode(a)).then(function (buf) {
       __avHashCache[a] = new Uint8Array(buf.slice(0, 4));
       cb(__avHashCache[a]);
     }).catch(function () {
-      // fallback seed: char-code fold (spec: hash failure -> solid + initial)
-      __avHashCache[a] = new Uint8Array([0xff, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]);
+      // crypto failure degrades to the same full-string soft hash - never the degenerate prefix seed
+      __avHashCache[a] = avSoftSeed(a);
       cb(__avHashCache[a]);
     });
   }
