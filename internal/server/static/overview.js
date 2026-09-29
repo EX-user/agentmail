@@ -186,7 +186,7 @@ var mgmtNodeSet = null;
           value: Math.max(1, n.volume || 1), scaling: nodeScaling,
           mass: 1 + 3 * Math.min(1, (n.volume || 0) / (mgmtMaxVol || 1)),
           title: shortAddr(n.address) + (kind !== "external" ? " · " + wl + " " + (n.volume || 0) : ""),
-          _kind: kind, _border: border, _bg: bg
+          _kind: kind, _border: border, _bg: bg, avatar_hash: n.avatar_hash || ""
         };
       }));
 
@@ -201,18 +201,25 @@ var mgmtNodeSet = null;
         var addr = String(n.id || "").toLowerCase();
         var key = addr + "|" + n.avatar_hash;
         var isMeN = (n.kind || "external") === "self";
-        var upgrade = function (url) {
-          vn.update({ id: n.id, shape: "circularImage", image: url,
+        var upgrade = function (imgEl) {
+          vn.update({ id: n.id, shape: "circularImage", image: { unselected: imgEl, selected: imgEl },
+
             size: isMeN ? 26 : 16,
             color: { background: n._bg, border: n._border }, borderWidth: isMeN ? 2 : 1 });
         };
         var hit = avUrlCache[key];
         if (hit === "none") return;
-        if (hit) { upgrade(hit); return; }
+        if (hit) { upgrade(hit); return; } // decoded Image element
         fetch("/api/avatar/" + encodeURIComponent(addr) + "?v=" + n.avatar_hash,
           { headers: { Authorization: basicAuth() } })
           .then(function (r) { if (!r.ok) throw 0; return r.blob(); })
-          .then(function (b) { var u = URL.createObjectURL(b); avUrlCache[key] = u; upgrade(u); })
+          .then(function (b) {
+            var u = URL.createObjectURL(b);
+            var im = new Image();
+            im.onload = function () { avUrlCache[key] = im; upgrade(im); };
+            im.onerror = function () { avUrlCache[key] = "none"; };
+            im.src = u;
+          })
           .catch(function () { avUrlCache[key] = "none"; });
       });
 
