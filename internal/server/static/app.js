@@ -1371,198 +1371,6 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var subj = shown ? "\u300c" + shown + "\u300d" : "";
     return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
   }
-  // ---- default avatar generator v2 (boss 0.3.4: monochrome minimal
-  // robot + random configurator). Deterministic: address (lowercase) ->
-  // SHA-256 -> seed bytes S[0..3], same address renders the same avatar
-  // everywhere. Palette/accessory/eye pools are FIXED (visibility-tested,
-  // boss-marked): accessories pick from the agreed palette inside their
-  // tier (large items all 10 colors, small items the 5-color subset),
-  // eyes come from a weighted pool (plain pair upweighted + paired sets
-  // wink/love/shy/happy + independent picks, two eyes may differ). ----
-  var __avHashCache = {};
-  function avSeed(addr, cb) {
-    var a = String(addr).toLowerCase();
-    if (__avHashCache[a]) { cb(__avHashCache[a]); return; }
-    var subtle = (window.crypto && window.crypto.subtle) || null;
-    if (!subtle) { __avHashCache[a] = new Uint8Array([a.length, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]); cb(__avHashCache[a]); return; }
-    subtle.digest("SHA-256", new TextEncoder().encode(a)).then(function (buf) {
-      __avHashCache[a] = new Uint8Array(buf.slice(0, 4));
-      cb(__avHashCache[a]);
-    }).catch(function () {
-      __avHashCache[a] = new Uint8Array([0xff, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]);
-      cb(__avHashCache[a]);
-    });
-  }
-  var AV_BG = "#cfcfcf", AV_INK_ON_WHITE = "#9a9a9a";
-  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#c6b6e0", "#ecb8a8", "#a8d0cc", "#d8b8b8", "#c2d6a8", "#d8c2e0"];
-  var AV_SMALL_ACCENTS = ["#e6b8c2", "#a9c6de", "#c6b6e0", "#ecb8a8", "#d8b8b8"];
-  var AV_EYES = ["?", "#", "\u00d7", "bar"];
-  var AV_MOUTHS = ["line", "wave", "dot", "v"];
-  function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
-  var AV_ACCS = [
-    ["flower", 1], ["headphone", 0], ["cat", 0], ["tophat", 1], ["bunny", 1],
-    ["chef", 1], ["heartclip", 1], ["sprout", 1], ["cherry", 1], ["bell", 1],
-    ["bowtie", 1], ["strawhat", 0], ["windkey", 0], ["propeller", 0]
-  ];
-  function avRobotSvg(addr, S) {
-    var pick = function (n, mod) { return S[n % 4] % mod; };
-    var white = "#ffffff";
-    var grey = AV_INK_ON_WHITE;
-    var accDef = AV_ACCS[pick(0, AV_ACCS.length)];
-    var accent = accDef[1] ? AV_SMALL_ACCENTS[pick(1, AV_SMALL_ACCENTS.length)] : AV_ACCENTS[pick(1, AV_ACCENTS.length)];
-    var eyeL = AV_EYES[pick(1, AV_EYES.length)];
-    var eyeR = AV_EYES[pick(2, AV_EYES.length)];
-    var mouth = AV_MOUTHS[pick(3, AV_MOUTHS.length)];
-    var acc = accDef[0];
-    function barEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 3) + '" y="28" width="6" height="16" rx="3" fill="' + grey + '"/></g>'; }
-    function gtEye(x, flip) {
-      var d = flip ? ("M" + (x + 6) + " 29 L" + (x - 6) + " 36 L" + (x + 6) + " 43")
-                   : ("M" + (x - 6) + " 29 L" + (x + 6) + " 36 L" + (x - 6) + " 43");
-      return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="' + d + '" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></g>';
-    }
-    function heartEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + x + ' 43 C' + (x - 9) + ' 36 ' + (x - 6) + ' 26 ' + x + ' 31 C' + (x + 6) + ' 26 ' + (x + 9) + ' 36 ' + x + ' 43 Z" fill="' + grey + '"/></g>'; }
-    function shyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 28 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
-    function happyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 43 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
-    function qEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 5) + ' 32 C' + (x - 5) + ' 25 ' + (x + 5) + ' 25 ' + (x + 5) + ' 31 C' + (x + 5) + ' 35 ' + x + ' 35 ' + x + ' 39" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/><circle cx="' + x + '" cy="45" r="2.6" fill="' + grey + '"/></g>'; }
-    function hashEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 6.5) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x + 2.9) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="32.5" width="15" height="3.4" rx="1.7" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="38.6" width="15" height="3.4" rx="1.7" fill="' + grey + '"/></g>'; }
-    function xEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 29 L' + (x + 6) + ' 43 M' + (x + 6) + ' 29 L' + (x - 6) + ' 43" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
-    var INDEP = [qEye, hashEye, xEye, barEye];
-    var roll = pick(1, 100);
-    var eyesEl = "";
-    if (roll < 25) eyesEl = barEye(36) + barEye(60);
-    else if (roll < 35) eyesEl = gtEye(36, false) + barEye(60);
-    else if (roll < 45) eyesEl = barEye(36) + gtEye(60, true);
-    else if (roll < 55) eyesEl = heartEye(36) + heartEye(60);
-    else if (roll < 65) eyesEl = shyEye(36) + shyEye(60);
-    else if (roll < 75) eyesEl = happyEye(36) + happyEye(60);
-    else eyesEl = INDEP[pick(2, INDEP.length)](36) + INDEP[pick(3, INDEP.length)](60);
-    var mouthEl = "";
-    if (mouth === "line") mouthEl = '<rect x="40" y="47" width="16" height="3.5" rx="1.75" fill="' + grey + '"/>';
-    else if (mouth === "wave") mouthEl = '<path d="M39 48 q4.5 -4.5 9 0 q4.5 4.5 9 0" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round"/>';
-    else if (mouth === "dot") mouthEl = '<circle cx="48" cy="48" r="3" fill="' + grey + '"/>';
-    else mouthEl = '<path d="M42.5 46 l5.5 5.5 l5.5 -5.5" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>';
-    var A = accent, accEl = "";
-    if (acc === "flower") accEl = '<g fill="' + A + '"><circle cx="61" cy="8" r="3.4"/><circle cx="56.5" cy="11" r="3.4"/><circle cx="65.5" cy="11" r="3.4"/><circle cx="58.5" cy="14.5" r="3.4"/><circle cx="63.5" cy="14.5" r="3.4"/></g><circle cx="61" cy="11.5" r="2.4" fill="' + AV_BG + '"/>';
-    else if (acc === "headphone") accEl = '<path d="M30 22 C30 11 66 11 66 22" fill="none" stroke="' + A + '" stroke-width="4" stroke-linecap="round"/><rect x="25.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/><rect x="62.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/>';
-    else if (acc === "cat") accEl = '<path d="M28 22 L31 4 L44 15 Z" fill="' + white + '"/><path d="M68 22 L65 4 L52 15 Z" fill="' + white + '"/>';
-    else if (acc === "tophat") accEl = '<rect x="40" y="1" width="16" height="11" fill="' + A + '"/><rect x="36.5" y="10.5" width="23" height="3.6" rx="1.8" fill="' + A + '"/>';
-    else if (acc === "bunny") accEl = '<ellipse cx="42" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(-12 42 15)"/><ellipse cx="54" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(12 54 15)"/>';
-    else if (acc === "chef") accEl = '<path d="M34 20 C28 20 28 10 35 11 C36 5 44 4 46 8 C48 3 58 4 58 10 C66 9 66 20 60 20 Z" fill="' + A + '"/>';
-    else if (acc === "heartclip") accEl = '<path d="M61 16 C54 11 56 4 61 8 C66 4 68 11 61 16 Z" fill="' + A + '"/>';
-    else if (acc === "sprout") accEl = '<path d="M48 22 C48 14 48 12 48 10" stroke="' + A + '" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M48 12 C42 12 40 6 47 6 C49 10 48 12 48 12 Z" fill="' + A + '"/><path d="M48 14 C54 14 56 9 50 8 C47 11 48 14 48 14 Z" fill="' + A + '"/>';
-    else if (acc === "cherry") accEl = '<path d="M42 10 C46 14 48 16 50 20 M58 8 C54 13 52 16 50 20" stroke="' + A + '" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="41" cy="13" r="4" fill="' + A + '"/><circle cx="59" cy="11" r="4" fill="' + A + '"/>';
-    else if (acc === "bell") accEl = '<path d="M41 18 C41 8 55 8 55 18 Z" fill="' + A + '"/><circle cx="48" cy="20" r="2.5" fill="' + A + '"/>';
-    else if (acc === "bowtie") accEl = '<path d="M48 22 L36 15 L36 29 Z" fill="' + A + '"/><path d="M48 22 L60 15 L60 29 Z" fill="' + A + '"/><circle cx="48" cy="22" r="3.5" fill="#3a3a3a"/>';
-    else if (acc === "strawhat") accEl = '<ellipse cx="48" cy="12" rx="22" ry="6" fill="' + A + '"/><path d="M38 12 C38 2 58 2 58 12 Z" fill="' + A + '"/>';
-    else if (acc === "windkey") accEl = '<circle cx="48" cy="10" r="7" fill="none" stroke="' + A + '" stroke-width="3.5"/><line x1="48" y1="10" x2="48" y2="4" stroke="' + A + '" stroke-width="3" stroke-linecap="round"/><line x1="48" y1="17" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
-    else if (acc === "propeller") accEl = '<ellipse cx="38" cy="8" rx="12" ry="4" fill="' + A + '"/><ellipse cx="58" cy="8" rx="12" ry="4" fill="' + A + '"/><circle cx="48" cy="9" r="3.5" fill="' + A + '"/><line x1="48" y1="12" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
-    else accEl = '<line x1="48" y1="26" x2="48" y2="14" stroke="' + grey + '" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="11" r="5.5" fill="' + A + '"/>';
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
-      '<rect width="96" height="96" fill="' + AV_BG + '"/>' +
-      accEl +
-      '<rect x="9" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
-      '<rect x="78" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
-      '<rect x="17" y="13" width="62" height="46" rx="14" fill="' + white + '"/>' +
-      '<rect x="12" y="52" width="72" height="60" rx="16" fill="' + white + '"/>' +
-      '<circle cx="48" cy="76" r="5" fill="' + AV_BG + '"/>' +
-      eyesEl + mouthEl +
-      "</svg>";
-  }
-  function avSvgHtml(addr, S) {
-    var svg = avRobotSvg(addr, S);
-    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="robot">';
-  }
-  // 404 fallback (A-line task 4): avatar_hash present but the real avatar
-  // is gone (file deleted server-side) - the broken <img> swaps to the
-  // deterministic generator inline, so no white block ever shows.
-  window.__avFallback = function (img) {
-    var box = img && img.parentNode;
-    var addr = box && box.getAttribute("data-av");
-    if (!box || !addr) return;
-    img.remove();
-    box.setAttribute("data-avpend", "1");
-    box.textContent = (String(addr)[0] || "?").toUpperCase();
-    avHydrate(box.parentElement || box); // $$ does not match the root itself - scan from the parent
-  };
-
-  function accAvatarHtml(addr, isSub) {
-    // A-line hook, 0021 rework (bug fix: uploaded avatars invisible to
-    // other accounts): the old branch rendered a bare <img
-    // src=/api/avatar/...> - under the auth wall an <img> can never carry
-    // credentials, so every row except the own card 401'd into the
-    // generator forever. Rows now ALWAYS render a placeholder that
-    // avRemoteHydrate fills via the shared avatarObjectURL registry
-    // (authenticated fetch -> objectURL); hash present = ?v= bust,
-    // absent = plain endpoint whose 404 falls back to the generator.
-    var h = (window.__avatarHashes || {})[String(addr).toLowerCase()] || '';
-    // The unclipped wrapper hosts the unread dot: .im3-av itself is
-    // overflow-hidden (rounded mask), and a corner badge must NOT live
-    // under that mask (boss: the dot showed a bite out of it).
-    return '<span class="im3-av-wrap"><div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div></span>';
-  }
-  // avRemoteHydrate (0021): fill remote placeholders via the shared
-  // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
-  // isConnected guards the re-render race; a failed fetch (404 = the
-    // account has no avatar) hands the box to the generator path.
-  function avRemoteFillOne(el) {
-    var addr = el.getAttribute("data-av");
-    var hash = el.getAttribute("data-avhash") || "";
-    avatarObjectURL(addr, hash, false).then(function (url) {
-      if (!el.isConnected) return;
-      el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
-    }).catch(function () {
-      if (!el.isConnected) return;
-      el.setAttribute("data-avpend", "1");
-      avHydrate(el.parentElement || el);
-    });
-  }
-  function avRemoteHydrate(root) {
-    $$("[data-avremote]", root).forEach(avRemoteFillOne);
-  }
-  // A-case (boss-approved): the activity poll payload already carries each
-  // account's current avatar_hash, so sync it here - an uploaded avatar
-  // shows within one poll cycle with no restart or refresh. A changed hash
-  // costs one registry update plus exactly one targeted box re-hydration;
-  // unchanged rows cost zero requests and zero DOM writes.
-  function avSyncAvatarsFromActivity(subs) {
-    var reg = window.__avatarHashes = window.__avatarHashes || {};
-    (subs || []).forEach(function (s) {
-      var addr = String(s.address || "").toLowerCase();
-      if (!addr) return;
-      var nh = s.avatar_hash || "";
-      if ((reg[addr] || "") === nh) return;
-      reg[addr] = nh;
-      var box = null;
-      var nodes = document.querySelectorAll('#tab-accounts [data-avremote]');
-      for (var i = 0; i < nodes.length; i++) {
-        if (String(nodes[i].getAttribute("data-av")).toLowerCase() === addr) { box = nodes[i]; break; }
-      }
-      if (!box || !box.isConnected) return; // row not on the page - registry is enough
-      box.setAttribute("data-avhash", nh);
-      box.classList.remove("cl-av-img");
-      box.style.background = "";
-      box.removeAttribute("data-avpend");
-      box.textContent = (String(box.getAttribute("data-av"))[0] || "?").toUpperCase();
-      avRemoteFillOne(box);
-    });
-  }
-  // Hydrate pending generator avatars (async seed -> svg swap-in place).
-  function avHydrate(root) {
-    $$("[data-avpend]", root).forEach(function (el) {
-      avSeed(el.getAttribute("data-av"), function (S) {
-        if (S[0] === 0xff) { // hash failure fallback: solid + initial (spec)
-          var hue = (S[1] * 360) / 256;
-          el.style.background = avHsl(hue, 60, 60);
-          el.classList.add("cl-av-img");
-          el.removeAttribute("data-avpend");
-          return;
-        }
-        el.innerHTML = avSvgHtml(el.getAttribute("data-av"), S);
-        el.removeAttribute("data-avpend");
-      });
-    });
-  }
-
   function accOverlayHtml(addr, isSub) {
     var acts = "";
     if (isSub) acts += '<button class="warn" data-remove-sub="' + esc(addr) + '">\u2715 ' + t("subs.removeBtn") + "</button>";
@@ -1717,57 +1525,84 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     });
   }
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; }
-  function avGradientInitial(addr, S) {
-    // linear gradient 135°±40° (S[2]); two hues 30-60° apart, L 55/45;
-    // white bold initial centered.
-    var h1 = (S[1] * 360) / 256;
-    var h2 = h1 + 30 + (S[3] % 31);
-    var ang = 135 + (S[2] % 81) - 40;
-    var ch = esc((String(addr)[0] || "?").toUpperCase());
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
-      '<defs><linearGradient id="g" gradientTransform="rotate(' + ang + ' .5 .5)">' +
-      '<stop offset="0" stop-color="' + avHsl(h1, 70, 55) + '"/>' +
-      '<stop offset="1" stop-color="' + avHsl(h2, 70, 45) + '"/></linearGradient></defs>' +
-      '<rect width="96" height="96" fill="url(#g)"/>' +
-      '<text x="48" y="48" dy=".36em" text-anchor="middle" font-family="system-ui,sans-serif" font-size="44" font-weight="700" fill="#fff">' + ch + "</text></svg>";
-  }
-  function avGeoTiles(addr, S) {
-    // fixed 2x2 four tiles (v1.1: block-count random dropped); tile hues
-    // 20-40° apart, per-tile rotation in {0,90,180,270} from the seed;
-    // no border, no glyph; seam <= 2px at 96.
-    var h0 = (S[1] * 360) / 256;
-    var gap = S[3] % 3; // 0..2px seam
-    var half = (96 - gap) / 2;
-    var tiles = "";
-    for (var i = 0; i < 4; i++) {
-      var hi = h0 + (20 + (S[(i + 1) % 4] % 21)) * i;
-      var rot = [0, 90, 180, 270][S[i] % 4];
-      var x = (i % 2) * (half + gap), y = Math.floor(i / 2) * (half + gap);
-      tiles += '<rect x="' + x + '" y="' + y + '" width="' + half + '" height="' + half + '" fill="' + avHsl(hi, 65, 55 + (i % 2) * 10) + '" transform="rotate(' + rot + " " + (x + half / 2) + " " + (y + half / 2) + ')"/>';
+  var AV_BG = "#cfcfcf", AV_INK_ON_WHITE = "#9a9a9a";
+  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#c6b6e0", "#ecb8a8", "#a8d0cc", "#d8b8b8", "#c2d6a8", "#d8c2e0"];
+  var AV_SMALL_ACCENTS = ["#e6b8c2", "#a9c6de", "#c6b6e0", "#ecb8a8", "#d8b8b8"];
+  var AV_EYES = ["?", "#", "\u00d7", "bar"];
+  var AV_MOUTHS = ["line", "wave", "dot", "v"];
+  function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
+  var AV_ACCS = [
+    ["flower", 1], ["headphone", 0], ["cat", 0], ["tophat", 1], ["bunny", 1],
+    ["chef", 1], ["heartclip", 1], ["sprout", 1], ["cherry", 1], ["bell", 1],
+    ["bowtie", 1], ["strawhat", 0], ["windkey", 0], ["propeller", 0]
+  ];
+  function avRobotSvg(addr, S) {
+    var pick = function (n, mod) { return S[n % 4] % mod; };
+    var white = "#ffffff";
+    var grey = AV_INK_ON_WHITE;
+    var accDef = AV_ACCS[pick(0, AV_ACCS.length)];
+    var accent = accDef[1] ? AV_SMALL_ACCENTS[pick(1, AV_SMALL_ACCENTS.length)] : AV_ACCENTS[pick(1, AV_ACCENTS.length)];
+    var eyeL = AV_EYES[pick(1, AV_EYES.length)];
+    var eyeR = AV_EYES[pick(2, AV_EYES.length)];
+    var mouth = AV_MOUTHS[pick(3, AV_MOUTHS.length)];
+    var acc = accDef[0];
+    function barEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 3) + '" y="28" width="6" height="16" rx="3" fill="' + grey + '"/></g>'; }
+    function gtEye(x, flip) {
+      var d = flip ? ("M" + (x + 6) + " 29 L" + (x - 6) + " 36 L" + (x + 6) + " 43")
+                   : ("M" + (x - 6) + " 29 L" + (x + 6) + " 36 L" + (x - 6) + " 43");
+      return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="' + d + '" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' + tiles + "</svg>";
-  }
-  function avRipple(addr, S) {
-    // base = seed hue; two concentric arc-ripple rings in the adjacent
-    // (S[3] even) or complementary (odd) hue; ring radii 0.66/0.33 of the
-    // box nudged +-0.08 by S[2]; no glyph.
-    var h0 = (S[1] * 360) / 256;
-    var h1 = (S[3] % 2 === 0) ? h0 + 30 : h0 + 180;
-    var r1 = 96 * (0.66 + (S[2] % 17 - 8) / 100);
-    var r2 = 96 * (0.33 + (S[2] % 17 - 8) / 100);
+    function heartEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + x + ' 43 C' + (x - 9) + ' 36 ' + (x - 6) + ' 26 ' + x + ' 31 C' + (x + 6) + ' 26 ' + (x + 9) + ' 36 ' + x + ' 43 Z" fill="' + grey + '"/></g>'; }
+    function shyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 28 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function happyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 43 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function qEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 5) + ' 32 C' + (x - 5) + ' 25 ' + (x + 5) + ' 25 ' + (x + 5) + ' 31 C' + (x + 5) + ' 35 ' + x + ' 35 ' + x + ' 39" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/><circle cx="' + x + '" cy="45" r="2.6" fill="' + grey + '"/></g>'; }
+    function hashEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 6.5) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x + 2.9) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="32.5" width="15" height="3.4" rx="1.7" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="38.6" width="15" height="3.4" rx="1.7" fill="' + grey + '"/></g>'; }
+    function xEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 29 L' + (x + 6) + ' 43 M' + (x + 6) + ' 29 L' + (x - 6) + ' 43" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    var INDEP = [qEye, hashEye, xEye, barEye];
+    var roll = pick(1, 100);
+    var eyesEl = "";
+    if (roll < 25) eyesEl = barEye(36) + barEye(60);
+    else if (roll < 35) eyesEl = gtEye(36, false) + barEye(60);
+    else if (roll < 45) eyesEl = barEye(36) + gtEye(60, true);
+    else if (roll < 55) eyesEl = heartEye(36) + heartEye(60);
+    else if (roll < 65) eyesEl = shyEye(36) + shyEye(60);
+    else if (roll < 75) eyesEl = happyEye(36) + happyEye(60);
+    else eyesEl = INDEP[pick(2, INDEP.length)](36) + INDEP[pick(3, INDEP.length)](60);
+    var mouthEl = "";
+    if (mouth === "line") mouthEl = '<rect x="40" y="47" width="16" height="3.5" rx="1.75" fill="' + grey + '"/>';
+    else if (mouth === "wave") mouthEl = '<path d="M39 48 q4.5 -4.5 9 0 q4.5 4.5 9 0" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round"/>';
+    else if (mouth === "dot") mouthEl = '<circle cx="48" cy="48" r="3" fill="' + grey + '"/>';
+    else mouthEl = '<path d="M42.5 46 l5.5 5.5 l5.5 -5.5" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>';
+    var A = accent, accEl = "";
+    if (acc === "flower") accEl = '<g fill="' + A + '"><circle cx="61" cy="8" r="3.4"/><circle cx="56.5" cy="11" r="3.4"/><circle cx="65.5" cy="11" r="3.4"/><circle cx="58.5" cy="14.5" r="3.4"/><circle cx="63.5" cy="14.5" r="3.4"/></g><circle cx="61" cy="11.5" r="2.4" fill="' + AV_BG + '"/>';
+    else if (acc === "headphone") accEl = '<path d="M30 22 C30 11 66 11 66 22" fill="none" stroke="' + A + '" stroke-width="4" stroke-linecap="round"/><rect x="25.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/><rect x="62.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/>';
+    else if (acc === "cat") accEl = '<path d="M28 22 L31 4 L44 15 Z" fill="' + white + '"/><path d="M68 22 L65 4 L52 15 Z" fill="' + white + '"/>';
+    else if (acc === "tophat") accEl = '<rect x="40" y="1" width="16" height="11" fill="' + A + '"/><rect x="36.5" y="10.5" width="23" height="3.6" rx="1.8" fill="' + A + '"/>';
+    else if (acc === "bunny") accEl = '<ellipse cx="42" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(-12 42 15)"/><ellipse cx="54" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(12 54 15)"/>';
+    else if (acc === "chef") accEl = '<path d="M34 20 C28 20 28 10 35 11 C36 5 44 4 46 8 C48 3 58 4 58 10 C66 9 66 20 60 20 Z" fill="' + A + '"/>';
+    else if (acc === "heartclip") accEl = '<path d="M61 16 C54 11 56 4 61 8 C66 4 68 11 61 16 Z" fill="' + A + '"/>';
+    else if (acc === "sprout") accEl = '<path d="M48 22 C48 14 48 12 48 10" stroke="' + A + '" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M48 12 C42 12 40 6 47 6 C49 10 48 12 48 12 Z" fill="' + A + '"/><path d="M48 14 C54 14 56 9 50 8 C47 11 48 14 48 14 Z" fill="' + A + '"/>';
+    else if (acc === "cherry") accEl = '<path d="M42 10 C46 14 48 16 50 20 M58 8 C54 13 52 16 50 20" stroke="' + A + '" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="41" cy="13" r="4" fill="' + A + '"/><circle cx="59" cy="11" r="4" fill="' + A + '"/>';
+    else if (acc === "bell") accEl = '<path d="M41 18 C41 8 55 8 55 18 Z" fill="' + A + '"/><circle cx="48" cy="20" r="2.5" fill="' + A + '"/>';
+    else if (acc === "bowtie") accEl = '<path d="M48 22 L36 15 L36 29 Z" fill="' + A + '"/><path d="M48 22 L60 15 L60 29 Z" fill="' + A + '"/><circle cx="48" cy="22" r="3.5" fill="#3a3a3a"/>';
+    else if (acc === "strawhat") accEl = '<ellipse cx="48" cy="12" rx="22" ry="6" fill="' + A + '"/><path d="M38 12 C38 2 58 2 58 12 Z" fill="' + A + '"/>';
+    else if (acc === "windkey") accEl = '<circle cx="48" cy="10" r="7" fill="none" stroke="' + A + '" stroke-width="3.5"/><line x1="48" y1="10" x2="48" y2="4" stroke="' + A + '" stroke-width="3" stroke-linecap="round"/><line x1="48" y1="17" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else if (acc === "propeller") accEl = '<ellipse cx="38" cy="8" rx="12" ry="4" fill="' + A + '"/><ellipse cx="58" cy="8" rx="12" ry="4" fill="' + A + '"/><circle cx="48" cy="9" r="3.5" fill="' + A + '"/><line x1="48" y1="12" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else accEl = '<line x1="48" y1="26" x2="48" y2="14" stroke="' + grey + '" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="11" r="5.5" fill="' + A + '"/>';
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
-      '<rect width="96" height="96" fill="' + avHsl(h0, 60, 60) + '"/>' +
-      '<circle cx="48" cy="48" r="' + r1 + '" fill="none" stroke="' + avHsl(h1, 65, 50) + '" stroke-width="7"/>' +
-      '<circle cx="48" cy="48" r="' + r2 + '" fill="none" stroke="' + avHsl(h1, 65, 62) + '" stroke-width="7"/></svg>';
+      '<rect width="96" height="96" fill="' + AV_BG + '"/>' +
+      accEl +
+      '<rect x="9" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="78" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="17" y="13" width="62" height="46" rx="14" fill="' + white + '"/>' +
+      '<rect x="12" y="52" width="72" height="60" rx="16" fill="' + white + '"/>' +
+      '<circle cx="48" cy="76" r="5" fill="' + AV_BG + '"/>' +
+      eyesEl + mouthEl +
+      "</svg>";
   }
   function avSvgHtml(addr, S) {
-    var svg;
-    switch (S[0] % 3) {
-      case 0: svg = avGradientInitial(addr, S); break;
-      case 1: svg = avGeoTiles(addr, S); break;
-      default: svg = avRipple(addr, S);
-    }
-    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="' + (S[0] % 3) + '">';
+    var svg = avRobotSvg(addr, S);
+    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="robot">';
   }
   // 404 fallback (A-line task 4): avatar_hash present but the real avatar
   // is gone (file deleted server-side) - the broken <img> swaps to the
