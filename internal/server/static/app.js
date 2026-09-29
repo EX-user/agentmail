@@ -1644,7 +1644,6 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       '<rect x="78" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
       '<rect x="17" y="13" width="62" height="46" rx="14" fill="' + white + '"/>' +
       '<rect x="12" y="52" width="72" height="60" rx="16" fill="' + white + '"/>' +
-      '<circle cx="48" cy="76" r="5" fill="' + AV_BG + '"/>' +
       eyesEl + mouthEl +
       "</svg>";
   }
