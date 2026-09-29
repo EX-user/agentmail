@@ -3059,6 +3059,11 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     padding-right: 2px;
   }
   #tab-compose.im #thread-holder #compose-thread { display: block; max-height: none; margin-top: 0; }
+  /* boss 09-30 (after the bug2 plates): breathing room ABOVE the first
+    history capsule - in content space (scrolls with the list, clips at
+    the holder edge) so nothing floats over or covers the letters; the
+    flush seat against the nav is untouched. */
+  #tab-compose.im #thread-holder #compose-thread { padding-top: 12px; }
   /* v3 items + boss freeze-round feedback: bubbles lean slightly IM-ward —
      own letters shift right AND carry an accent-tinted fill, received stay
      on the plain panel with the success bar, so the sender reads at a
