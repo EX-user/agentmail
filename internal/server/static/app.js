@@ -875,7 +875,13 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     ((actData && actData.subs) || []).forEach(function (s) {
 
 
-      byAddr[String(s.address).toLowerCase()] = s;
+      var kb = String(s.address || "").toLowerCase();
+
+
+      if (kb.indexOf("@") < 0) return; // bare legacy name: cannot match a row
+
+
+      byAddr[kb] = s;
 
 
     });
@@ -897,6 +903,9 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
 
 
       var k = String(c.address).toLowerCase();
+
+
+      if (k.indexOf("@") < 0) return; // bare legacy name: cannot match a row
 
 
       if (!byAddr[k]) byAddr[k] = c;
@@ -983,9 +992,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var box = $("#acc-m-contacts");
     if (box && !applyActivity._reloading) {
       var by = {};
-      ((actData && actData.subs) || []).forEach(function (s) { by[String(s.address).toLowerCase()] = s; });
+      ((actData && actData.subs) || []).forEach(function (s) { var ks = String(s.address || "").toLowerCase(); if (ks.indexOf("@") >= 0) by[ks] = s; });
       ((actData && actData.contacts) || []).forEach(function (c) {
-        var kk = String(c.address).toLowerCase();
+        var kk = String(c.address || "").toLowerCase();
+        if (kk.indexOf("@") < 0) return; // bare legacy name
         if (!by[kk]) by[kk] = c;
       });
       var want = Object.keys(by).sort(function (a, b) {
@@ -1011,6 +1021,21 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
           applyActivity._reloading = true;
           setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
         }
+      }
+    }
+
+
+    // boss 09-29 gate leg 1 (dead-build self-heal, the PC half of the
+    // entry-flake symmetry): activity data exists but the PC table has no
+    // data rows (a mid-chain fetch death left the build unfinished) - one
+    // debounced rebuild heals it. Empty accounts keep dataAny false, so the
+    // legitimate empty state never loops.
+    if (!applyActivity._reloading && actData && (((actData.subs || []).length + (actData.contacts || []).length) > 0)) {
+      var tbPc = null;
+      $$("#tab-accounts tbody").forEach(function (t) { if (!tbPc && t.querySelector(".subrow-pc, .ct-row")) tbPc = t; });
+      if (!tbPc) {
+        applyActivity._reloading = true;
+        setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 400);
       }
     }
 
@@ -2001,8 +2026,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // in-container button; admin sessions never see it).
     const subregPc = $("#subreg-pc");
     if (subregPc) subregPc.classList.remove("hidden");
+    // boss 09-29 gate leg 1 (Iris): no clear-then-fill - the stale rows stay
+    // visible until the finished build swaps atomically; the early clear
+    // turned every fallback rebuild into a bare blank window (tbody 6<->0).
     const tbody = $("#accounts-table tbody");
-    tbody.textContent = "";
     // Subordinate management UI lives in Preferences since v0.6; Accounts
     // still needs fresh edges for the sub badges (and read-only rows).
     var subs = await requestSubs(true).catch(function () { return null; });
