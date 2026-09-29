@@ -2026,6 +2026,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // (with a change-password button) plus the people they've exchanged mail with
   // (from /api/contacts). No admin/disabled/uuid columns — those are sensitive
   // and not relevant to a personal view.
+  var mqPhase = null; // boss 09-29: marquee clocks across a pending rewrite (see mqSnap)
   async function loadAccountsRegular(selfAddr) {
     // The "+ Register new account" button is admin-only.
     const accSecRegular = document.getElementById("tab-accounts");
@@ -2185,6 +2186,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       "</tr>"
     );    // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
+    mqPhase = mqMerge(mqPhase, mqSnap(tbody));
     var avBank = avHarvest(tbody);
     var openGearAddr = "";
     // boss 09-29 (gear pop dies on rebuild): a letter-driven rebuild rewrote
@@ -2252,6 +2254,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var errSubsRow = subsFailed ? im3StateRowHtml("err", "acc.errSubs", "acc.retryTap", "subs") : "";
       var errContactsRow = contactsFailed ? im3StateRowHtml("err", "acc.errContacts", "acc.retryTap", "contacts") : "";
       var emptyRow = (!subsFailed && !contactsFailed && subsList.length === 0 && contactRaw === 0) ? im3StateRowHtml("empty", "acc.emptyTitle", "acc.emptySub", null) : "";
+      mqPhase = mqMerge(mqPhase, mqSnap(ctBox));
       var avBankM = avHarvest(ctBox);
       // boss 09-29 (settings-card flash-close, Iris 8d9963c): the fallback
       // rebuild wiped the open .im3-overlay (its .on lived only in the old
@@ -2275,6 +2278,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       avHydrate(ctBox);
       avRemoteHydrate(ctBox); // 0021: registry-backed real avatars
       im3MarqueeScan(ctBox);
+      mqApply(ctBox, mqPhase); // rescan done - mobile tracks can take their clocks back now
     }
     // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
 
@@ -4616,6 +4620,36 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   window.addEventListener("resize", maybeMarqueeWhoami);
 
+  // boss 09-29 (marquee "not running"): rebuilds recreate the rows, and a
+  // fresh node starts its marquee animation from zero - under steady mail
+  // traffic the marquee never gets to show progress. Snapshot the running
+  // clocks per row address before a rewrite and restore them after the
+  // rescan; advance-only (currentTime < saved), so a fresh surface is never
+  // rewound.
+  function mqSnap(root) {
+    var out = {};
+    $$("tr[data-act-acct] .sig-track, .im3-row[data-claddr] .im3-addr-in", root).forEach(function (t) {
+      var tr = t.closest("tr[data-act-acct], .im3-row[data-claddr]");
+      var k = String(tr ? (tr.getAttribute("data-act-acct") || tr.getAttribute("data-claddr") || "") : "").toLowerCase() + "|" + t.className;
+      t.getAnimations().forEach(function (a) { (out[k] = out[k] || []).push([a.animationName, a.currentTime]); });
+    });
+    return out;
+  }
+  function mqMerge(a, b2) {
+    if (!a) return b2;
+    Object.keys(b2).forEach(function (k) { a[k] = (a[k] || []).concat(b2[k]); });
+    return a;
+  }
+  function mqApply(root, phase) {
+    if (!phase) return;
+    $$("tr[data-act-acct] .sig-track, .im3-row[data-claddr] .im3-addr-in", root).forEach(function (t) {
+      var tr = t.closest("tr[data-act-acct], .im3-row[data-claddr]");
+      var k = String(tr ? (tr.getAttribute("data-act-acct") || tr.getAttribute("data-claddr") || "") : "").toLowerCase() + "|" + t.className;
+      (phase[k] || []).forEach(function (c) {
+        t.getAnimations().forEach(function (a) { if (a.animationName === c[0] && a.currentTime < c[1]) a.currentTime = c[1]; });
+      });
+    });
+  }
   // maybeMarqueeSigs runs over-wide signature cells (Accounts + Directory)
   // as a seamless one-way loop (superior feedback: ping-pong never reveals
   // the whole text). The track carries the text twice; each copy has the
@@ -4633,6 +4667,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         cell.classList.add("marquee");
       }
     });
+    if (mqPhase) { mqApply(document, mqPhase); mqPhase = null; }
   }
   window.addEventListener("resize", maybeMarqueeSigs);
 
