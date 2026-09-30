@@ -383,7 +383,7 @@
            this page now; hidden until data arrives / when no subs). -->
       <div id="acc-act-sum" class="mgmt-sum" hidden></div>
       <table id="accounts-table">
-        <thead><tr><th data-i18n="hdr.address">Address</th><th data-i18n="hdr.tags">Tags</th><th data-i18n="prof.signature">Signature</th><th data-i18n="hdr.created">Created</th><th data-i18n="hdr.actions">Actions</th></tr></thead>
+        <thead><tr><th data-i18n="hdr.address">Address</th><th data-i18n="prof.signature">Signature</th><th data-i18n="hdr.actions">Actions</th></tr></thead>
         <tbody></tbody>
       </table>
       <!-- Accounts one-screen plan (mobile only): contacts render here as
@@ -863,9 +863,12 @@
       </div>
       <div id="im-subject" role="button" tabindex="0"></div>
       <div id="im-bar">
+        <!-- boss 09-30 (corrected): the IRT line (not cc) rides above the
+             input line - visible only while an anchor is set, x to clear -->
+        <div id="im-irt-line" class="hidden"><span>↩</span><span id="im-irt-val"></span><button type="button" id="im-irt-x" class="attach-x hidden" aria-label="Clear">×</button></div>
         <div id="im-main">
           <button type="button" id="im-plus" title="＋">＋</button>
-          <input type="text" id="im-input" data-i18n-ph="compose.imPh" placeholder="Write a message…" autocomplete="off" />
+          <textarea id="im-input" rows="1" data-i18n-ph="compose.imPh" placeholder="Write a message…" autocomplete="off"></textarea>
           <button type="button" id="im-send" title="➤">➤</button>
         </div>
         <div id="im-sheet" class="hidden">

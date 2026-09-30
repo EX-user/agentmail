@@ -70,7 +70,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // after a newer one would resurrect the dot until the next tick (the
   // reported "badge clears with a lag"). Only the latest call may write.
   let badgeSeq = 0;
-  var prevInboxUnread = 0;
+  var prevLatestId = null;
   async function refreshInboxBadge() {
     if (!getSession()) { setInboxBadge(0); return; }
     // Background tabs skip the tick — the badge refreshes on visibility
@@ -78,14 +78,26 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     if (document.visibilityState === "hidden") return;
     const seq = ++badgeSeq;
     try {
-      const d = await api("/api/inbox?limit=1");
+      const d = await api("/api/inbox?limit=1&badge=1"); // badge=1: server skips the audit row - a poll reads nothing
       if (seq !== badgeSeq) return; // a newer refresh superseded this one
       var cur = d.unread_count || 0;
-      if (cur > prevInboxUnread) {
+      // New-mail gate keyed on the latest message id, not the unread count:
+      // the approved 0.3.4 "opening the conversation reads it" semantics
+      // consume letters between polls, so a count high-water deflates and a
+      // genuine arrival that merely recovers the level (4 > 4) never fires —
+      // the open conversation misses its own peer's letter. An id the poll
+      // has not seen is arrival itself; consumption never changes it.
+      var latestMail = (d.messages && d.messages[0]) || null;
+      var latestId = latestMail ? (latestMail.id || "") : "";
+      if (prevLatestId === null) {
+        prevLatestId = latestId; // first sample: baseline only, no event
+      } else if (latestId && latestId !== prevLatestId) {
         // New mail detected — notify manage.js incremental merger (v0.2.1).
-        document.dispatchEvent(new CustomEvent("inbox:newmail"));
+        // boss 09-30: carry the latest sender so a listener scoped to one
+        // conversation can tell its peer's mail from a bystander's.
+        prevLatestId = latestId;
+        document.dispatchEvent(new CustomEvent("inbox:newmail", { detail: { from: latestMail ? (latestMail.from || "") : "" } }));
       }
-      prevInboxUnread = cur;
       setInboxBadge(cur);
     } catch (_) { /* badge is best-effort */ }
   }
@@ -176,7 +188,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     $("#tab-" + name).classList.remove("hidden");
     syncPageLock(name);
     if (name === "overview") loadOverview();
-    if (name === "accounts") { loadAccounts(); activityEntered(); } // 进页即拉（5s 防抖，boss 报单修）
+    if (name === "accounts") { loadAccounts(); activityEntered(); } // 进页即拉（5s 防抖，boss 报单修）
+
     if (name === "inbox") document.dispatchEvent(new CustomEvent("inbox:entered"));
     if (name === "profile") document.dispatchEvent(new CustomEvent("profile:entered"));
     if (name === "mail") document.dispatchEvent(new CustomEvent("manage:entered"));
@@ -436,7 +449,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     try {
       const data = await api("/admin/accounts");
       if (!data.accounts || !data.accounts.length) {
-        tbody.innerHTML = '<tr><td colspan="5">' + t("acc.noAccounts") + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3">' + t("acc.noAccounts") + '</td></tr>';
         return;
       }
       tbody.innerHTML = data.accounts.map(function (a) {
@@ -454,10 +467,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
             ? '<button class="row-action" data-enable="' + esc(a.address) + '">' + t("act.enable") + '</button>'
             : '<button class="row-action" data-disable="' + esc(a.address) + '">' + t("act.disable") + '</button>';
         return "<tr" + rowCls + ">" +
-          '<td class="addr-cell" data-label="' + t("col.address") + '">' + esc(a.address) + "</td>" +
-          '<td data-label="' + t("col.tags") + '">' + tags.trim() + "</td>" +
+          '<td class="addr-cell" data-label="' + t("col.address") + '"><span class="pc-av-line"><span class="pc-addr">' + esc(a.address) + '</span><span class="pc-badges">' + tags.trim() + "</span></span></td>" +
           '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(a.signature || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(a.signature || "") + "</span></span></td>" +
-          '<td data-label="' + t("col.created") + '">' + fmtTime(a.created_at) + "</td>" +
           '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(a.address) + '">' + t("act.compose") + '</button><button class="row-action" data-reset="' + esc(a.address) + '">' + t("act.resetPw") + '</button>' +
           toggleBtn + "</td>" +
           "</tr>";
@@ -480,7 +491,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       maybeMarqueeSigs();
 
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="5">Error: ' + esc(e.message) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="3">Error: ' + esc(e.message) + "</td></tr>";
     }
   }
 
@@ -548,171 +559,869 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     }
   }
 
-  // ---- 0.3.2 概览重构：从属活动 B 案融合（boss 0924 认定）----
-  // 从属表从管理-概览并入账户页：心跳胶囊（活动行按 boss 0924 口径摘除：「7日/均/常联」不再显示）
-  // 融进账户表从属行与手机从属卡（不换表头、不加列）。10s 轮询宿主=
-  // 账户页可见期；进页即拉（5s 防抖——boss 报单「进页晚显 10s」修，规格
-  // alice/Devi 0924 定）；轮询就地更新只写胶囊槽位，行元素本体不动
-  // （1046 语义沿袭，滑条零扰）。图不跟活帧（boss 定）：图侧留 overview.js。
-  var HB_TTL_SEC = 60; // 3×20s 上报周期为过期线（boss 0923 定口径：前端刷 10s/心跳 20s/TTL 60s）
-  var HB_POLL_SEC = 10; // T1=前端刷新间隔（轮询 POLL_MS 与此同源）
-  var HB_GRAY = [0x9c, 0xa3, 0xaf]; // 渐变灰端 #9ca3af
-  var HB_COLORS = { working: [0x16, 0xa3, 0x4a], waiting: [0x25, 0x63, 0xeb], compact: [0xb4, 0x53, 0x09], error: [0xdc, 0x26, 0x26], arming: [0x25, 0x63, 0xeb] };
-  (function hbInjectCss() {
-    var css = ".hb-pill{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;" +
-      "font-size:11px;line-height:16px;font-weight:600;color:#fff;vertical-align:1px;white-space:nowrap}" +
-      ".hb-working{background:#16a34a}.hb-waiting{background:#2563eb}.hb-compact{background:#b45309}" +
-      ".hb-error{background:#dc2626}.hb-arming{background:#2563eb;animation:hbBreath 1.6s ease-in-out infinite}" +
-      "@keyframes hbBreath{0%,100%{opacity:1}50%{opacity:.55}}" +
-      ".hb-pill{transition:background-color .9s linear}";
-    var st = document.createElement("style");
-    st.textContent = css;
-    document.head.appendChild(st);
-  })();
-  var HB_STATES = { working: 1, waiting: 1, compact: 1, error: 1, arming: 1 };
-  // boss 0923 公式：f=max(t-t1-T1,0)/T3 ∈[0,1]，活跃色→灰实时渐变；f>=1 即隐（TTL）。
-  function hbFreshRatio(at) {
-    var f = (Date.now() / 1000 - at - HB_POLL_SEC) / HB_TTL_SEC;
-    return f < 0 ? 0 : (f > 1 ? 1 : f);
-  }
-  function hbFadeColor(key, f) {
-    var c = HB_COLORS[key];
-    if (!c || f <= 0) return ""; // f=0 交给状态类本色
-    var r = Math.round(c[0] + (HB_GRAY[0] - c[0]) * f);
-    var g = Math.round(c[1] + (HB_GRAY[1] - c[1]) * f);
-    var b2 = Math.round(c[2] + (HB_GRAY[2] - c[2]) * f);
-    return "rgb(" + r + "," + g + "," + b2 + ")";
-  }
-  function hbPillHtml(s) {
-    var hst = s && s.worker_state;
-    if (!hst) return "";
-    var at = +s.worker_seen_at || 0;
-    if (at > 1e12) at = at / 1000; // 毫秒时间戳兜底
-    if (!at || Date.now() / 1000 - at >= HB_POLL_SEC + HB_TTL_SEC) return ""; // TTL 过期即隐（T1+T3）
-    var key = hst.toLowerCase();
-    if (!HB_STATES[key]) return ""; // 未知状态=不显（前瞻兼容 worker 新态）
-    var f = hbFreshRatio(at);
-    var col = hbFadeColor(key, f);
-    var style = col ? ' style="background-color:' + col + '"' : "";
-    return '<span class="hb-pill hb-' + key + '" data-hb-t1="' + at + '" data-hb-key="' + key + '"' + style + ' title="' + esc(t("hb." + key + "Tip")) + '">' + esc(t("hb." + key)) + "</span>";
-  }
-  // 实时走查（1s，仅改样式/摘除，不动结构）。0.3.2 修（boss 报单双根因之二）：
-  // 走查加宿主视图域门——账户页不可见时不摘不涂，离页不再偷摘过期胶囊；
-  // 回页由进页即拉按服务器数据整槽重渲，状态以服务器为准。
-  (function hbFadeLoop() {
-    setInterval(function () {
-      if (document.hidden) return;
-      var panel = document.getElementById("tab-accounts");
-      if (!panel || panel.offsetParent === null) return;
-      var pills = document.querySelectorAll(".hb-pill[data-hb-t1]");
-      for (var i = 0; i < pills.length; i++) {
-        var el = pills[i];
-        var at = +el.getAttribute("data-hb-t1") || 0;
-        var f = hbFreshRatio(at);
-        if (f >= 1) { el.remove(); continue; }
-        var col = hbFadeColor(el.getAttribute("data-hb-key"), f);
-        if (col) el.style.backgroundColor = col;
-        else el.style.backgroundColor = "";
-      }
-    }, 1000);
-  })();
-  // 活动数据＋就地应用：从属行/手机从属卡内的两个槽位（胶囊槽/活动行槽）
-  // 整槽重写，行元素与操作按钮不动——滚动/悬停零感（1046 语义）。
-  var actData = null, actLastPull = 0, actPulling = false;
-  function applyActivity() {
-    var byAddr = {};
-    ((actData && actData.subs) || []).forEach(function (s) {
-      byAddr[String(s.address).toLowerCase()] = s;
-    });
-    $$("[data-act-acct]").forEach(function (el) {
-      var s = byAddr[String(el.getAttribute("data-act-acct")).toLowerCase()];
-      var pill = el.querySelector('[data-act-slot="pill"]');
-      // 1046 纪律（boss 0924 口径：刷新逻辑与原管理-概览从属列表对应）：
-      // 先比对、内容无变化不写 DOM——轮询对滚动零扰。
-      if (pill) {
-        var html = s ? hbPillHtml(s) : "";
-        if (pill.innerHTML !== html) pill.innerHTML = html;
-      }
+  // ---- 0.3.2 概览重构：从属活动 B 案融合（boss 0924 认定）----
+
+
+  // 从属表从管理-概览并入账户页：心跳胶囊（活动行按 boss 0924 口径摘除：「7日/均/常联」不再显示）
+
+
+
+  // 融进账户表从属行与手机从属卡（不换表头、不加列）。10s 轮询宿主=
+
+
+  // 账户页可见期；进页即拉（5s 防抖——boss 报单「进页晚显 10s」修，规格
+
+
+  // alice/Devi 0924 定）；轮询就地更新只写胶囊槽位，行元素本体不动
+
+
+
+  // （1046 语义沿袭，滑条零扰）。图不跟活帧（boss 定）：图侧留 overview.js。
+
+
+  var HB_TTL_SEC = 60; // 3×20s 上报周期为过期线（boss 0923 定口径：前端刷 10s/心跳 20s/TTL 60s）
+
+
+  var HB_POLL_SEC = 10; // T1=前端刷新间隔（轮询 POLL_MS 与此同源）
+
+
+  var HB_GRAY = [0x9c, 0xa3, 0xaf]; // 渐变灰端 #9ca3af
+
+
+  var HB_COLORS = { working: [0x16, 0xa3, 0x4a], waiting: [0x25, 0x63, 0xeb], compact: [0xb4, 0x53, 0x09], error: [0xdc, 0x26, 0x26], arming: [0x25, 0x63, 0xeb] };
+
+
+  (function hbInjectCss() {
+
+
+    var css = ".hb-pill{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;" +
+
+
+      "font-size:11px;line-height:16px;font-weight:600;color:#fff;vertical-align:1px;white-space:nowrap;transition:background-color 1.2s linear}" +
+
+
+      ".hb-working{background:#16a34a}.hb-waiting{background:#2563eb}.hb-compact{background:#b45309}" +
+
+
+      ".hb-error{background:#dc2626}.hb-arming{background:#2563eb;animation:hbBreath 1.6s ease-in-out infinite}" +
+
+
+      "@keyframes hbBreath{0%,100%{opacity:1}50%{opacity:.55}}" +
+
+
+      ".hb-pill{transition:background-color .9s linear}";
+
+
+    var st = document.createElement("style");
+
+
+    st.textContent = css;
+
+
+    document.head.appendChild(st);
+
+
+  })();
+
+
+  var HB_STATES = { working: 1, waiting: 1, compact: 1, error: 1, arming: 1 };
+
+
+  // boss 0923 公式：f=max(t-t1-T1,0)/T3 ∈[0,1]，活跃色→灰实时渐变；f>=1 即隐（TTL）。
+
+
+  function hbFreshRatio(at) {
+
+
+    var f = (Date.now() / 1000 - at - HB_POLL_SEC) / HB_TTL_SEC;
+
+
+    if (f < 0) f = 0; else if (f > 1) f = 1;
+
+
+    return Math.round(f * 10) / 10; // decile steps
+
+
+  }
+
+
+  function hbFadeColor(key, f) {
+
+
+    var c = HB_COLORS[key];
+
+
+    if (!c || f <= 0) return ""; // f=0 交给状态类本色
+
+
+    var r = Math.round(c[0] + (HB_GRAY[0] - c[0]) * f);
+
+
+    var g = Math.round(c[1] + (HB_GRAY[1] - c[1]) * f);
+
+
+    var b2 = Math.round(c[2] + (HB_GRAY[2] - c[2]) * f);
+
+
+    return "rgb(" + r + "," + g + "," + b2 + ")";
+
+
+  }
+
+
+  function hbPillKey(s) {
+
+
+    var hst = s && s.worker_state;
+
+
+    if (!hst) return "";
+
+
+    var at = +s.worker_seen_at || 0;
+
+
+    if (at > 1e12) at = at / 1000; // 毫秒时间戳兜底
+
+
+    if (!at || Date.now() / 1000 - at >= HB_POLL_SEC + HB_TTL_SEC) return ""; // TTL 过期即隐（T1+T3）
+
+
+    var key = hst.toLowerCase();
+
+
+    if (!HB_STATES[key]) return ""; // 未知状态=不显（前瞻兼容 worker 新态）
+
+
+    return key;
+
+
+  }
+
+
+  function hbPillHtml(s) {
+
+
+    var key = hbPillKey(s);
+
+
+    if (!key) return "";
+
+
+    return '<span class="hb-pill hb-' + key + '" data-hb-key="' + key + '" title="' + esc(t("hb." + key + "Tip")) + '">' + esc(t("hb." + key)) + "</span>";
+
+
+  }
+
+
+  // 实时走查（1s，仅改样式/摘除，不动结构）。0.3.2 修（boss 报单双根因之二）：
+
+
+  // 走查加宿主视图域门——账户页不可见时不摘不涂，离页不再偷摘过期胶囊；
+
+
+  // 回页由进页即拉按服务器数据整槽重渲，状态以服务器为准。
+
+
+  (function hbFadeLoop() {
+
+
+    setInterval(function () {
+
+
+      if (document.hidden) return;
+
+
+      var panel = document.getElementById("tab-accounts");
+
+
+      if (!panel || panel.offsetParent === null) return;
+
+
+      var pills = document.querySelectorAll(".hb-pill");
+
+
+      for (var i = 0; i < pills.length; i++) {
+
+
+        var el = pills[i];
+
+
+        if (!applyActivity._hb) return;
+
+      var host = el.closest("[data-act-acct]");
+
+      var s2 = host ? (applyActivity._hb[String(host.getAttribute("data-act-acct")).toLowerCase()] || null) : null;
+
+      var at = 0;
+
+      if (s2) { at = +s2.worker_seen_at || 0; if (at > 1e12) at = at / 1000; }
+
+
+        var f = s2 ? hbFreshRatio(at) : 1;
+
+
+        if (!s2 || f >= 1) { el.remove(); continue; }
+
+
+        var col = hbFadeColor(el.getAttribute("data-hb-key"), f);
+
+
+        if (el.__hbcol !== col) { el.__hbcol = col; el.style.backgroundColor = col; }
+
+
+
+
+
+      }
+
+
+    }, 1000);
+
+
+  })();
+
+
+  // 活动数据＋就地应用：从属行/手机从属卡内的两个槽位（胶囊槽/活动行槽）
+
+
+  // 整槽重写，行元素与操作按钮不动——滚动/悬停零感（1046 语义）。
+
+
+  var actData = null, actLastPull = 0, actPulling = false;
+
+
+  // reorderAccountsDom moves EXISTING rows into the unified latest_at order
+  // on both surfaces instead of the full loadAccounts rewrite (boss 09-29
+  // round two, from the clean v0.3.4.1 base: PC and the phone must share one
+  // list-refresh logic, and the per-flip rebuild re-created every row on
+  // nearly every poll - on PC that read as constant page flicker). One
+  // contract for both surfaces: collect the rendered rows per address,
+  // VERIFY the move is total - every wanted address has its row(s), every
+  // rendered data row is wanted, no unknown children, pinned furniture
+  // present, no duplicates - and only then append in want order. Any
+  // mismatch returns false and the caller falls back to the debounced
+  // rebuild, so a partial move can never strand rows in a detached fragment
+  // (the v0.3.4.2 empty-list bug class is structurally impossible here).
+  // Moved nodes keep avatar bitmaps, listeners and hover/scroll state.
+  function reorderAccountsDom(want) {
+    // boss 09-29 (marquee jumps on every order flip): re-parenting a node
+    // restarts its CSS animations - the over-wide signature marquee visibly
+    // snapped back to its start each move. Snapshot the running clocks and
+    // restore them right after the re-insertion; same-task restore means no
+    // visible restart.
+    var mqClocks = [];
+    $$(".sig-cell .sig-track, .mq .sig-track").forEach(function (t) {
+      t.getAnimations().forEach(function (a) { mqClocks.push([t, a.animationName, a.currentTime]); });
+    });
+    var wantList = want.map(function (a) { return String(a).toLowerCase(); });
+    var wantSet = {};
+    wantList.forEach(function (a) { wantSet[a] = 1; });
+    var moved = false;
+    // PC: one tbody; per-address pair = main row (subrow-pc/ct-row) +
+    // full-width line3 row; the register card stays last.
+    $$("#tab-accounts tbody").forEach(function (tb) {
+      if (!tb.querySelector(".subrow-pc, .ct-row")) return;
+      var main = {}, line3 = {}, unknown = 0, reg = null;
+      Array.prototype.forEach.call(tb.children, function (tr) {
+        if (tr.nodeType !== 1) { unknown++; return; }
+        var k = String(tr.getAttribute("data-act-acct") || "").toLowerCase();
+        if (tr.classList.contains("agentreg-row")) { reg = tr; return; }
+        if (tr.classList.contains("line3-row")) {
+          if (k && !line3[k]) line3[k] = tr; else unknown++;
+        } else if (k && (tr.classList.contains("subrow-pc") || tr.classList.contains("ct-row"))) {
+          if (main[k]) unknown++; else main[k] = tr;
+        } else unknown++;
+      });
+      if (!reg || unknown) return;
+      var seq = [];
+      var ok = wantList.every(function (a) {
+        if (main[a] && line3[a]) { seq.push(a); return true; }
+        return false;
+      });
+      Object.keys(main).forEach(function (a) { if (!wantSet[a]) ok = false; });
+      Object.keys(line3).forEach(function (a) { if (!wantSet[a]) ok = false; });
+      if (!ok) return;
+      var cur = [...tb.querySelectorAll(".subrow-pc, .ct-row")].map(function (r) {
+        return String(r.getAttribute("data-act-acct")).toLowerCase();
+      });
+      if (cur.join("|") === seq.join("|")) { moved = true; return; }
+      var frag = document.createDocumentFragment();
+      seq.forEach(function (a) { frag.appendChild(main[a]); frag.appendChild(line3[a]); });
+      frag.appendChild(reg);
+      tb.appendChild(frag);
+      moved = true;
+    });
+    // Phone: one card per address in #acc-m-contacts; the pinned register
+    // row stays first (data groups always append after it).
+    var cb = document.getElementById("acc-m-contacts");
+    if (cb && cb.querySelector(".im3-row[data-claddr]")) {
+      var rows = {}, unknownM = 0, regM = null;
+      Array.prototype.forEach.call(cb.children, function (el) {
+        if (el.nodeType !== 1) { unknownM++; return; }
+        if (el.hasAttribute("data-reg")) { regM = el; return; }
+        var k = String(el.getAttribute("data-claddr") || "").toLowerCase();
+        if (el.classList.contains("im3-row") && k && !rows[k]) rows[k] = el;
+        else unknownM++;
+      });
+      if (regM && !unknownM) {
+        var seqM = [];
+        var okM = wantList.every(function (a) {
+          if (rows[a]) { seqM.push(a); return true; }
+          return false;
+        });
+        Object.keys(rows).forEach(function (a) { if (!wantSet[a]) okM = false; });
+        if (okM) {
+          var curM = [...cb.querySelectorAll(".im3-row[data-claddr]")].map(function (r) {
+            return String(r.getAttribute("data-claddr")).toLowerCase();
+          });
+          if (curM.join("|") !== seqM.join("|")) {
+            var fragM = document.createDocumentFragment();
+            seqM.forEach(function (a) { fragM.appendChild(rows[a]); });
+            cb.appendChild(fragM);
+            if (cb.firstElementChild !== regM) cb.insertBefore(regM, cb.firstChild);
+          }
+          moved = true;
+        }
+      }
+    }
+    mqClocks.forEach(function (c) {
+      c[0].getAnimations().forEach(function (a) { if (a.animationName === c[1]) a.currentTime = c[2]; });
+    });
+    return moved;
+  }
+  // insertMissingAccountsDom is the redraw-on-demand path (boss 0930:
+  // 按需重画 - "why redraw the whole row when the heartbeat only concerns
+  // the pill"). A letter from a BRAND-NEW counterparty used to cost a full
+  // loadAccounts rebuild: reorderAccountsDom cannot place what the DOM
+  // lacks, so the fallback rebuilt every row just to add one - open states
+  // and marquee clocks went through the snapshot/restore band-aids and the
+  // page flickered once per addition. This routine adds ONLY the missing
+  // rows: present rows keep their nodes (identity, listeners, avatar
+  // bitmaps, running marquee clocks) and the new rows come from the SAME
+  // templates the full rebuild uses (ctPcRowsHtml / accRowHtml), so the
+  // two paths cannot diverge.
+  // One contract on both surfaces, verify-first mutate-second (the same
+  // shape as reorderAccountsDom - a partial insert is structurally
+  // impossible): no removals (every rendered row must be wanted),
+  // furniture intact (register card PC-last / phone-first, no unknown
+  // children, no duplicates), the two surfaces must agree on the missing
+  // set, and every missing address must be a plain CONTACT with an
+  // activity edge (new subordinates belong to the register flow; edgeless
+  // rows cannot be ordered). Any mismatch returns false and the caller
+  // keeps its debounced full-rebuild fallback.
+  function insertMissingAccountsDom(want) {
+    var ctx = acctCtx;
+    if (!ctx) return false;
+    var wantList = want.map(function (a) { return String(a).toLowerCase(); });
+    var wantSet = {};
+    wantList.forEach(function (a) { wantSet[a] = 1; });
+    // fresh activity view: ordering keys + the new rows' latest line
+    var actByAddr = {};
+    ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
+    ((actData && actData.contacts) || []).forEach(function (x) { var k = String(x.address).toLowerCase(); if (!actByAddr[k]) actByAddr[k] = x; });
+    var entryAt = function (addr) { var x = actByAddr[String(addr).toLowerCase()]; return (+(x && x.latest_at)) || 0; };
+    var tbPc = null;
+    $$("#tab-accounts tbody").forEach(function (t) { if (!tbPc && t.querySelector(".subrow-pc, .ct-row")) tbPc = t; });
+    var cb = document.getElementById("acc-m-contacts");
+    if (!tbPc || !cb) return false;
+    // ---- verify PC: furniture + no extras + collect the missing set ----
+    var main = {}, line3 = {}, unknown = 0, reg = null;
+    Array.prototype.forEach.call(tbPc.children, function (tr) {
+      if (tr.nodeType !== 1) { unknown++; return; }
+      var k = String(tr.getAttribute("data-act-acct") || "").toLowerCase();
+      if (tr.classList.contains("agentreg-row")) { reg = tr; return; }
+      if (tr.classList.contains("line3-row")) {
+        if (k && !line3[k]) line3[k] = tr; else unknown++;
+      } else if (k && (tr.classList.contains("subrow-pc") || tr.classList.contains("ct-row"))) {
+        if (main[k]) unknown++; else main[k] = tr;
+      } else unknown++;
+    });
+    if (!reg || unknown) return false;
+    var extra = Object.keys(main).concat(Object.keys(line3)).filter(function (a) { return !wantSet[a]; });
+    if (extra.length) return false;
+    var missing = wantList.filter(function (a) { return !main[a] || !line3[a]; });
+    if (!missing.length) return false; // nothing to add: order alone is reorderAccountsDom's job
+    for (var mi = 0; mi < missing.length; mi++) {
+      if (ctx.subsSet[missing[mi]]) return false; // new subordinate: the register flow owns its reload
+      if (!actByAddr[missing[mi]]) return false;  // no activity edge - cannot order it, let the rebuild decide
+    }
+    // ---- verify phone: furniture + the SAME missing set on both surfaces ----
+    if (!cb.querySelector(".im3-row[data-claddr]")) return false;
+    var rowsM = {}, unknownM = 0, regM = null;
+    Array.prototype.forEach.call(cb.children, function (el) {
+      if (el.nodeType !== 1) { unknownM++; return; }
+      if (el.hasAttribute("data-reg")) { regM = el; return; }
+      var k = String(el.getAttribute("data-claddr") || "").toLowerCase();
+      if (el.classList.contains("im3-row") && k && !rowsM[k]) rowsM[k] = el;
+      else unknownM++;
+    });
+    if (!regM || unknownM) return false;
+    var extraM = Object.keys(rowsM).filter(function (a) { return !wantSet[a]; });
+    if (extraM.length) return false;
+    var missingM = wantList.filter(function (a) { return !rowsM[a]; });
+    if (missingM.join("|") !== missing.join("|")) return false; // surfaces disagree - rebuild decides
+    // ---- build everything before mutating (all-or-nothing) ----
+    var builds = missing.map(function (c) {
+      var pcC = ctPcRowsHtml(c, ctx.listedSet, ctx.listedSig, actByAddr);
+      return {
+        addr: c, at: entryAt(c),
+        main: pcC.main, line3: pcC.line3,
+        card: accRowHtml({ addr: c, badge: pcC.badge, sig: ctx.listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null })
+      };
+    });
+    // moving the present rows re-parents them - CSS animations restart on
+    // re-insertion, so snapshot the running clocks and restore after
+    // (same-task restore, no visible restart; same shape as the mover).
+    var clocks = [];
+    $$(".sig-cell .sig-track, .mq .sig-track, .im3-row[data-claddr] .im3-addr-in").forEach(function (t) {
+      t.getAnimations().forEach(function (a) { clocks.push([t, a.animationName, a.currentTime]); });
+    });
+    // ---- mutate PC: present rows into want order, reg stays last ----
+    var presentSeq = wantList.filter(function (a) { return main[a] && line3[a]; });
+    var curSeq = [...tbPc.querySelectorAll(".subrow-pc, .ct-row")].map(function (r) { return String(r.getAttribute("data-act-acct")).toLowerCase(); });
+    if (curSeq.join("|") !== presentSeq.join("|")) { // already in order: skip the re-parent, animations keep running untouched
+      var frag = document.createDocumentFragment();
+      presentSeq.forEach(function (a) { frag.appendChild(main[a]); frag.appendChild(line3[a]); });
+      frag.appendChild(reg);
+      tbPc.appendChild(frag);
+    }
+    // ---- mutate phone: present cards into want order, pinned reg first ----
+    var presentM = wantList.filter(function (a) { return rowsM[a]; });
+    var curM = [...cb.querySelectorAll(".im3-row[data-claddr]")].map(function (r) { return String(r.getAttribute("data-claddr")).toLowerCase(); });
+    if (curM.join("|") !== presentM.join("|")) {
+      var fragM = document.createDocumentFragment();
+      presentM.forEach(function (a) { fragM.appendChild(rowsM[a]); });
+      cb.appendChild(fragM);
+      if (cb.firstElementChild !== regM) cb.insertBefore(regM, cb.firstChild);
+    }
+    // ---- insert the missing rows at their sorted position ----
+    // Stable-sort semantics: walk to the first row with a strictly smaller
+    // key, so ties keep the new row AFTER existing equals; previously
+    // inserted builds carry equal-or-larger keys and are skipped the same
+    // way.
+    builds.forEach(function (b) {
+      var ref = null;
+      Array.prototype.forEach.call(tbPc.children, function (tr) {
+        if (ref || tr.nodeType !== 1) return;
+        if (!(tr.classList.contains("subrow-pc") || tr.classList.contains("ct-row"))) return;
+        if (entryAt(String(tr.getAttribute("data-act-acct") || "").toLowerCase()) < b.at) ref = tr;
+      });
+      var tpl = document.createElement("template");
+      tpl.innerHTML = b.main + b.line3;
+      var pair = Array.prototype.slice.call(tpl.content.children);
+      if (ref) { tbPc.insertBefore(pair[0], ref); tbPc.insertBefore(pair[1], ref); }
+      else { tbPc.insertBefore(pair[0], reg); tbPc.insertBefore(pair[1], reg); }
+      $$("[data-compose]", pair[0]).forEach(function (btn) {
+        btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: btn.dataset.compose } })); });
+      });
+      avHydrate(pair[0]);
+      avRemoteHydrate(pair[0]); // 0021: registry-backed real avatars
+      var tplM = document.createElement("template");
+      tplM.innerHTML = b.card;
+      var card = tplM.content.firstElementChild;
+      var refM = null;
+      Array.prototype.forEach.call(cb.children, function (el) {
+        if (refM || el.nodeType !== 1) return;
+        if (!el.classList.contains("im3-row") || !el.hasAttribute("data-claddr")) return;
+        if (entryAt(String(el.getAttribute("data-claddr") || "").toLowerCase()) < b.at) refM = el;
+      });
+      if (refM) cb.insertBefore(card, refM); else cb.appendChild(card);
+      wireIm3Row(card, cb);
+      $$("[data-compose], [data-remove-sub]", card).forEach(function (btn) {
+        if (btn.dataset.compose) btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: btn.dataset.compose } })); });
+        if (btn.dataset.removeSub) btn.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: btn.dataset.removeSub, role: "superior" } })); });
+      });
+      avHydrate(card);
+      avRemoteHydrate(card);
+      im3MarqueeScan(card); // the new card's own address marquee
+    });
+    maybeMarqueeSigs(); // engage the new PC address/sig tracks (idempotent)
+    clocks.forEach(function (c) {
+      c[0].getAnimations().forEach(function (a) { if (a.animationName === c[1]) a.currentTime = c[2]; });
+    });
+    return true;
+  }
+  function applyActivity() {
+
+
+    var byAddr = {};
+
+
+    ((actData && actData.subs) || []).forEach(function (s) {
+
+
+      var kb = String(s.address || "").toLowerCase();
+
+
+      if (kb.indexOf("@") < 0) return; // bare legacy name: cannot match a row
+
+
+      byAddr[kb] = s;
+
+
+    });
+
+
+    avSyncAvatarsFromActivity((actData && actData.subs) || []); // A-case: avatar spot-hydration on the same poll
+
+
+    var unreadBy = (actData && actData.unreadBySender) || {};
+
+
+    // Contact rows (bug fix 09-29): correspondence-driven latest for
+
+
+    // non-subordinate rows; a declared sub entry wins the slot.
+
+
+    ((actData && actData.contacts) || []).forEach(function (c) {
+
+
+      var k = String(c.address).toLowerCase();
+
+
+      if (k.indexOf("@") < 0) return; // bare legacy name: cannot match a row
+
+
+      if (!byAddr[k]) byAddr[k] = c;
+
+
+    });
+
+
+    applyActivity._hb = byAddr; // live heartbeat data for the 1s fade loop (no per-poll pill swaps)
+
+
+    $$("[data-act-acct]").forEach(function (el) {
+
+
+      var s = byAddr[String(el.getAttribute("data-act-acct")).toLowerCase()];
+
+
+      var pill = el.querySelector('[data-act-slot="pill"]');
+
+
+      // 1046 纪律（boss 0924 口径：刷新逻辑与原管理-概览从属列表对应）：
+
+
+
+      // 先比对、内容无变化不写 DOM——轮询对滚动零扰。
+
+
+
+      if (pill) {
+
+
+
+        // boss 09-29: the 1s fade loop writes the pill's inline color and
+        // innerHTML serializes it - compare the pill SIGNATURE (state class
+        // + label) instead of the raw html, or every poll reads the colored
+        // pill as changed and re-creates it (the per-poll swap = snap-back).
+
+
+
+        var key2 = s ? hbPillKey(s) : "";
+
+
+
+        var cur2 = pill.firstChild;
+
+
+
+        var sig2 = cur2 && cur2.nodeType === 1 ? cur2.className + "\u0001" + cur2.textContent : "";
+
+
+
+        if (sig2 !== (key2 ? "hb-pill hb-" + key2 + "\u0001" + t("hb." + key2) : "")) pill.innerHTML = hbPillHtml(s);
+
+
+
+      }
+
+
+
 
       // 0.3.3-C: the latest-message line rides the same in-place update --
       // the poll delivers latest_subject/latest_at after first render.
+      // 0.3.4 item 1: the avatar unread dot flips on server truth -
+      // any read path clears it within the next poll (same 5s cycle).
+      var av = el.querySelector(".im3-av-wrap");
+      if (av) {
+        var has = !!unreadBy[String(el.getAttribute("data-act-acct")).toLowerCase()];
+        if (av.classList.contains("has-unread") !== has) av.classList.toggle("has-unread", has);
+      }
       var line3 = el.querySelector(".im3-line3");
       if (line3) {
         var lh = accLatestHtml(s);
         if (line3.innerHTML !== lh) line3.innerHTML = lh;
       }
-    });
-    // boss rc2 feedback: if interaction order changed, re-render the list -
-    // line3 patches alone cannot reorder. Debounced; converges because the
-    // re-render's own applyActivity sees the new order as already applied.
-    var box = $("#acc-m-contacts");
-    if (box && !applyActivity._reloading) {
-      var by = {};
-      ((actData && actData.subs) || []).forEach(function (s) { by[String(s.address).toLowerCase()] = s; });
-      var want = Object.keys(by).sort(function (a, b) {
-        return (+by[b].latest_at || 0) - (+by[a].latest_at || 0);
-      }).filter(function (a) { return box.querySelector('.im3-row.im3-sub[data-claddr="' + a + '"]'); });
-      var have = [...box.querySelectorAll(".im3-row.im3-sub")].map(function (r) { return String(r.getAttribute("data-claddr")).toLowerCase(); });
-      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; });
-      if (!same && have.length) {
-        applyActivity._reloading = true;
-        setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
-      }
-    }
-    var sum = $("#acc-act-sum");
-    if (sum) {
-      var subs = (actData && actData.subs) || [];
-      if (subs.length) {
-        var live = 0, in7 = 0, out7 = 0;
-        var now = Date.now() / 1000;
-        var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
-        var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
-        subs.forEach(function (s) {
-          var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
-          var read = s.last_read_at || 0;
-          if ((traffic && now - traffic <= strongH * 3600) || (read && now - read <= weakH * 3600)) live++;
-          in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
-        });
-        sum.textContent = t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 });
-        sum.hidden = false;
-      } else sum.hidden = true;
-    }
-  }
-  function accountsPanelVisible() {
-    var p = document.getElementById("tab-accounts");
-    return !!p && p.offsetParent !== null;
-  }
-  async function pullActivity() {
-    if (actPulling || document.hidden || !accountsPanelVisible()) return;
-    actPulling = true;
-    try {
-      var d = await api("/api/mgmt/subs-overview?days=7", { keepSession: true });
-      actData = d;
-      actLastPull = Date.now();
-      applyActivity();
-    } catch (_) { /* 失败静默（权限/网络）——活动槽保持空态 */ }
-    actPulling = false;
-  }
-  function activityEntered() {
-    // 进页即拉（5s 防抖）：进账户页 ≤一个网络往返内胶囊/活动行可见——
-    // boss 报单「进页晚显约 10s」修复的一半；另一半是走查视图域门。
-    if (Date.now() - actLastPull > 5000) pullActivity();
-  }
-  (function activityPollLoop() {
-    var POLL_MS = HB_POLL_SEC * 1000; // T1 同源（boss 0923 定 10s）；测试/调优可覆盖（下限 5s）
-    try {
-      var o = parseInt(localStorage.getItem("ovw_subs_poll_ms") || "0", 10);
-      if (o >= 5000) POLL_MS = o;
-    } catch (_) {}
-    setInterval(function () { if (!document.hidden && accountsPanelVisible()) pullActivity(); }, POLL_MS);
-    document.addEventListener("visibilitychange", function () {
-      if (!document.hidden && accountsPanelVisible() && Date.now() - actLastPull > 10000) pullActivity(); // 回窗即拉（防抖 10s）
-    });
-  })();
-  document.addEventListener("compose:sent", function () {
-    actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
-  });
-
+    });
+
+
+    // boss 09-29: if interaction order changed, re-render the list - line3
+    // patches alone cannot reorder. The comparison covers the UNIFIED page
+    // order (subordinates AND contacts, latest_at desc); activity-bearing
+    // addresses only, as a sequence, so rows without data cannot loop it.
+    // Debounced; converges because the re-render's own applyActivity sees
+    // the new order as already applied.
+    var box = $("#acc-m-contacts");
+    if (box && !applyActivity._reloading) {
+      var by = {};
+      ((actData && actData.subs) || []).forEach(function (s) { var ks = String(s.address || "").toLowerCase(); if (ks.indexOf("@") >= 0) by[ks] = s; });
+      ((actData && actData.contacts) || []).forEach(function (c) {
+        var kk = String(c.address || "").toLowerCase();
+        if (kk.indexOf("@") < 0) return; // bare legacy name
+        if (!by[kk]) by[kk] = c;
+      });
+      var want = Object.keys(by).sort(function (a, b) {
+        return (+by[b].latest_at || 0) - (+by[a].latest_at || 0);
+      });
+      var wantSet = {};
+      want.forEach(function (a) { wantSet[a] = 1; });
+      var have = [...box.querySelectorAll(".im3-row")]
+        .map(function (r) { return String(r.getAttribute("data-claddr") || "").toLowerCase(); })
+        .filter(function (a) { return a && wantSet[a]; });
+      // boss 0930 按需重画 round: `have` is FILTERED to wantSet members, so
+      // stale rows (a contact that vanished from the activity view) were
+      // invisible to this check - a removed counterparty's row sat in the
+      // DOM forever because same never went false. Count BOTH surfaces'
+      // rendered data rows against want: extras must trigger the decision
+      // path too (reorder refuses them, the inserter refuses them, the
+      // rebuild fallback finally cleans up).
+      var same = want.length === have.length && want.every(function (a, i) { return a === have[i]; })
+        && box.querySelectorAll(".im3-row[data-claddr]").length === want.length
+        && $$("#tab-accounts tbody tr.subrow-pc, #accounts-table tbody tr.ct-row").length === want.length;
+      // 0024 batch guard: the reorder reload has no exit once it starts
+      // against an empty actData (rows exist, panel later hidden, pulls
+      // visibility-gated) - the 150ms loop rebuilt the whole list ~27x/5s
+      // with no convergence possible. actData empty = nothing to reorder
+      // against; the next successful pull re-runs applyActivity anyway.
+      if (!same && have.length && actData) {
+        // boss 09-29 round two: an order flip MOVES the existing rows via the
+        // one shared routine (PC + phone, logic identical); the debounced
+        // rebuild below is only the fallback for rows the move cannot place
+        // (brand-new contact, stale row, state row) - never the flicker path.
+        // boss 0930 按需重画: the missing-row case - the one shape the mover
+        // cannot place - now takes the incremental inserter first; the
+        // debounced rebuild stays as the fallback for every shape the
+        // inserter cannot verify.
+        if (!reorderAccountsDom(want) && !insertMissingAccountsDom(want)) {
+          applyActivity._reloading = true;
+          setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 150);
+        }
+      }
+    }
+
+
+    // boss 09-29 gate leg 1 (dead-build self-heal, the PC half of the
+    // entry-flake symmetry): activity data exists but the PC table has no
+    // data rows (a mid-chain fetch death left the build unfinished) - one
+    // debounced rebuild heals it. Empty accounts keep dataAny false, so the
+    // legitimate empty state never loops.
+    if (!applyActivity._reloading && actData && (((actData.subs || []).length + (actData.contacts || []).length) > 0)) {
+      var tbPc = null;
+      $$("#tab-accounts tbody").forEach(function (t) { if (!tbPc && t.querySelector(".subrow-pc, .ct-row")) tbPc = t; });
+      if (!tbPc) {
+        applyActivity._reloading = true;
+        setTimeout(function () { applyActivity._reloading = false; loadAccounts(); }, 400);
+      }
+    }
+
+
+    var sum = $("#acc-act-sum");
+
+
+    if (sum) {
+
+
+      var subs = (actData && actData.subs) || [];
+
+
+      if (subs.length) {
+
+
+        var live = 0, in7 = 0, out7 = 0;
+
+
+        var now = Date.now() / 1000;
+
+
+        var strongH = (userPrefs && userPrefs.livenessStrongHours) || 24;
+
+
+        var weakH = (userPrefs && userPrefs.livenessWeakHours) || 48;
+
+
+        subs.forEach(function (s) {
+
+
+          var traffic = Math.max(s.last_in_at || 0, s.last_out_at || 0);
+
+
+          var read = s.last_read_at || 0;
+
+
+          if ((traffic && now - traffic <= strongH * 3600) || (read && now - read <= weakH * 3600)) live++;
+
+
+          in7 += s.count_in_7d || 0; out7 += s.count_out_7d || 0;
+
+
+        });
+
+
+        sum.textContent = t("mgmt.sum", { n: subs.length, a: live, i: in7, o: out7 });
+
+
+        sum.hidden = false;
+
+
+      } else sum.hidden = true;
+
+
+    }
+
+
+  }
+
+
+  function accountsPanelVisible() {
+
+
+    var p = document.getElementById("tab-accounts");
+
+
+    return !!p && p.offsetParent !== null;
+
+
+  }
+
+
+  async function pullActivity() {
+
+
+    if (actPulling || document.hidden || !accountsPanelVisible()) return;
+
+
+    actPulling = true;
+
+
+    try {
+
+
+      var d = await api("/api/mgmt/subs-overview?days=7", { keepSession: true });
+
+
+      // boss bug 09-29: contact rows ride the same poll - correspondence-driven
+
+
+      // latest data for non-subordinate counterparties.
+
+
+      await api("/api/mgmt/contacts-latest", { keepSession: true }).then(function (dc) { d.contacts = (dc && dc.contacts) || []; }, function () { d.contacts = []; });
+
+
+      await api("/api/mgmt/unread-by-sender", { keepSession: true }).then(function (du) { d.unreadBySender = (du && du.by_sender) || {}; }, function () { d.unreadBySender = {}; });
+
+
+      actData = d;
+
+
+      actLastPull = Date.now();
+
+
+      applyActivity();
+
+
+    } catch (_) { /* 失败静默（权限/网络）——活动槽保持空态 */ }
+
+
+    actPulling = false;
+
+
+  }
+
+
+  function activityEntered() {
+
+
+    // 进页即拉（5s 防抖）：进账户页 ≤一个网络往返内胶囊/活动行可见——
+
+
+    // boss 报单「进页晚显约 10s」修复的一半；另一半是走查视图域门。
+
+
+    if (Date.now() - actLastPull > 5000) pullActivity();
+
+
+  }
+
+
+  (function activityPollLoop() {
+
+
+    var POLL_MS = HB_POLL_SEC * 1000; // T1 同源（boss 0923 定 10s）；测试/调优可覆盖（下限 5s）
+
+
+    try {
+
+
+      var o = parseInt(localStorage.getItem("ovw_subs_poll_ms") || "0", 10);
+
+
+      if (o >= 5000) POLL_MS = o;
+
+
+    } catch (_) {}
+
+
+    setInterval(function () { if (!document.hidden && accountsPanelVisible()) pullActivity(); }, POLL_MS);
+
+
+    document.addEventListener("visibilitychange", function () {
+
+
+      if (!document.hidden && accountsPanelVisible() && Date.now() - actLastPull > 10000) pullActivity(); // 回窗即拉（防抖 10s）
+
+
+    });
+
+
+  })();
+
+
+  document.addEventListener("compose:sent", function (ev) {
+
+
+    actLastPull = 0; // boss rc2: a just-sent mail must reorder the list at once
+
+
+    // boss 09-29 local short path: the server pull is three SERIAL round-
+    // trips, which read as a ~1s lag before the accounts order corrected
+    // after a send. Bump the recipient rows from local state and re-apply
+    // now - zero network; the next pull confirms with server truth.
+    var det = ev.detail || {};
+    var now = Math.floor(Date.now() / 1000);
+    var subj = String(det.subject || "");
+    var d = (actData = actData || {});
+    var rows = (d.subs = d.subs || []).concat(d.contacts = d.contacts || []);
+    String(det.to || "").split(",").forEach(function (raw) {
+      var addr = String(raw).trim().toLowerCase();
+      if (!addr) return;
+      rows.forEach(function (s) {
+        if (String(s.address).toLowerCase() !== addr) return;
+        s.latest_at = now;
+        if (subj) s.latest_subject = subj;
+      });
+    });
+    applyActivity();
+  });
+
+
+
+
+
   function renderPrefsOwnCard(ownSig, ownVisible) {
     // 0.3.2 boss 认定四：自身卡迁偏好页，双端同款手机卡样式（ct-card 语法）；
     // 「My address」显示地址卡随迁撤销（boss：不留「我的地址 XXX」）。
@@ -994,11 +1703,173 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     if (diff === 1) return t("acc.yesterday");
     return t("acc.daysAgo", { n: diff });
   }
+  // boss mobile-list round (0.3.4): no "Latest:" prefix; a no-information
+  // subject (IM-style sends fill it) shows the body snippet instead - the
+  // set is the union of both locales' vocabularies. latest_body rides the
+  // same payload once the Go side lands; until then the subject fallback
+  // keeps the line honest.
+  var noinfoCache = null;
+  function noinfoSet() {
+    if (noinfoCache) return noinfoCache;
+    var out = {};
+    ["zh", "en"].forEach(function (l) {
+      var d = window.I18N && window.I18N.dict && window.I18N.dict(l);
+      var raw = (d && d["acc.noinfoSubjects"]) || "";
+      raw.split(",").forEach(function (w) {
+        w = w.trim().toLowerCase();
+        if (w) out[w] = 1;
+      });
+    });
+    noinfoCache = out;
+    return out;
+  }
   function accLatestHtml(s) {
     if (!s || !(+s.latest_at)) return '<div class="im3-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div>";
     var dir = s.latest_dir === "out" ? t("acc.latestOut") : t("acc.latestIn");
-    var subj = s.latest_subject ? "\u300c" + s.latest_subject + "\u300d" : "";
-    return '<div class="im3-line3">' + esc(t("acc.latestPre")) + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
+    var shown = s.latest_subject || "";
+    if (shown && !shown.trim()) shown = s.latest_body || shown;
+    if (shown && noinfoSet()[shown.trim().toLowerCase()]) shown = s.latest_body || shown;
+    var subj = shown ? "\u300c" + shown + "\u300d" : "";
+    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + " " + dir + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
+  }
+  function accOverlayHtml(addr, isSub) {
+    var acts = "";
+    if (isSub) acts += '<button class="warn" data-remove-sub="' + esc(addr) + '">\u2715 ' + t("subs.removeBtn") + "</button>";
+    acts += '<button data-limits="' + esc(addr) + '">' + t("limits.open") + "</button>";
+    return '<div class="im3-overlay" data-ovl="' + esc(addr) + '">' +
+      acts +
+      '<button class="cl-close" data-ovl-back="' + esc(addr) + '">\u2715 ' + t("acc.back") + "</button></div>";
+  }
+  function accRowHtml(o) {
+    var av = accAvatarHtml(o.addr, o.isSub);
+    var latest = accLatestHtml(o.sub);
+    var sigLine = o.sig ? esc(o.sig) : "";
+    return '<div class="im3-row' + (o.isSub ? " im3-sub" : " im3-ext") + '" data-act-acct="' + esc(o.addr) + '" data-claddr="' + esc(o.addr) + '">' +
+      av +
+      '<div class="im3-main">' +
+        '<div class="im3-l1">' + o.badge +
+        '<span class="im3-addr"><span class="im3-addr-in">' + esc(o.addr) + "</span></span>" +
+        '<span class="act-pill-slot" data-act-slot="pill"></span></div>' +
+        '<div class="im3-line2">' + sigLine + "</div>" +
+        latest +
+      "</div>" +
+      (o.isSub ? '<button class="im3-gear" data-gear="' + esc(o.addr) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' : '') +
+      accOverlayHtml(o.addr, o.isSub) +
+      "</div>";
+  }
+  // Iris v6 marquee scan (verbatim semantics): overflow detection sets the
+  // shift distance and duration; the CSS keyframes do the ping-pong.
+  function im3MarqueeScan(root) {
+    $$(".im3-addr", root).forEach(function (el) {
+      var inn = el.querySelector(".im3-addr-in");
+      if (!inn) return;
+      var over = inn.scrollWidth - el.clientWidth;
+      if (over > 1) {
+        el.classList.add("mq");
+        el.style.setProperty("--mq-shift", (-over - 2) + "px");
+        el.style.setProperty("--mq-dur", Math.max(6, over / 18).toFixed(1) + "s");
+      } else { el.classList.remove("mq"); el.style.removeProperty("--mq-shift"); }
+    });
+  }
+  // 0.3.3-C ②③ (Iris spec v1.0): empty/failure states are expressed IN the
+  // row grammar - never as floating text outside the list; a failure row is
+  // a whole-row retry button (same interaction grain as tap-to-compose).
+  function im3StateRowHtml(kind, titleKey, subKey, retrySrc) {
+    var cls = kind === "err" ? "im3-err" : "im3-empty";
+    var av = kind === "err" ? "！" : "○";
+    var retry = retrySrc ? ' data-retry="' + retrySrc + '"' : "";
+    return '<div class="im3-row ' + cls + '"' + retry + ">" +
+      '<div class="im3-av ' + (kind === "err" ? "im3-av-err" : "im3-av-empty") + '">' + av + "</div>" +
+      '<div class="im3-main im3-state-main">' +
+      '<div class="im3-state-t">' + t(titleKey) + "</div>" +
+      '<div class="im3-state-s">' + t(subKey) + "</div></div></div>";
+  }
+  function wireErrRetry(root) {
+    $$("[data-retry]", root).forEach(function (row) {
+      row.addEventListener("click", function () {
+        if (row.getAttribute("data-retrying")) return;
+        row.setAttribute("data-retrying", "1");
+        var s = row.querySelector(".im3-state-s");
+        if (s) s.textContent = t("acc.retrying");
+        loadAccounts(); // whole-list rebuild - success clears the row, failure re-renders it
+      });
+    });
+  }
+  function accWireList(root) {
+    // Row tap = compose; gear tap = in-place overlay; back hides it.
+    $$(".im3-row", root).forEach(function (row) { wireIm3Row(row, root); });
+    $$("[data-compose], [data-remove-sub]", root).forEach(function (b) {
+      if (b.dataset.compose) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
+      if (b.dataset.removeSub) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: b.dataset.removeSub, role: "superior" } })); });
+    });
+  }
+  // wireIm3Row wires ONE mobile card - the per-row unit the full render
+  // loops over and the incremental inserter calls for a single new card
+  // (looping accWireList over the whole box again would double-wire every
+  // existing listener). root is the list container: the gear handler must
+  // still be able to close OTHER rows' overlays.
+  function wireIm3Row(row, root) {
+    row.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
+      var to = row.getAttribute("data-claddr");
+      if (!to) return; // register/pinned row opens its own flow, not compose
+      document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
+    });
+    var gear = row.querySelector("[data-gear]");
+    if (gear) gear.addEventListener("click", function () {
+      $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
+      row.querySelector(".im3-overlay").classList.toggle("on");
+    });
+    var back = row.querySelector("[data-ovl-back]");
+    if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
+  }
+
+  // ---- 0.3.3-C: accounts-page listification (mobile only) ----
+  // Row grammar per Iris spec v1.0: avatar | label body (3 lines) | gear.
+  // All rows equal height; single-line iron rule (badges/pill nowrap, the
+  // address marquees only on overflow, sig/latest ellipsize); gear opens an
+  // in-place overlay card (absolutely positioned over the row — page layout
+  // pixel-stable); tapping the row composes (replaces per-row compose btns).
+  function accRelTime(ts) {
+    if (!ts) return "";
+    var d = new Date(ts * 1000), now = new Date();
+    var hm = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var diff = Math.round((today - day) / 86400000);
+    if (diff <= 0) return hm;
+    if (diff === 1) return t("acc.yesterday");
+    return t("acc.daysAgo", { n: diff });
+  }
+  // boss mobile-list round (0.3.4): no "Latest:" prefix; a no-information
+  // subject (IM-style sends fill it) shows the body snippet instead - the
+  // set is the union of both locales' vocabularies. latest_body rides the
+  // same payload once the Go side lands; until then the subject fallback
+  // keeps the line honest.
+  var noinfoCache = null;
+  function noinfoSet() {
+    if (noinfoCache) return noinfoCache;
+    var out = {};
+    ["zh", "en"].forEach(function (l) {
+      var d = window.I18N && window.I18N.dict && window.I18N.dict(l);
+      var raw = (d && d["acc.noinfoSubjects"]) || "";
+      raw.split(",").forEach(function (w) {
+        w = w.trim().toLowerCase();
+        if (w) out[w] = 1;
+      });
+    });
+    noinfoCache = out;
+    return out;
+  }
+  function accLatestHtml(s) {
+    if (!s || !(+s.latest_at)) return '<div class="im3-line3"><span class="cl-none">' + esc(t("acc.latestNone")) + "</span></div>";
+    var shown = s.latest_subject || "";
+    if (shown && !shown.trim()) shown = s.latest_body || shown;
+    if (shown && noinfoSet()[shown.trim().toLowerCase()]) shown = s.latest_body || shown;
+    var subj = shown ? "\u300c" + shown + "\u300d" : "";
+    // boss 09-29: the direction word is dropped from line3 (time + content
+    // carry the row); latest_dir stays in the payloads for other uses.
+    return '<div class="im3-line3">' + esc(accRelTime(+s.latest_at)) + (subj ? " \u00b7 " + esc(subj) : "") + "</div>";
   }
   // ---- 0.3.3-A: default avatar mixed generator (Iris spec v1.1) ----
   // Deterministic: address (lowercase) -> SHA-256 -> seed bytes S[0..3].
@@ -1006,76 +1877,156 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // ripple). Every parameter derives from the seed — no Math.random, the
   // same address renders the same avatar across sessions and devices.
   var __avHashCache = {};
+  // One seed path for every origin. WebCrypto digest is secure-context-only,
+  // which forked the same address into different robots across entry points
+  // (boss: avatars MUST be identical from every entry). This software SHA-256
+  // produces the exact bytes crypto.subtle.digest returned, so every avatar
+  // already rendered on secure origins keeps its look; insecure origins join
+  // the canonical stream instead of a degenerate fallback. First 4 digest
+  // bytes seed the generator.
+  function avSha256(a) {
+    var bytes = new TextEncoder().encode(a), bitLen = bytes.length * 8;
+    var msg = Array.prototype.slice.call(bytes);
+    msg.push(0x80);
+    while (msg.length % 64 !== 56) msg.push(0);
+    var hi = Math.floor(bitLen / 4294967296), lo = bitLen >>> 0;
+    msg.push((hi >>> 24) & 255, (hi >>> 16) & 255, (hi >>> 8) & 255, hi & 255,
+             (lo >>> 24) & 255, (lo >>> 16) & 255, (lo >>> 8) & 255, lo & 255);
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    var K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+             0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+             0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+             0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+             0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+             0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+             0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+             0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    for (var i = 0; i < msg.length; i += 64) {
+      var w = [], t, s0, s1;
+      for (t = 0; t < 16; t++) w[t] = (msg[i + 4*t] << 24) | (msg[i + 4*t + 1] << 16) | (msg[i + 4*t + 2] << 8) | msg[i + 4*t + 3];
+      for (t = 16; t < 64; t++) {
+        s0 = rr(w[t-15], 7) ^ rr(w[t-15], 18) ^ (w[t-15] >>> 3);
+        s1 = rr(w[t-2], 17) ^ rr(w[t-2], 19) ^ (w[t-2] >>> 10);
+        w[t] = (w[t-16] + s0 + w[t-7] + s1) | 0;
+      }
+      var av = H[0], bv = H[1], cv = H[2], dv = H[3], ev = H[4], fv = H[5], gv = H[6], hv = H[7];
+      for (t = 0; t < 64; t++) {
+        var S1 = rr(ev, 6) ^ rr(ev, 11) ^ rr(ev, 25);
+        var ch = (ev & fv) ^ (~ev & gv);
+        var t1 = (hv + S1 + ch + K[t] + w[t]) | 0;
+        var S0 = rr(av, 2) ^ rr(av, 13) ^ rr(av, 22);
+        var mj = (av & bv) ^ (av & cv) ^ (bv & cv);
+        var t2 = (S0 + mj) | 0;
+        hv = gv; gv = fv; fv = ev; ev = (dv + t1) | 0; dv = cv; cv = bv; bv = av; av = (t1 + t2) | 0;
+      }
+      H[0] = (H[0] + av) | 0; H[1] = (H[1] + bv) | 0; H[2] = (H[2] + cv) | 0; H[3] = (H[3] + dv) | 0;
+      H[4] = (H[4] + ev) | 0; H[5] = (H[5] + fv) | 0; H[6] = (H[6] + gv) | 0; H[7] = (H[7] + hv) | 0;
+    }
+    return new Uint8Array([(H[0] >>> 24) & 255, (H[0] >>> 16) & 255, (H[0] >>> 8) & 255, H[0] & 255]);
+  }
   function avSeed(addr, cb) {
     var a = String(addr).toLowerCase();
     if (__avHashCache[a]) { cb(__avHashCache[a]); return; }
-    var subtle = (window.crypto && window.crypto.subtle) || null;
-    if (!subtle) { __avHashCache[a] = new Uint8Array([a.length, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]); cb(__avHashCache[a]); return; }
-    subtle.digest("SHA-256", new TextEncoder().encode(a)).then(function (buf) {
-      __avHashCache[a] = new Uint8Array(buf.slice(0, 4));
-      cb(__avHashCache[a]);
-    }).catch(function () {
-      // fallback seed: char-code fold (spec: hash failure -> solid + initial)
-      __avHashCache[a] = new Uint8Array([0xff, a.charCodeAt(0) || 0, a.charCodeAt(1) || 0, a.charCodeAt(2) || 0]);
-      cb(__avHashCache[a]);
-    });
+    __avHashCache[a] = avSha256(a);
+    cb(__avHashCache[a]);
   }
   function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; }
-  function avGradientInitial(addr, S) {
-    // linear gradient 135°±40° (S[2]); two hues 30-60° apart, L 55/45;
-    // white bold initial centered.
-    var h1 = (S[1] * 360) / 256;
-    var h2 = h1 + 30 + (S[3] % 31);
-    var ang = 135 + (S[2] % 81) - 40;
-    var ch = esc((String(addr)[0] || "?").toUpperCase());
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
-      '<defs><linearGradient id="g" gradientTransform="rotate(' + ang + ' .5 .5)">' +
-      '<stop offset="0" stop-color="' + avHsl(h1, 70, 55) + '"/>' +
-      '<stop offset="1" stop-color="' + avHsl(h2, 70, 45) + '"/></linearGradient></defs>' +
-      '<rect width="96" height="96" fill="url(#g)"/>' +
-      '<text x="48" y="48" dy=".36em" text-anchor="middle" font-family="system-ui,sans-serif" font-size="44" font-weight="700" fill="#fff">' + ch + "</text></svg>";
-  }
-  function avGeoTiles(addr, S) {
-    // fixed 2x2 four tiles (v1.1: block-count random dropped); tile hues
-    // 20-40° apart, per-tile rotation in {0,90,180,270} from the seed;
-    // no border, no glyph; seam <= 2px at 96.
-    var h0 = (S[1] * 360) / 256;
-    var gap = S[3] % 3; // 0..2px seam
-    var half = (96 - gap) / 2;
-    var tiles = "";
-    for (var i = 0; i < 4; i++) {
-      var hi = h0 + (20 + (S[(i + 1) % 4] % 21)) * i;
-      var rot = [0, 90, 180, 270][S[i] % 4];
-      var x = (i % 2) * (half + gap), y = Math.floor(i / 2) * (half + gap);
-      tiles += '<rect x="' + x + '" y="' + y + '" width="' + half + '" height="' + half + '" fill="' + avHsl(hi, 65, 55 + (i % 2) * 10) + '" transform="rotate(' + rot + " " + (x + half / 2) + " " + (y + half / 2) + ')"/>';
+  var AV_BGS = ["#cfcfcf", "#c4c4c4", "#d8d8d8", "#bdbdbd"]; // boss 09-30 ②: 4-shade body grayscale (Iris final: neutral grays), drawn per address
+  var AV_INK_ON_WHITE = "#9a9a9a";
+  // big-item palette rebalanced the same way: pink/lavender 6/10 -> 2/10,
+  // steel/sage/tan/olive mid-tones fill the freed slots.
+  var AV_ACCENTS = ["#e6b8c2", "#a9c6de", "#b8d4b8", "#eed3a4", "#a8d0cc", "#ecb8a8", "#c9dfd4", "#d8c8b8", "#a8c8a0", "#c6b6e0"]; // Iris final swatches: pink 1/10, lavender 1/10
+  // boss 09-30: the old 5-swatch small palette was 4/5 pink-family, so 80%
+  // of rows read pink and neighbors ran together. Rebalanced to 7 with the
+  // pink share cut to 2/7 and cool/sage/stone mid-tones added (Iris to
+  // review the values).
+  var AV_SMALL_ACCENTS = ["#a9c6de", "#a8d0cc", "#c9dfd4", "#eed3a4", "#d8c8b8", "#a8c8a0", "#e6b8c2"]; // Iris final swatches: pink 1/7
+  var AV_EYES = ["?", "#", "\u00d7", "bar"];
+  var AV_MOUTHS = ["line", "wave", "dot", "v"];
+  function avHsl(h, s, l) { return "hsl(" + Math.round(h) + "," + Math.round(s) + "%," + Math.round(l) + "%)"; } // still used by the accounts heartbeat colors
+  var AV_ACCS = [
+    ["flower", 1], ["headphone", 0], ["cat", 0], ["tophat", 1], ["bunny", 1],
+    ["chef", 1], ["heartclip", 1], ["sprout", 1], ["cherry", 1], ["bell", 1],
+    ["bowtie", 1], ["strawhat", 0], ["windkey", 0], ["propeller", 0]
+  ];
+  function avRobotSvg(addr, S) {
+    var pick = function (n, mod) { return S[n % 4] % mod; };
+    var white = "#ffffff";
+    var grey = AV_INK_ON_WHITE;
+    var AV_BG = AV_BGS[pick(2, AV_BGS.length)]; // per-address body shade (②)
+    var accDef = AV_ACCS[pick(0, AV_ACCS.length)];
+    var accent = accDef[1] ? AV_SMALL_ACCENTS[pick(1, AV_SMALL_ACCENTS.length)] : AV_ACCENTS[pick(1, AV_ACCENTS.length)];
+    var eyeL = AV_EYES[pick(1, AV_EYES.length)];
+    var eyeR = AV_EYES[pick(2, AV_EYES.length)];
+    var mouth = AV_MOUTHS[pick(3, AV_MOUTHS.length)];
+    var acc = accDef[0];
+    function barEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 3) + '" y="28" width="6" height="16" rx="3" fill="' + grey + '"/></g>'; }
+    function gtEye(x, flip) {
+      var d = flip ? ("M" + (x + 6) + " 29 L" + (x - 6) + " 36 L" + (x + 6) + " 43")
+                   : ("M" + (x - 6) + " 29 L" + (x + 6) + " 36 L" + (x - 6) + " 43");
+      return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="' + d + '" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' + tiles + "</svg>";
-  }
-  function avRipple(addr, S) {
-    // base = seed hue; two concentric arc-ripple rings in the adjacent
-    // (S[3] even) or complementary (odd) hue; ring radii 0.66/0.33 of the
-    // box nudged +-0.08 by S[2]; no glyph.
-    var h0 = (S[1] * 360) / 256;
-    var h1 = (S[3] % 2 === 0) ? h0 + 30 : h0 + 180;
-    var r1 = 96 * (0.66 + (S[2] % 17 - 8) / 100);
-    var r2 = 96 * (0.33 + (S[2] % 17 - 8) / 100);
+    function heartEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + x + ' 43 C' + (x - 9) + ' 36 ' + (x - 6) + ' 26 ' + x + ' 31 C' + (x + 6) + ' 26 ' + (x + 9) + ' 36 ' + x + ' 43 Z" fill="' + grey + '"/></g>'; }
+    function shyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 28 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function happyEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 35 Q' + x + ' 43 ' + (x + 6) + ' 35" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    function qEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 5) + ' 32 C' + (x - 5) + ' 25 ' + (x + 5) + ' 25 ' + (x + 5) + ' 31 C' + (x + 5) + ' 35 ' + x + ' 35 ' + x + ' 39" fill="none" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/><circle cx="' + x + '" cy="45" r="2.6" fill="' + grey + '"/></g>'; }
+    function hashEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><rect x="' + (x - 6.5) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x + 2.9) + '" y="29" width="3.6" height="15" rx="1.8" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="32.5" width="15" height="3.4" rx="1.7" fill="' + grey + '"/><rect x="' + (x - 7.5) + '" y="38.6" width="15" height="3.4" rx="1.7" fill="' + grey + '"/></g>'; }
+    function xEye(x) { return '<g transform="translate(' + x * 0.2 + ' 7.2) scale(0.8)"><path d="M' + (x - 6) + ' 29 L' + (x + 6) + ' 43 M' + (x + 6) + ' 29 L' + (x - 6) + ' 43" stroke="' + grey + '" stroke-width="4.5" stroke-linecap="round"/></g>'; }
+    var INDEP = [qEye, hashEye, xEye, barEye];
+    var roll = pick(1, 100);
+    var eyesEl = "";
+    if (roll < 25) eyesEl = barEye(36) + barEye(60);
+    else if (roll < 35) eyesEl = gtEye(36, false) + barEye(60);
+    else if (roll < 45) eyesEl = barEye(36) + gtEye(60, true);
+    else if (roll < 55) eyesEl = heartEye(36) + heartEye(60);
+    else if (roll < 65) eyesEl = shyEye(36) + shyEye(60);
+    else if (roll < 75) eyesEl = happyEye(36) + happyEye(60);
+    else eyesEl = INDEP[pick(2, INDEP.length)](36) + INDEP[pick(3, INDEP.length)](60);
+    var mouthEl = "";
+    if (mouth === "line") mouthEl = '<rect x="40" y="47" width="16" height="3.5" rx="1.75" fill="' + grey + '"/>';
+    else if (mouth === "wave") mouthEl = '<path d="M39 48 q4.5 -4.5 9 0 q4.5 4.5 9 0" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round"/>';
+    else if (mouth === "dot") mouthEl = '<circle cx="48" cy="48" r="3" fill="' + grey + '"/>';
+    else mouthEl = '<path d="M42.5 46 l5.5 5.5 l5.5 -5.5" fill="none" stroke="' + grey + '" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>';
+    var A = accent, accEl = "";
+    if (acc === "flower") accEl = '<g fill="' + A + '"><circle cx="61" cy="8" r="3.4"/><circle cx="56.5" cy="11" r="3.4"/><circle cx="65.5" cy="11" r="3.4"/><circle cx="58.5" cy="14.5" r="3.4"/><circle cx="63.5" cy="14.5" r="3.4"/></g><circle cx="61" cy="11.5" r="2.4" fill="' + AV_BG + '"/>';
+    else if (acc === "headphone") accEl = '<path d="M30 22 C30 11 66 11 66 22" fill="none" stroke="' + A + '" stroke-width="4" stroke-linecap="round"/><rect x="25.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/><rect x="62.5" y="19" width="8" height="11" rx="3.5" fill="' + A + '"/>';
+    else if (acc === "cat") accEl = '<path d="M28 22 L31 4 L44 15 Z" fill="' + white + '"/><path d="M68 22 L65 4 L52 15 Z" fill="' + white + '"/>';
+    else if (acc === "tophat") accEl = '<rect x="40" y="1" width="16" height="11" fill="' + A + '"/><rect x="36.5" y="10.5" width="23" height="3.6" rx="1.8" fill="' + A + '"/>';
+    else if (acc === "bunny") accEl = '<ellipse cx="42" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(-12 42 15)"/><ellipse cx="54" cy="9" rx="4" ry="8" fill="' + A + '" transform="rotate(12 54 15)"/>';
+    else if (acc === "chef") accEl = '<path d="M34 20 C28 20 28 10 35 11 C36 5 44 4 46 8 C48 3 58 4 58 10 C66 9 66 20 60 20 Z" fill="' + A + '"/>';
+    else if (acc === "heartclip") accEl = '<path d="M61 16 C54 11 56 4 61 8 C66 4 68 11 61 16 Z" fill="' + A + '"/>';
+    else if (acc === "sprout") accEl = '<path d="M48 22 C48 14 48 12 48 10" stroke="' + A + '" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M48 12 C42 12 40 6 47 6 C49 10 48 12 48 12 Z" fill="' + A + '"/><path d="M48 14 C54 14 56 9 50 8 C47 11 48 14 48 14 Z" fill="' + A + '"/>';
+    else if (acc === "cherry") accEl = '<path d="M42 10 C46 14 48 16 50 20 M58 8 C54 13 52 16 50 20" stroke="' + A + '" stroke-width="2.5" fill="none" stroke-linecap="round"/><circle cx="41" cy="13" r="4" fill="' + A + '"/><circle cx="59" cy="11" r="4" fill="' + A + '"/>';
+    else if (acc === "bell") accEl = '<path d="M41 18 C41 8 55 8 55 18 Z" fill="' + A + '"/><circle cx="48" cy="20" r="2.5" fill="' + A + '"/>';
+    else if (acc === "bowtie") accEl = '<path d="M48 22 L36 15 L36 29 Z" fill="' + A + '"/><path d="M48 22 L60 15 L60 29 Z" fill="' + A + '"/><circle cx="48" cy="22" r="3.5" fill="#3a3a3a"/>';
+    else if (acc === "strawhat") accEl = '<ellipse cx="48" cy="12" rx="22" ry="6" fill="' + A + '"/><path d="M38 12 C38 2 58 2 58 12 Z" fill="' + A + '"/>';
+    else if (acc === "windkey") accEl = '<circle cx="48" cy="10" r="7" fill="none" stroke="' + A + '" stroke-width="3.5"/><line x1="48" y1="10" x2="48" y2="4" stroke="' + A + '" stroke-width="3" stroke-linecap="round"/><line x1="48" y1="17" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else if (acc === "propeller") accEl = '<ellipse cx="38" cy="8" rx="12" ry="4" fill="' + A + '"/><ellipse cx="58" cy="8" rx="12" ry="4" fill="' + A + '"/><circle cx="48" cy="9" r="3.5" fill="' + A + '"/><line x1="48" y1="12" x2="48" y2="26" stroke="' + A + '" stroke-width="3.5"/>';
+    else accEl = '<line x1="48" y1="26" x2="48" y2="14" stroke="' + grey + '" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="11" r="5.5" fill="' + A + '"/>';
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">' +
-      '<rect width="96" height="96" fill="' + avHsl(h0, 60, 60) + '"/>' +
-      '<circle cx="48" cy="48" r="' + r1 + '" fill="none" stroke="' + avHsl(h1, 65, 50) + '" stroke-width="7"/>' +
-      '<circle cx="48" cy="48" r="' + r2 + '" fill="none" stroke="' + avHsl(h1, 65, 62) + '" stroke-width="7"/></svg>';
+      '<rect width="96" height="96" fill="' + AV_BG + '"/>' +
+      accEl +
+      '<rect x="9" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="78" y="24" width="9" height="17" rx="3.5" fill="' + white + '"/>' +
+      '<rect x="17" y="13" width="62" height="46" rx="14" fill="' + white + '"/>' +
+      '<rect x="12" y="52" width="72" height="60" rx="16" fill="' + white + '"/>' +
+      eyesEl + mouthEl +
+      "</svg>";
   }
   function avSvgHtml(addr, S) {
-    var svg;
-    switch (S[0] % 3) {
-      case 0: svg = avGradientInitial(addr, S); break;
-      case 1: svg = avGeoTiles(addr, S); break;
-      default: svg = avRipple(addr, S);
-    }
-    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="' + (S[0] % 3) + '">';
+    var svg = avRobotSvg(addr, S);
+    return '<img class="cl-av-img" src="data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '" alt="" data-avgen="robot">';
   }
   // 404 fallback (A-line task 4): avatar_hash present but the real avatar
   // is gone (file deleted server-side) - the broken <img> swaps to the
   // deterministic generator inline, so no white block ever shows.
+  // window bridge: compose.js imports ONLY core.js (audit constraint), so the
+  // avatar family rides on window for the conversation capsules (0.3.4.2).
+  window.__avHydrate = avHydrate;
+  window.__avRemoteHydrate = avRemoteHydrate;
+  window.__avHarvest = avHarvest;
+  window.__avRestore = avRestore;
   window.__avFallback = function (img) {
     var box = img && img.parentNode;
     var addr = box && box.getAttribute("data-av");
@@ -1096,24 +2047,91 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // (authenticated fetch -> objectURL); hash present = ?v= bust,
     // absent = plain endpoint whose 404 falls back to the generator.
     var h = (window.__avatarHashes || {})[String(addr).toLowerCase()] || '';
-    return '<div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div>';
+    // The unclipped wrapper hosts the unread dot: .im3-av itself is
+    // overflow-hidden (rounded mask), and a corner badge must NOT live
+    // under that mask (boss: the dot showed a bite out of it).
+    return '<span class="im3-av-wrap"><div class="im3-av' + (isSub ? "" : " im3-av-ext") + '" data-av="' + esc(addr) + '" data-avremote="1" data-avhash="' + esc(h) + '">' + esc((String(addr)[0] || "?").toUpperCase()) + '</div></span>';
   }
   // avRemoteHydrate (0021): fill remote placeholders via the shared
   // avatarObjectURL registry (dedupe by addr|hash, page-lifetime URLs).
   // isConnected guards the re-render race; a failed fetch (404 = the
     // account has no avatar) hands the box to the generator path.
+  // boss 09-29 production flicker: real traffic flips the unified order almost
+  // every poll, each flip rewrites the list, and a rewritten avatar <img> costs
+  // a re-decode frame - generated avatars flickered continuously. Harvest the
+  // rendered avatar boxes before a rebuild and re-attach their (already
+  // decoded) nodes after: unchanged rows never flash, and the data-avdone
+  // guard keeps hydration off recycled nodes so only genuinely new or
+  // changed addresses cost work.
+  function avHarvest(container) {
+    var bank = {};
+    $$("[data-avdone]", container).forEach(function (b) {
+      var k = String(b.getAttribute("data-av")).toLowerCase() + "|" + (b.getAttribute("data-avhash") || "");
+      // multi-slot: one addr|hash renders MANY boxes in a conversation (every
+      // capsule of a thread, or sub+contact twins on the accounts page) - a
+      // single-slot bank left all but the last box re-decoding every rebuild.
+      (bank[k] = bank[k] || []).push(b);
+    });
+    return bank;
+  }
+  function avRestore(container, bank) {
+    if (!bank) return;
+    $$("[data-avremote]", container).forEach(function (b) {
+      var q = bank[String(b.getAttribute("data-av")).toLowerCase() + "|" + (b.getAttribute("data-avhash") || "")];
+      while (q && q.length) {
+        var old = q.shift();
+        if (!old.hasAttribute("data-avdone") || !old.firstChild) continue; // drained by a twin - next slot
+        while (b.firstChild) b.removeChild(b.firstChild);
+        while (old.firstChild) b.appendChild(old.firstChild);
+        b.setAttribute("data-avdone", "1");
+        b.removeAttribute("data-avpend");
+        return;
+      }
+    });
+  }
+  function avRemoteFillOne(el) {
+    if (el.hasAttribute("data-avdone")) return; // recycled node: bitmap already decoded
+    var addr = el.getAttribute("data-av");
+    var hash = el.getAttribute("data-avhash") || "";
+    avatarObjectURL(addr, hash, false).then(function (url) {
+      if (!el.isConnected) return;
+      el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
+      el.setAttribute("data-avdone", "1");
+    }).catch(function () {
+      if (!el.isConnected) return;
+      el.setAttribute("data-avpend", "1");
+      avHydrate(el.parentElement || el);
+    });
+  }
   function avRemoteHydrate(root) {
-    $$("[data-avremote]", root).forEach(function (el) {
-      var addr = el.getAttribute("data-av");
-      var hash = el.getAttribute("data-avhash") || "";
-      avatarObjectURL(addr, hash, false).then(function (url) {
-        if (!el.isConnected) return;
-        el.innerHTML = '<img class="cl-av-img" src="' + url + '" alt="">';
-      }).catch(function () {
-        if (!el.isConnected) return;
-        el.setAttribute("data-avpend", "1");
-        avHydrate(el.parentElement || el);
-      });
+    $$("[data-avremote]", root).forEach(avRemoteFillOne);
+  }
+  // A-case (boss-approved): the activity poll payload already carries each
+  // account's current avatar_hash, so sync it here - an uploaded avatar
+  // shows within one poll cycle with no restart or refresh. A changed hash
+  // costs one registry update plus exactly one targeted box re-hydration;
+  // unchanged rows cost zero requests and zero DOM writes.
+  function avSyncAvatarsFromActivity(subs) {
+    var reg = window.__avatarHashes = window.__avatarHashes || {};
+    (subs || []).forEach(function (s) {
+      var addr = String(s.address || "").toLowerCase();
+      if (!addr) return;
+      var nh = s.avatar_hash || "";
+      if ((reg[addr] || "") === nh) return;
+      reg[addr] = nh;
+      var box = null;
+      var nodes = document.querySelectorAll('#tab-accounts [data-avremote]');
+      for (var i = 0; i < nodes.length; i++) {
+        if (String(nodes[i].getAttribute("data-av")).toLowerCase() === addr) { box = nodes[i]; break; }
+      }
+      if (!box || !box.isConnected) return; // row not on the page - registry is enough
+      box.setAttribute("data-avhash", nh);
+      box.classList.remove("cl-av-img");
+      box.style.background = "";
+      box.removeAttribute("data-avpend");
+      box.removeAttribute("data-avdone");
+      box.textContent = (String(box.getAttribute("data-av"))[0] || "?").toUpperCase();
+      avRemoteFillOne(box);
     });
   }
   // Hydrate pending generator avatars (async seed -> svg swap-in place).
@@ -1128,6 +2146,7 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
           return;
         }
         el.innerHTML = avSvgHtml(el.getAttribute("data-av"), S);
+        el.setAttribute("data-avdone", "1");
         el.removeAttribute("data-avpend");
       });
     });
@@ -1198,31 +2217,66 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   function accWireList(root) {
     // Row tap = compose; gear tap = in-place overlay; back hides it.
-    $$(".im3-row", root).forEach(function (row) {
-      row.addEventListener("click", function (ev) {
-        if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
-        var to = row.getAttribute("data-claddr");
-        if (!to) return; // register/pinned row opens its own flow, not compose
-        document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
-      });
-      var gear = row.querySelector("[data-gear]");
-      if (gear) gear.addEventListener("click", function () {
-        $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
-        row.querySelector(".im3-overlay").classList.toggle("on");
-      });
-      var back = row.querySelector("[data-ovl-back]");
-      if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
-    });
+    $$(".im3-row", root).forEach(function (row) { wireIm3Row(row, root); });
     $$("[data-compose], [data-remove-sub]", root).forEach(function (b) {
       if (b.dataset.compose) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
       if (b.dataset.removeSub) b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("subs:remove", { detail: { address: b.dataset.removeSub, role: "superior" } })); });
     });
+  }
+  // wireIm3Row wires ONE mobile card - the per-row unit the full render
+  // loops over and the incremental inserter calls for a single new card
+  // (looping accWireList over the whole box again would double-wire every
+  // existing listener). root is the list container: the gear handler must
+  // still be able to close OTHER rows' overlays.
+  function wireIm3Row(row, root) {
+    row.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-gear]") || ev.target.closest(".im3-overlay")) return;
+      var to = row.getAttribute("data-claddr");
+      if (!to) return; // register/pinned row opens its own flow, not compose
+      document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: to } }));
+    });
+    var gear = row.querySelector("[data-gear]");
+    if (gear) gear.addEventListener("click", function () {
+      $$(".im3-overlay.on", root).forEach(function (o) { if (o !== row.querySelector(".im3-overlay")) o.classList.remove("on"); });
+      row.querySelector(".im3-overlay").classList.toggle("on");
+    });
+    var back = row.querySelector("[data-ovl-back]");
+    if (back) back.addEventListener("click", function () { row.querySelector(".im3-overlay").classList.remove("on"); });
   }
 
   // loadAccountsRegular renders the regular-user Accounts view: themselves
   // (with a change-password button) plus the people they've exchanged mail with
   // (from /api/contacts). No admin/disabled/uuid columns — those are sensitive
   // and not relevant to a personal view.
+  var mqPhase = null; // boss 09-29: marquee clocks across a pending rewrite (see mqSnap)
+  // acctCtx = the directory/subs view the last full render built its rows
+  // from. The incremental inserter (insertMissingAccountsDom) reuses it to
+  // build a missing contact's row without refetching; every full render
+  // refreshes it, so it is at most one render behind - self-correcting.
+  var acctCtx = null;
+  // ctPcRowsHtml builds ONE contact's PC row pair (main + line3) plus the
+  // badge the mobile card shares. The full rebuild and the incremental
+  // inserter (insertMissingAccountsDom) must produce byte-identical rows -
+  // two copies of the template would drift and the two refresh paths would
+  // visibly diverge - so both go through this one builder.
+  function ctPcRowsHtml(c, listedSet, listedSig, actByAddr) {
+    // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
+    // 从属集内的地址打「外部」标（与 listed 并存不互斥）。
+    var badge2 = '<span class="badge-ext">' + t("acc.badgeExt") + "</span>" +
+      (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
+    return {
+      badge: badge2.trim(),
+      main: '<tr class="ct-row" data-act-acct="' + esc(c) + '">' +
+        '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + '<span class="pc-badges">' + badge2.trim() + "</span></span></td>" +
+        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
+        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
+        "</tr>",
+      // boss PC round: the latest message runs the FULL row width (one
+      // colspan-3 line under the entry), still patched in place by
+      // applyActivity via the data-act-acct hook.
+      line3: '<tr class="line3-row" data-act-acct="' + esc(c) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(c).toLowerCase()]) + "</div></td></tr>"
+    };
+  }
   async function loadAccountsRegular(selfAddr) {
     // The "+ Register new account" button is admin-only.
     const accSecRegular = document.getElementById("tab-accounts");
@@ -1235,8 +2289,10 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     // in-container button; admin sessions never see it).
     const subregPc = $("#subreg-pc");
     if (subregPc) subregPc.classList.remove("hidden");
+    // boss 09-29 gate leg 1 (Iris): no clear-then-fill - the stale rows stay
+    // visible until the finished build swaps atomically; the early clear
+    // turned every fallback rebuild into a bare blank window (tbody 6<->0).
     const tbody = $("#accounts-table tbody");
-    tbody.textContent = "";
     // Subordinate management UI lives in Preferences since v0.6; Accounts
     // still needs fresh edges for the sub badges (and read-only rows).
     var subs = await requestSubs(true).catch(function () { return null; });
@@ -1272,97 +2328,120 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
         if (e.avatar_hash) window.__avatarHashes[String(e.address || "").toLowerCase()] = e.avatar_hash;
       });
     } catch (e) { /* non-fatal — badges degrade to sub-only */ }
+    acctCtx = { listedSet: listedSet, listedSig: listedSig, subsSet: subAddrs }; // refresh the inserter's view
     var rows = [];
-    // 0.3.2 概览重构（boss 认定四）：自身行已撤——自身卡迁偏好页
-    // （renderPrefsOwnCard，手机卡样式双端）。
+    // 0.3.2 概览重构（boss 认定四）：自身行已撤——自身卡迁偏好页
+
+    // （renderPrefsOwnCard，手机卡样式双端）。
+
     // Subordinates render TWICE from one pass (superior feedback round 3):
     // PC = leading table rows right after the own row (no container; the
     // register button lives above the table — #subreg-pc in index.html);
     // phones keep the approved container card (agentreg-row below) and hide
     // the PC rows via CSS.
-    var pcSubRows = "";
     var clRows = "";
     var actByAddr = {};
     ((actData && actData.subs) || []).forEach(function (x) { actByAddr[String(x.address).toLowerCase()] = x; });
-    // boss rc2 feedback: IM-style ordering - the most recently interacted
-    // account tops the list (latest_at desc; untouched rows keep their
-    // relative order below via stable sort).
+    ((actData && actData.contacts) || []).forEach(function (x) { var k = String(x.address).toLowerCase(); if (!actByAddr[k]) actByAddr[k] = x; });
+    var seenAddrs = {};
+    var contactsFailed = false, contactRaw = 0;
+    // Contacts are fetched BEFORE any row is built (boss 09-29: the whole
+    // page shares one ordering, so both sides must be in hand up front).
+    var contactList = [];
+    try {
+      const data = await api("/api/contacts", { keepSession: true });
+      contactRaw = (data.contacts || []).length;
+      (data.contacts || []).forEach(function (c) {
+        if (subAddrs[c]) return; // subordinate entries render from subsList
+        seenAddrs[c] = 1;
+        contactList.push(c);
+      });
+    } catch (e) {
+      contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent
+    }
+    // boss 09-29: ONE ordering for the page - recent interaction time
+    // (latest_at desc, stable; untouched rows keep their relative order).
+    // Relationship no longer groups the list, so a non-subordinate
+    // counterparty can top it. Rows keep their per-type shape (subs:
+    // gear/limits; contacts: ext badge) on both PC and the mobile card.
     subsList = subsList.slice().sort(function (a, b) {
       var sa = actByAddr[String(a.address).toLowerCase()] || {};
       var sb = actByAddr[String(b.address).toLowerCase()] || {};
       return (+sb.latest_at || 0) - (+sa.latest_at || 0);
     });
-    subsList.forEach(function (e) {
-      var sig = e.signature || listedSig[e.address] || "";
-      // 0.3.2 tag 语义反转（boss 认定五）：从属是面板主角不打标（listed 照旧）。
-      var badge = listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "";
-      pcSubRows +=
-        '<tr class="subrow-pc" data-act-acct="' + esc(e.address) + '">' +
-        '<td class="addr-cell" data-label="' + t("col.address") + '">' +
-        // 0019 (boss directive): PC rows carry avatars - same accAvatarHtml
-        // payload as the mobile list; CSS scopes it to >800px.
-        '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
-        '<span class="pc-addr">' + esc(e.address) + '</span>' +
-        '<span class="act-pill-slot" data-act-slot="pill"></span></span></td>' +
-        '<td data-label="' + t("col.tags") + '">' + badge + "</td>" +
-        '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
-        "<td data-label=\"Created\"></td>" +
-        '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-action" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></td>" +
-        "</tr>";
-      // Mobile container card (one-screen plan): badges + address share one
-      // line (address marquees on overflow), signature max one line (same),
-      // pill buttons bottom-right — all inside the scrollable .sub-list.
-      clRows += accRowHtml({ addr: e.address, badge: badge, sig: sig, isSub: true, sub: actByAddr[String(e.address).toLowerCase()] });
-    });
-    rows.push(pcSubRows);
-
-    rows.push(
-      '<tr class="agentreg-row">' +
-      '<td colspan="5" class="agentreg-cell">' +
-      '<div class="agentreg-card">' +
-      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
-      '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
-      // Feedback 09-04 (mobile): the register button lives in its own card;
-      // subordinate entries merge into the contacts card below (subs on top).
-      "</div></td>" +
-      "</tr>"
-    );
-    var seenAddrs = {};
-    var contactsFailed = false, contactRaw = 0;
-    try {
-      const data = await api("/api/contacts", { keepSession: true });
-      contactRaw = (data.contacts || []).length;
-      (data.contacts || []).forEach(function (c) {
-        if (subAddrs[c]) return; // already shown (PC leading rows / mobile container)
-        seenAddrs[c] = 1;
-        // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
-        // 从属集内的地址打「外部」标（与 listed 并存不互斥）。纯前端推导
-        // （requestSubs 从属集在手），数据面零改动（Devi 已确认口径）。
-        var badge = (subAddrs[c] ? "" : '<span class="badge-ext">' + t("acc.badgeExt") + "</span>") +
-          (listedSet[c] ? ' <span class="badge-listed">listed</span>' : "");
+    var entries = [];
+    subsList.forEach(function (e) { entries.push({ sub: true, addr: e.address, e: e }); });
+    contactList.forEach(function (c) { entries.push({ sub: false, addr: c }); });
+    var entryAt = function (addr) { var x = actByAddr[String(addr).toLowerCase()]; return (+(x && x.latest_at)) || 0; };
+    entries.sort(function (a, b) { return entryAt(b.addr) - entryAt(a.addr); });
+    entries.forEach(function (en) {
+      if (en.sub) {
+        var e = en.e;
+        var sig = e.signature || listedSig[e.address] || "";
+        // 0.3.2 tag 语义反转（boss 认定五）：从属是面板主角不打标（listed 照旧）。
+        var badge = listedSet[e.address] ? '<span class="badge-listed">listed</span>' : "";
+        rows.push(
+          '<tr class="subrow-pc" data-act-acct="' + esc(e.address) + '">' +
+          '<td class="addr-cell" data-label="' + t("col.address") + '">' +
+          // 0019 (boss directive): PC rows carry avatars - same accAvatarHtml
+          // payload as the mobile list; CSS scopes it to >800px.
+          '<span class="pc-av-line">' + accAvatarHtml(e.address, true) +
+          '<span class="pc-addr">' + esc(e.address) + '</span>' +
+          '<span class="act-pill-slot" data-act-slot="pill"></span><span class="pc-badges">' + badge + "</span></span></td>" +
+          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(sig) + '</span><span class="sig-dup" aria-hidden="true">' + esc(sig) + "</span></span></td>" +
+          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action act-compose" data-compose="' + esc(e.address) + '">' + t("act.compose") + '</button><button class="row-gear" data-gear="' + esc(e.address) + '" aria-label="' + esc(t("acc.settings")) + '">\u2699</button>' +
+          '<div class="gear-pop" hidden><button class="row-action warn" data-remove-sub="' + esc(e.address) + '">' + t("subs.removeBtn") + '</button><button class="row-action" data-limits="' + esc(e.address) + '">' + t("limits.open") + "</button></div></td>" +
+          "</tr>");
+        // boss PC round: the latest message runs the FULL row width (one
+        // colspan-3 line under the entry), still patched in place by
+        // applyActivity via the data-act-acct hook.
+        rows.push(
+          '<tr class="line3-row" data-act-acct="' + esc(e.address) + '"><td colspan="3"><div class="pc-line3">' + accLatestHtml(actByAddr[String(e.address).toLowerCase()]) + "</div></td></tr>");
+        // Mobile container card (one-screen plan): badges + address share one
+        // line (address marquees on overflow), signature max one line (same),
+        // pill buttons bottom-right — all inside the scrollable .sub-list.
+        clRows += accRowHtml({ addr: e.address, badge: badge, sig: sig, isSub: true, sub: actByAddr[String(e.address).toLowerCase()] });
+      } else {
+        var c = en.addr;
+        // 0.3.2 tag 语义反转（boss 认定五）：非从属才是例外——联系人中不在
+        // 从属集内的地址打「外部」标（与 listed 并存不互斥）。纯前端推导
+        // （requestSubs 从属集在手），数据面零改动（Devi 已确认口径）。
         // Every address row gets the same shape (feedback: subordinate
         // rows with and without mail history must look identical):
         // badge column, Compose action; Created only where known.
         // The address carries the marquee track for the mobile one-screen
         // plan (phones merge badges+address into one line); the twin card
         // below feeds #acc-m-contacts (the phone-only scrollable list).
-        rows.push(
-          "<tr class=\"ct-row\">" +
-          '<td class="addr-cell mq" data-label="' + t("col.address") + '"><span class="pc-av-line">' + accAvatarHtml(c, false) + '<span class="sig-track"><span class="sig-txt">' + esc(c) + '</span><span class="sig-dup" aria-hidden="true">' + esc(c) + "</span></span></span></td>" +
-          '<td data-label="' + t("col.tags") + '">' + badge.trim() + "</td>" +
-          '<td class="sig-cell" data-label="' + t("col.signature") + '"><span class="sig-track"><span class="sig-txt">' + esc(listedSig[c] || "") + '</span><span class="sig-dup" aria-hidden="true">' + esc(listedSig[c] || "") + "</span></span></td>" +
-          "<td data-label=\"Created\"></td>" +
-          '<td class="actions-cell" data-label="' + t("col.actions") + '"><button class="row-action" data-compose="' + esc(c) + '">' + t("act.compose") + "</button></td>" +
-          "</tr>"
-        );
-        clRows += accRowHtml({ addr: c, badge: badge.trim(), sig: listedSig[c] || "", isSub: false, sub: null });
-      });
-    } catch (e) {
-      contactsFailed = true; // 0.3.3-C (3): failure must be visible, not silent
-    }
-    // Subordinate accounts render ONLY inside the register card's zone
+        var pcC = ctPcRowsHtml(c, listedSet, listedSig, actByAddr);
+        rows.push(pcC.main);
+        rows.push(pcC.line3);
+        clRows += accRowHtml({ addr: c, badge: pcC.badge, sig: listedSig[c] || "", isSub: false, sub: actByAddr[String(c).toLowerCase()] || null });
+      }
+    });
+    // Register card LAST: with one unified ordering it must not split the
+    // interaction-ranked rows (it is a tool, not an account entry).
+    rows.push(
+      '<tr class="agentreg-row">' +
+      '<td colspan="3" class="agentreg-cell">' +
+      '<div class="agentreg-card">' +
+      '<button id="btn-subreg" class="primary">' + t("subs.registerBtn") + "</button>" +
+      '<div class="muted" style="font-size:12px; margin-top:5px;">' + t("subs.registerNote") + "</div>" +
+      "</div></td>" +
+      "</tr>"
+    );    // Subordinate accounts render ONLY inside the register card's zone
     // (approved two-zone layout) — nothing about them joins the main list.
+    mqPhase = mqMerge(mqPhase, mqSnap(tbody));
+    var avBank = avHarvest(tbody);
+    var openGearAddr = "";
+    // boss 09-29 (gear pop dies on rebuild): a letter-driven rebuild rewrote
+    // the tbody while the popover was open - the click looked dead. Capture
+    // the open pop's row and restore it after the rewire (same shape as the
+    // settings-card overlay preservation).
+    $$(".gear-pop", tbody).forEach(function (x) {
+      if (!x.hidden) { var gtr = x.closest("tr"); if (gtr) openGearAddr = String(gtr.getAttribute("data-act-acct") || "").toLowerCase(); }
+    });
     tbody.innerHTML = rows.join("");
+    avRestore(tbody, avBank);
     avHydrate(tbody); // 0019: PC table avatars - pending generators swap in
     avRemoteHydrate(tbody); // 0021: registry-backed real avatars
     preloadLimits(selfAddr, subsList.map(function (e) { return e.address; }));
@@ -1371,6 +2450,33 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     $$("[data-compose]", tbody).forEach(function (b) {
       b.addEventListener("click", function () { document.dispatchEvent(new CustomEvent("compose:to", { detail: { address: b.dataset.compose } })); });
     });
+    // boss PC round: the gear opens the row popover (remove + limits),
+    // mobile-style; one open at a time, click-away closes (wired once).
+    $$("[data-gear]", tbody).forEach(function (g) {
+      g.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var pop = g.parentElement.querySelector(".gear-pop");
+        if (!pop) return;
+        var wasHidden = pop.hidden;
+        $$(".gear-pop", tbody).forEach(function (x) { x.hidden = true; });
+        pop.hidden = !wasHidden;
+      });
+    });
+    if (openGearAddr) {
+      $$("tr[data-act-acct]", tbody).forEach(function (tr) {
+        if (String(tr.getAttribute("data-act-acct") || "").toLowerCase() === openGearAddr) {
+          var gp = tr.querySelector(".gear-pop");
+          if (gp) gp.hidden = false;
+        }
+      });
+    }
+    if (!window.__gearAwayWired) {
+      window.__gearAwayWired = 1;
+      document.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".gear-pop, [data-gear]")) return;
+        $$(".gear-pop", document).forEach(function (x) { x.hidden = true; });
+      });
+    }
     // v0.6.5: remove-subordinate buttons (PC rows + mobile cards) — the
     // destructive twin of compose, guarded by a consequence-aware confirm.
     $$("[data-remove-sub]", tbody).forEach(function (b) {
@@ -1392,21 +2498,44 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       var errSubsRow = subsFailed ? im3StateRowHtml("err", "acc.errSubs", "acc.retryTap", "subs") : "";
       var errContactsRow = contactsFailed ? im3StateRowHtml("err", "acc.errContacts", "acc.retryTap", "contacts") : "";
       var emptyRow = (!subsFailed && !contactsFailed && subsList.length === 0 && contactRaw === 0) ? im3StateRowHtml("empty", "acc.emptyTitle", "acc.emptySub", null) : "";
+      mqPhase = mqMerge(mqPhase, mqSnap(ctBox));
+      var avBankM = avHarvest(ctBox);
+      // boss 09-29 (settings-card flash-close, Iris 8d9963c): the fallback
+      // rebuild wiped the open .im3-overlay (its .on lived only in the old
+      // DOM) - capture the open card's address and re-apply it after the
+      // rewire.
+      var onOvl = ctBox.querySelector(".im3-overlay.on");
+      var openOvl = onOvl ? onOvl.getAttribute("data-ovl") : null;
       ctBox.innerHTML = regRow + errSubsRow + clRows + errContactsRow + emptyRow;
+      avRestore(ctBox, avBankM);
       var regEl = ctBox.querySelector("[data-reg]");
       if (regEl) regEl.addEventListener("click", function () {
         var b = document.getElementById("btn-subreg");
         if (b) b.click();
       });
       accWireList(ctBox);
+      if (openOvl) {
+        var reOvl = ctBox.querySelector('.im3-overlay[data-ovl="' + openOvl + '"]');
+        if (reOvl) reOvl.classList.add("on"); // settings card survives the rebuild
+      }
       wireErrRetry(ctBox);
       avHydrate(ctBox);
       avRemoteHydrate(ctBox); // 0021: registry-backed real avatars
       im3MarqueeScan(ctBox);
+      mqApply(ctBox, mqPhase); // rescan done - mobile tracks can take their clocks back now
     }
-    // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
-    renderPrefsOwnCard(ownSig, ownVisible);
-    applyActivity();
+    // 自身卡 → 偏好页（0.3.2 认定四）；活动槽有缓存则即时回填。
+
+    renderPrefsOwnCard(ownSig, ownVisible);
+
+    // Fresh dots on return: pull immediately instead of waiting for the
+
+    // next 5s tick, so a visited conversation clears its dot in ~1s.
+
+    pullActivity();
+
+    applyActivity();
+
   }
 
   // composeTo switches to the Compose tab and prefills the To field with the
@@ -1878,7 +3007,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
       const p = await api("/api/profile/self");
       $("#profile-visible").checked = !!p.visible;
       $("#profile-signature").value = p.signature || "";
-      renderPrefsOwnCard(p.signature || "", !!p.visible); // 0.3.2：偏好页自身卡
+      renderPrefsOwnCard(p.signature || "", !!p.visible); // 0.3.2：偏好页自身卡
+
       status.textContent = "";
       // Preferences toggles (v0.6): server prefs win, local fallback.
       mergePrefs(p.prefs);
@@ -3734,23 +4864,85 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   }
   window.addEventListener("resize", maybeMarqueeWhoami);
 
+  // boss 09-29 (marquee "not running"): rebuilds recreate the rows, and a
+  // fresh node starts its marquee animation from zero - under steady mail
+  // traffic the marquee never gets to show progress. Snapshot the running
+  // clocks per row address before a rewrite and restore them after the
+  // rescan; advance-only (currentTime < saved), so a fresh surface is never
+  // rewound.
+  function mqSnap(root) {
+    var out = {};
+    $$("tr[data-act-acct] .sig-track, .im3-row[data-claddr] .im3-addr-in", root).forEach(function (t) {
+      var tr = t.closest("tr[data-act-acct], .im3-row[data-claddr]");
+      var k = String(tr ? (tr.getAttribute("data-act-acct") || tr.getAttribute("data-claddr") || "") : "").toLowerCase() + "|" + t.className;
+      t.getAnimations().forEach(function (a) { (out[k] = out[k] || []).push([a.animationName, a.currentTime]); });
+    });
+    return out;
+  }
+  function mqMerge(a, b2) {
+    if (!a) return b2;
+    Object.keys(b2).forEach(function (k) { a[k] = (a[k] || []).concat(b2[k]); });
+    return a;
+  }
+  function mqApply(root, phase) {
+    if (!phase) return;
+    $$("tr[data-act-acct] .sig-track, .im3-row[data-claddr] .im3-addr-in", root).forEach(function (t) {
+      var tr = t.closest("tr[data-act-acct], .im3-row[data-claddr]");
+      var k = String(tr ? (tr.getAttribute("data-act-acct") || tr.getAttribute("data-claddr") || "") : "").toLowerCase() + "|" + t.className;
+      (phase[k] || []).forEach(function (c) {
+        t.getAnimations().forEach(function (a) { if (a.animationName === c[0] && a.currentTime < c[1]) a.currentTime = c[1]; });
+      });
+    });
+  }
   // maybeMarqueeSigs runs over-wide signature cells (Accounts + Directory)
   // as a seamless one-way loop (superior feedback: ping-pong never reveals
   // the whole text). The track carries the text twice; each copy has the
   // same trailing gap, so translateX(-50%) is exactly one period.
   // Reduced-motion users keep the ellipsis.
+  // boss 0930 (跑马灯几乎完全不动): this scan used to be destructive -
+  // remove the marquee class, measure, re-add on overflow - so EVERY scan
+  // restarted every engaged marquee from zero, and the scan rides high
+  // Frequency events (window resize, the header-growth sentinel's synthetic
+  // resize, ovw:rendered). Worse, a scan while the Accounts page is hidden
+  // (ovw:rendered fires on Overview renders) measures an all-zero layout
+  // and STRIPPED the class without being able to re-add it - the marquee
+  // stayed dead until the next full re-render happened to run visible.
+  // Two changes, both measurement-only: (1) cells that are not rendered
+  // are left untouched - a hidden scan can no longer kill what it cannot
+  // see; (2) track-grammar cells (sig-txt present) are measured in place -
+  // the first copy's border-box width minus its own padding equals the raw
+  // overflow the class-off measurement used to produce - so an already
+  // running marquee is never re-classed and resizes become true no-ops.
+  // Cells without sig-txt keep the legacy remove-then-measure dance.
   function maybeMarqueeSigs() {
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     $$(".sig-cell, .mq").forEach(function (cell) {
-      cell.classList.remove("marquee"); // dup hidden again -> measure raw overflow
+      var txt = cell.querySelector(".sig-txt");
+      var cw = cell.clientWidth;
+      if (!cw && !(txt && txt.getBoundingClientRect().width)) return; // display:none - leave state alone
+      if (txt) {
+        var has = cell.classList.contains("marquee");
+        var pad = has ? (parseFloat(getComputedStyle(txt).paddingRight) || 0) : 0; // marquee-on pads each copy with the gap
+        var over = Math.ceil(txt.getBoundingClientRect().width) - pad - cw;
+        if (over > 8) {
+          var dur = Math.max(8, (over + 48) / 28) + "s"; // linear period over (overflow + one gap), ~28px/s
+          if (cell.style.getPropertyValue("--wm-dur") !== dur) cell.style.setProperty("--wm-dur", dur);
+          if (!has) cell.classList.add("marquee");
+        } else if (has) {
+          cell.classList.remove("marquee");
+          cell.style.removeProperty("--wm-dur");
+        }
+        return;
+      }
+      cell.classList.remove("marquee"); // legacy grammar: dup hidden again -> measure raw overflow
       cell.style.removeProperty("--wm-dur");
       const diff = cell.scrollWidth - cell.clientWidth;
       if (diff > 8) {
-        // Linear period over (overflow + one gap), ~28px/s.
         cell.style.setProperty("--wm-dur", Math.max(8, (diff + 48) / 28) + "s");
         cell.classList.add("marquee");
       }
     });
+    if (mqPhase) { mqApply(document, mqPhase); mqPhase = null; }
   }
   window.addEventListener("resize", maybeMarqueeSigs);
 
@@ -3794,10 +4986,14 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
     var subList = document.querySelector(".sub-list");
     var ctBox = $("#acc-m-contacts");
     if (!ctBox) return;
-    // 1048e（boss rc2c 实测：滑动中被拽回顶部）：列表滚动中严禁重钉——真机滑动时
-    // 地址栏伸缩触发 resize，重钉按页顶几何重算会把滚动清零（maxHeight=none
-    // 未钳位即回落 0）。回到顶部后的下次 fit 自然恢复。
-    if (ctBox.scrollTop > 2) return;
+    // 1048e（boss rc2c 实测：滑动中被拽回顶部）：列表滚动中严禁重钉——真机滑动时
+
+    // 地址栏伸缩触发 resize，重钉按页顶几何重算会把滚动清零（maxHeight=none
+
+    // 未钳位即回落 0）。回到顶部后的下次 fit 自然恢复。
+
+    if (ctBox.scrollTop > 2) return;
+
     ctBox.style.maxHeight = "none";
     if (subList) subList.style.maxHeight = "none";
     var ctTop = ctBox.getBoundingClientRect().top;
@@ -4183,7 +5379,8 @@ import { $, $$, esc, api, getSession, setSession, setToken, updateTokenRole, bas
   // Populate the Compose To-field dropdown with known recipients (admins get
   // every account; regular accounts get their contacts). Builds a custom
   // dropdown (not a native datalist) so clicking a recipient clears the input
-  // and fills it — the behavior admin requested.
+  // and fills it — the behavior admin requested.
+
   // ---- 0.3.2 系统更新弹窗（0.3.1 方案放行；契约定稿=Devi 0922：推送表
   // {id,version,title,body_md,published_at,published}+last_read_push_id+四端点。
   // 触发=进系统总览页后取最新已发布推送，未读则弹；关闭即上报已读、不阻塞；

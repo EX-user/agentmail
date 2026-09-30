@@ -373,3 +373,190 @@ func TestMgmtLatestRelatedToMe(t *testing.T) {
 		t.Fatalf("latest_subject = %q, want %q", out.Subs[0].LatestSubject, "related")
 	}
 }
+
+// TestMgmtContactLatests (bug fix 09-29 via boss): the accounts-page
+// latest line for NON-subordinate rows must be driven by correspondence
+// alone - visibility plays no part, and a sub-less account still gets
+// contact latest (the subs-overview early return never ran for it).
+func TestMgmtContactLatests(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare sub1: %v", err)
+	}
+	base := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC).Unix()
+	put := func(from, to, subj string, at int64, cc ...string) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, CC: cc, Subject: subj, Body: "b", ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	put("me@t", "ext1@t", "my-out-to-ext1", base-3600)
+	put("ext1@t", "me@t", "ext1-replied-newer", base-1800)
+	put("ext2@t", "me@t", "in-from-ext2", base-7200)
+	put("me@t", "other2@t", "i-mailed-them", base-50)
+	put("ext3@t", "stranger@t", "no-me-involved", base-100)
+	put("sub1@t", "me@t", "from-my-sub", base-100)
+	// latest_body pins (boss retest: contact rows must be able to show the
+	// body for empty / no-information subjects): an empty-subject form and a
+	// has-subject form, plus the 100-rune truncation.
+	putB := func(from, to, subj, body string, at int64) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, Subject: subj, Body: body, ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	putB("ext4@t", "me@t", "", "empty-subject-body-text", base-60)
+	putB("me@t", "ext5@t", "out-with-subject", "out-body-text", base-55)
+	putB("ext6@t", "me@t", "long-body-letter", strings.Repeat("字", 120), base-50)
+
+	out, err := s.MgmtContactLatests("me@t")
+	if err != nil {
+		t.Fatalf("contacts latest: %v", err)
+	}
+	got := map[string]MgmtContactLatest{}
+	for _, c := range out {
+		got[c.Address] = c
+	}
+	if len(out) != 6 {
+		t.Fatalf("len(contacts) = %d (%v), want 6", len(out), out)
+	}
+	if c := got["ext1@t"]; c.LatestAt != base-1800 || c.LatestSubject != "ext1-replied-newer" || c.LatestDir != "in" {
+		t.Fatalf("ext1 = %+v, want newer reply (in)", c)
+	}
+	if c := got["other2@t"]; c.LatestDir != "out" {
+		t.Fatalf("other2 dir = %q, want out (my outbound is the latest)", c.LatestDir)
+	}
+	if c := got["ext2@t"]; c.LatestAt != base-7200 || c.LatestSubject != "in-from-ext2" {
+		t.Fatalf("ext2 = %+v", c)
+	}
+	if c := got["other2@t"]; c.LatestAt != base-50 || c.LatestSubject != "i-mailed-them" {
+		t.Fatalf("other2 = %+v", c)
+	}
+	// latest_body rides the same winning message as subject/dir, in both
+	// subject forms, truncated at 100 runes like the subs-overview feed.
+	if c := got["ext4@t"]; c.LatestBody != "empty-subject-body-text" || c.LatestSubject != "" {
+		t.Fatalf("ext4 = %+v, want empty-subject form (body carried, subject empty)", c)
+	}
+	if c := got["ext5@t"]; c.LatestBody != "out-body-text" || c.LatestSubject != "out-with-subject" {
+		t.Fatalf("ext5 = %+v, want has-subject form (body still carried)", c)
+	}
+	if c := got["ext6@t"]; len([]rune(c.LatestBody)) != 100 || c.LatestSubject != "long-body-letter" {
+		t.Fatalf("ext6 = %+v, want 100-rune truncated body", c)
+	}
+	for _, absent := range []string{"ext3@t", "sub1@t", "me@t", "stranger@t"} {
+		if _, ok := got[absent]; ok {
+			t.Fatalf("%s must not appear (unrelated or subordinate)", absent)
+		}
+	}
+	// Deterministic order: addresses ascending.
+	for i := 1; i < len(out); i++ {
+		if out[i-1].Address >= out[i].Address {
+			t.Fatalf("contacts not sorted: %v", out)
+		}
+	}
+}
+
+// TestMgmtLatestBody (0.3.4 item 1 companion): latest_body rides the same
+// 0023 me-pair gate as latest_subject and never diverges from it - the
+// client swaps a "no information" subject for the body on display.
+func TestMgmtLatestBody(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	base := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC).Unix()
+	put := func(from, to, subj, body string, at int64) {
+		m := Message{ID: newULID(), From: from, To: []string{to}, Subject: subj, Body: body, ReceivedAt: at}
+		val, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(bMessages).Put([]byte(m.ID), val)
+		}); err != nil {
+			t.Fatalf("put msg: %v", err)
+		}
+	}
+	put("sub1@t", "me@t", "短信", "正文内容在这里：无主题也要有信息量", base-3600)
+	put("sub1@t", "stranger@t", "unrelated out", "x", base-1800)
+	put("stranger@t", "sub1@t", "unrelated in", "y", base-60)
+
+	out, err := s.MgmtSubsOverview("me@t")
+	if err != nil {
+		t.Fatalf("overview: %v", err)
+	}
+	if len(out.Subs) != 1 {
+		t.Fatalf("len(subs) = %d, want 1", len(out.Subs))
+	}
+	row := out.Subs[0]
+	if row.LatestSubject != "短信" || row.LatestBody != "正文内容在这里：无主题也要有信息量" {
+		t.Fatalf("latest pair = (%q, %q), want subject+body captured together", row.LatestSubject, row.LatestBody)
+	}
+	// Unrelated traffic must not have moved the pair (0023 gate).
+	if row.LatestAt != base-3600 {
+		t.Fatalf("latest_at = %d, want the related one only", row.LatestAt)
+	}
+}
+
+// TestUnreadBySender (0.3.4 item 1): per-sender unread counts from the
+// login account's own inbox - server truth for the per-row avatar dot.
+func TestUnreadBySender(t *testing.T) {
+	s := newMgmtStore(t)
+	if err := s.DeclareSubordinate("me@t", "sub1@t"); err != nil {
+		t.Fatalf("declare: %v", err)
+	}
+	for _, m := range []struct{ from, subj string }{
+		{"ext1@t", "u1"}, {"ext1@t", "u2"}, {"sub1@t", "u3"}, {"ext2@t", "r1"},
+	} {
+		if _, err := s.Send(m.from, m.from, []string{"me@t"}, nil, m.subj, "b", ""); err != nil {
+			t.Fatalf("send %s: %v", m.subj, err)
+		}
+	}
+	// Read ext2's letter: any read path must drop the sender off the list.
+	me, err := s.GetAccount("me@t")
+	if err != nil {
+		t.Fatalf("me: %v", err)
+	}
+	inbox, err := s.ReadInbox("me@t", 20)
+	if err != nil {
+		t.Fatalf("inbox: %v", err)
+	}
+	var readID string
+	for _, m := range inbox {
+		if m.From == "ext2@t" {
+			readID = m.ID
+		}
+	}
+	if readID == "" {
+		t.Fatal("ext2 letter not in inbox")
+	}
+	if err := s.MarkRead(me.UUID, readID); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+
+	out, err := s.UnreadBySender("me@t")
+	if err != nil {
+		t.Fatalf("unread by sender: %v", err)
+	}
+	if out["ext1@t"] != 2 || out["sub1@t"] != 1 {
+		t.Fatalf("counts = %v, want ext1:2 sub1:1", out)
+	}
+	if _, ok := out["ext2@t"]; ok {
+		t.Fatalf("read sender must be absent: %v", out)
+	}
+	if len(out) != 2 {
+		t.Fatalf("len = %d (%v), want 2", len(out), out)
+	}
+}

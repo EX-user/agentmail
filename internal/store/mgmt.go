@@ -58,13 +58,20 @@ type MgmtSubSummary struct {
 	// subject + 0 = never any mail (client shows its placeholder).
 	LatestSubject string `json:"latest_subject,omitempty"`
 	LatestAt      int64  `json:"latest_at,omitempty"`
+	// 0.3.4 item 1 companion (no-info subjects): the body of the SAME
+	// message the subject came from (100-rune truncated) - the client
+	// shows it in place of a "no information" subject (the legacy
+	// placeholder word family). Never diverges from LatestSubject:
+	// captured under the same gate.
+	LatestBody string `json:"latest_body,omitempty"`
 }
 
 // MgmtNode is one graph node. Kind: self | sub | external.
 type MgmtNode struct {
-	Address string `json:"address"`
-	Kind    string `json:"kind"`
-	Volume  int    `json:"volume"` // 7d window in+out
+	Address    string `json:"address"`
+	Kind       string `json:"kind"`
+	Volume     int    `json:"volume"`                // 7d window in+out
+	AvatarHash string `json:"avatar_hash,omitempty"` // 0.3.5: real-avatar key for the graph node (empty = box shape)
 }
 
 // MgmtEdge is one graph edge between two nodes. Directional counts are
@@ -147,6 +154,7 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 		// message over ALL TIME — subject + its received_at, truncated to
 		// 100 runes exactly like the inbox preview (rune-safe).
 		latestSubject string
+		latestBody    string
 		latestAt      int64
 	}
 	core := map[string]*acc{me: {}}
@@ -210,6 +218,7 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 				if m.ReceivedAt > c.latestAt && recips[me] {
 					c.latestAt = m.ReceivedAt
 					c.latestSubject = truncateRunes(m.Subject, 100)
+					c.latestBody = truncateRunes(m.Body, 100)
 				}
 				if inWindow {
 					c.countOut++
@@ -235,6 +244,7 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 					if m.ReceivedAt > c.latestAt && from == me {
 						c.latestAt = m.ReceivedAt
 						c.latestSubject = truncateRunes(m.Subject, 100)
+						c.latestBody = truncateRunes(m.Body, 100)
 					}
 					if inWindow {
 						c.countIn++
@@ -287,6 +297,7 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 		subs[i].LastInAt = a.lastIn
 		subs[i].LastOutAt = a.lastOut
 		subs[i].LatestSubject = a.latestSubject
+		subs[i].LatestBody = a.latestBody
 		subs[i].LatestAt = a.latestAt
 		subs[i].CountIn7d = a.countIn
 		subs[i].CountOut7d = a.countOut
@@ -345,6 +356,14 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 	for _, a := range extList {
 		nodes = append(nodes, MgmtNode{Address: a, Kind: "external", Volume: extVolume[a]})
 	}
+	// 0.3.5 (boss item 7): graph nodes carry the real-avatar hash - the
+	// client upgrades nodes that have one to the circular image shape.
+	// Best-effort per node: an unreadable account just keeps the box.
+	for i := range nodes {
+		if acc, err := s.GetAccount(nodes[i].Address); err == nil {
+			nodes[i].AvatarHash = acc.AvatarHash
+		}
+	}
 	out.Graph.Nodes = nodes
 
 	// Edges: only pairs that exchanged mail in the 7d window — and only
@@ -384,6 +403,145 @@ func (s *Store) MgmtSubsOverviewWindow(me string, days int) (*MgmtOverview, erro
 			BToA:   dir7[k[1]][k[0]],
 			LastAt: pairLastAll[k],
 		})
+	}
+	return out, nil
+}
+
+// MgmtContactLatest is one non-subordinate counterparty's latest exchange
+// with the login account (boss bug report 09-29: contact rows on the
+// accounts page showed the no-mail placeholder even with real traffic,
+// because the 0.3.3-C latest generation only ever ran for declared
+// subordinates). Correspondence alone drives it - visibility plays no
+// part; the same 0023 "related to me" gate applies (out requires me among
+// the recipients, in requires from == me).
+type MgmtContactLatest struct {
+	Address       string `json:"address"`
+	LatestSubject string `json:"latest_subject,omitempty"`
+	// Body of the latest letter (truncated) - the client swaps it in for
+	// empty / "no information" subjects on the contact rows (the same trait
+	// subordinate rows already have via subs-overview; boss retest report).
+	LatestBody string `json:"latest_body,omitempty"`
+	LatestAt   int64  `json:"latest_at,omitempty"`
+	// Direction of the LATEST message ("in"|"out", relative to me) - the
+	// client's accLatestHtml renders the arrow from it, same as the
+	// subs-overview payload (review note: without it every contact row
+	// reads as received, even one's own outbound latest).
+	LatestDir string `json:"latest_dir,omitempty"`
+}
+
+// MgmtContactLatests returns, per non-subordinate counterparty that ever
+// exchanged mail with me, the ALL-TIME latest related-to-me message
+// (subject truncated to 100 runes exactly like the inbox preview).
+// Declared subordinates are excluded - their rows ride the subs-overview
+// payload. Address-sorted for deterministic output.
+func (s *Store) MgmtContactLatests(me string) ([]MgmtContactLatest, error) {
+	me = strings.ToLower(me)
+	subSet := map[string]bool{}
+	for _, e := range s.SubordinatesOf(me) {
+		subSet[strings.ToLower(e.Address)] = true
+	}
+	type cl struct {
+		subject string
+		body    string
+		at      int64
+		dir     string
+	}
+	latest := map[string]*cl{}
+	err := s.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bMessages).ForEach(func(_, v []byte) error {
+			var m Message
+			if json.Unmarshal(v, &m) != nil {
+				return nil // skip corrupt records, keep scanning
+			}
+			from := strings.ToLower(m.From)
+			recips := map[string]bool{}
+			for _, a := range m.To {
+				recips[strings.ToLower(a)] = true
+			}
+			for _, a := range m.CC {
+				recips[strings.ToLower(a)] = true
+			}
+			touch := func(addr, dir string) {
+				if addr == me || subSet[addr] {
+					return
+				}
+				c := latest[addr]
+				if c == nil {
+					c = &cl{}
+					latest[addr] = c
+				}
+				if m.ReceivedAt > c.at {
+					c.at = m.ReceivedAt
+					c.subject = truncateRunes(m.Subject, 100)
+					c.body = truncateRunes(m.Body, 100)
+					c.dir = dir
+				}
+			}
+			if from == me {
+				for r := range recips {
+					touch(r, "out")
+				}
+			} else if recips[me] {
+				touch(from, "in")
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MgmtContactLatest, 0, len(latest))
+	for a, c := range latest {
+		out = append(out, MgmtContactLatest{Address: a, LatestSubject: c.subject, LatestBody: c.body, LatestAt: c.at, LatestDir: c.dir})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
+	return out, nil
+}
+
+// UnreadBySender returns, per sender address with unread mail in my inbox,
+// the unread count (0.3.4 item 1: the accounts page's per-row avatar dot is
+// driven by server truth - an address is on the list iff unread mail from
+// it exists; any read path clears it within the next poll cycle). Full
+// inbox-index scan; self data only - no subordinate mailbox is touched.
+func (s *Store) UnreadBySender(me string) (map[string]int, error) {
+	acc, err := s.GetAccount(me)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int{}
+	prefix := indexKey(acc.UUID, "")
+	prefixStr := string(prefix)
+	err = s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bInbox)
+		if b == nil {
+			return nil
+		}
+		mb := tx.Bucket(bMessages)
+		ub := tx.Bucket(bUnread)
+		if ub == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, _ := c.Seek(prefix); k != nil && strings.HasPrefix(string(k), prefixStr); k, _ = c.Next() {
+			id := string(k[len(prefix):])
+			if ub.Get(indexKey(acc.UUID, id)) == nil {
+				continue // read
+			}
+			var m Message
+			v := mb.Get([]byte(id))
+			if v == nil || json.Unmarshal(v, &m) != nil {
+				continue // skip corrupt records
+			}
+			from := strings.ToLower(m.From)
+			if from == "" {
+				continue
+			}
+			out[from]++
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

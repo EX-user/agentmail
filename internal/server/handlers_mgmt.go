@@ -47,3 +47,46 @@ func (s *Server) handleMgmtSubsOverview(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+// handleMgmtContactLatests returns the accounts-page latest-message line
+// data for NON-subordinate rows (bug fix 09-29 via boss: contact rows with
+// real correspondence showed the no-mail placeholder - the 0.3.3-C latest
+// generation never ran for them). Pure correspondence drive: an address
+// appears iff it exchanged mail with the login account; visibility plays
+// no part.
+//
+//	GET /api/mgmt/contacts-latest (auth=self)
+//	  -> {"contacts":[{address, latest_subject, latest_at}...], "count":N}
+func (s *Server) handleMgmtContactLatests(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	me := accountFrom(r.Context())
+	list, err := s.store.MgmtContactLatests(me)
+	if err != nil {
+		internalError(w, "contacts latest: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"contacts": list, "count": len(list)})
+}
+
+// handleMgmtUnreadBySender returns the accounts-page unread-dot data
+// (0.3.4 item 1): per sender with unread mail in the login account's own
+// inbox, the unread count. Self data only - no subordinate scan.
+//
+//	GET /api/mgmt/unread-by-sender (auth=self)
+//	  -> {"by_sender": {"addr": n, ...}, "count": N}
+func (s *Server) handleMgmtUnreadBySender(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w)
+		return
+	}
+	me := accountFrom(r.Context())
+	by, err := s.store.UnreadBySender(me)
+	if err != nil {
+		internalError(w, "unread by sender: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"by_sender": by, "count": len(by)})
+}

@@ -151,6 +151,24 @@ button.row-action {
   font-size: 13px;
 }
 button.row-action:hover { background: var(--panel-2); border-color: var(--accent); }
+/* boss PC round: compose reads as the row primary action; the gear opens
+   the mobile-style popover (remove + limits); badges trail the pill slot. */
+button.row-action.act-compose { background: var(--accent); color: #fff; border-color: var(--accent); border-radius: 999px; padding: 5px 18px; }
+button.row-action.act-compose:hover { background: var(--accent); filter: brightness(1.08); }
+button.row-gear { background: transparent; color: var(--muted, #888); border: 1px solid var(--border); border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1; }
+button.row-gear:hover { color: var(--accent); border-color: var(--accent); }
+.actions-cell { position: relative; }
+.gear-pop { position: absolute; right: 10px; top: calc(100% - 6px); z-index: 40; display: flex; flex-direction: column; gap: 6px; background: var(--panel, #fff); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 132px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.gear-pop[hidden] { display: none; }
+.pc-badges { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
+/* boss PC round: the row's latest-message line mirrors the mobile list item
+   (time dir . subject) - applyActivity patches it in place like on phones. */
+.pc-line3 { font-size: 12px; color: var(--muted, #888); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.line3-row > td { padding: 0 12px 10px; border-top: none; }
+.pc-line3 .cl-none { color: var(--muted, #aaa); }
+/* ct-row: the address line is a block flex row (long marquee addresses must
+   not stack the badges/latest line on top of it). */
+
 button.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 
 tr.row-disabled td { opacity: 0.5; }
@@ -1067,7 +1085,7 @@ nav::-webkit-scrollbar { display: none; }
     flex: 0 0 auto; align-self: center; }
   .im3-gear:hover { color: var(--accent); border-color: var(--accent); }
   .im3-overlay { position: absolute; inset: 0; display: none; align-items: center; gap: 8px;
-    padding: 0 12px 0 12px; background: var(--panel-2); z-index: 3; }
+    padding: 0 12px 0 12px; background: color-mix(in srgb, var(--panel-2) 86%, transparent); z-index: 3; }
   .im3-overlay.on { display: flex; }
   .im3-overlay button { font-size: 12px; padding: 5px 12px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
@@ -3041,19 +3059,56 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     padding-right: 2px;
   }
   #tab-compose.im #thread-holder #compose-thread { display: block; max-height: none; margin-top: 0; }
+  /* boss 09-30 (after the bug2 plates): breathing room ABOVE the first
+    history capsule - in content space (scrolls with the list, clips at
+    the holder edge) so nothing floats over or covers the letters; the
+    flush seat against the nav is untouched. */
+  #tab-compose.im #thread-holder #compose-thread { padding-top: 12px; }
   /* v3 items + boss freeze-round feedback: bubbles lean slightly IM-ward —
      own letters shift right AND carry an accent-tinted fill, received stay
      on the plain panel with the success bar, so the sender reads at a
      glance (position + edge color + fill). The expand hint stays visible:
      it is the affordance for the lazy-loaded full body. Order in JS. */
   #tab-compose.im .thread-item { margin: 0 0 7px; font-size: 12.5px; border-left-width: 2px; }
-  #tab-compose.im .thread-item.thread-out {
-    margin-left: 14%;
+  #tab-compose.im .thread-item.thread-out { margin-left: 14%; }
+  #tab-compose.im .thread-item.thread-in { margin-right: 14%; }
+  /* boss 0.3.4.2: history capsules carry avatars - peer left, own right
+     (row-reverse). Boxes ride the standard data-av path (real avatar if the
+     sender uploaded one, robot via the 404 fallback); harvest/restore keeps
+     them decode-free across poll rebuilds (same mechanism as 06586e1). */
+  #tab-compose.im .thread-item { display: flex; gap: 7px; align-items: flex-start;
+    background: none; border: none; border-left: none; padding: 0; border-radius: 0; }
+  /* the capsule chrome lives on the inner card - the avatar hangs in the
+     gutter OUTSIDE it (boss 09-29: 头像不放在胶囊内) */
+  #tab-compose.im .thread-item .thread-card {
+    flex: 1 1 auto; min-width: 0; padding: 8px 12px; border-radius: 6px;
+    border-left: 2px solid var(--border); background: var(--panel);
+  }
+  #tab-compose.im .thread-item.thread-out { flex-direction: row-reverse; }
+  #tab-compose.im .thread-item.thread-out .thread-card {
     border-left-color: var(--accent);
     background: linear-gradient(color-mix(in srgb, var(--accent) 14%, transparent),
                 color-mix(in srgb, var(--accent) 14%, transparent)), var(--panel);
   }
-  #tab-compose.im .thread-item.thread-in { margin-right: 14%; border-left-color: var(--success); }
+  #tab-compose.im .thread-item.thread-in .thread-card { border-left-color: var(--success); }
+  #tab-compose.im .thread-av {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 11px;
+    overflow: hidden; background: var(--bg);
+    font-size: 14px; line-height: 34px; text-align: center; color: var(--muted);
+  }
+  /* boss 0.3.4.2: bigger avatar, closer to the screen edge - main's 20px
+     side padding reads as wasted gutter on the phone; IM view hugs 8px */
+  html:has(#tab-compose.im) main { padding-left: 8px; padding-right: 8px; }
+  #tab-compose.im .thread-item { gap: 6px; }
+  #tab-compose.im .thread-av img { width: 100%; height: 100%; display: block; border-radius: 9px; }
+  /* boss 0.3.4.2 addendum: no-subject capsules have no subject line, so the
+     folded preview is the whole face of the letter - let it breathe to 3
+     lines (clamp, ellipsis on the cut) instead of the one-line nowrap. */
+  #tab-compose.im .thread-item .thread-prev.thread-prev-multi {
+    white-space: normal;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; text-overflow: ellipsis; word-break: break-word; overflow-wrap: anywhere;
+  }
   /* the visible subject line (boss: the silent Re:-fill was baffling) —
      it always shows exactly what the next send will carry: the user's own
      subject, the predicted "Re: <newest> (auto)", or a tap-to-fill prompt */
@@ -3075,12 +3130,19 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
      main row (plus/minus, input, send) and the pull-out rows (Cc, panel
      entries) all live inside a single solid rounded card. Every input and
      display is preserved; nothing floats loose any more. */
+  /* boss 09-30 bug 2: below the floating header a 16px band of bare body
+     background showed (main's page margin, measured 82->98, elementFromPoint
+     = BODY). In conversation mode the list IS the page body (v6 ruling), so
+     the margin dies with the mode and returns the moment the mode or the
+     tab goes away (:has tracks both; support envelope is below color-mix,
+     already assumed by the v3 bubble gradient). */
+  body:has(#tab-compose.im:not(.hidden)) main { margin-top: 0; }
   #tab-compose.im { position: relative; } /* overlay anchor */
   #tab-compose.im #im-bar {
     position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5;
     display: flex; flex-direction: column; gap: 6px;
     background: var(--panel); border: 1px solid var(--border); border-radius: 18px;
-    box-shadow: 0 8px 22px rgba(0,0,0,.4);
+    /* boss 0.3.4.2: no shadow - the front-end uses none anywhere else */
     padding: 4px 8px;
   }
   #tab-compose.im #im-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -3092,17 +3154,26 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
     color: var(--muted); font-size: 17px; line-height: 1;
   }
   #tab-compose.im #im-main #im-input {
-    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: none;
+    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 4px 0; border: none;
     background: transparent; color: var(--text); font-size: 13.5px; outline: none;
+    font-family: inherit; line-height: 1.45; resize: none;
+    overflow-y: auto; overflow-x: hidden; max-height: 88px;
   }
+  /* boss 0.3.4.2: the send glyph must sit dead-center - flex box centers
+     the glyph on both axes (line-height alone rides the font baseline) */
   #tab-compose.im #im-main #im-send {
     width: 34px; height: 34px; min-height: 0; padding: 0; flex: 0 0 auto;
     border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center; line-height: 1;
   }
   #tab-compose.im #im-bar #compose-attachments { margin: 0; }
   /* 附件卡提密（boss：信息密度低）：单行 chip——📎 名（省略）·大小·× 同排 */
+  /* boss test-server report: base .attach-card allows flex-wrap - a long
+     filename pushed the size chip onto a second line before the name ever
+     spent its shrink; nowrap forces ellipsis on the name first, keeping
+     clip+name+size+x on one line. */
   #tab-compose.im #im-bar .attach-card {
-    display: flex; align-items: center; gap: 7px;
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 7px;
     padding: 3px 9px; border: 1px solid var(--border); border-radius: 10px;
     background: rgba(127,127,127,.10); min-width: 0;
   }
@@ -3126,7 +3197,8 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) button {
     flex: 1 1 30%; min-width: 0; padding: 5px 8px; font-size: 12px;
-    background: rgba(127,127,127,.14); border: 1px solid var(--border);
+    /* boss: flat gray read muddy in light mode - theme surface */
+    background: var(--panel-2); border: 1px solid var(--border);
     border-radius: 10px; color: var(--accent);
   }
   #tab-compose.im #im-bar #im-sheet:not(.hidden) #compose-cc-row {
@@ -3164,7 +3236,11 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   }
   #tab-compose.im #compose-thread { padding-bottom: 84px; } /* 最新信滚出浮层卡（卡高62+阴影余量22） */
   /* 完整写信页 within a conversation: the validated form returns in full */
-  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; }
+  /* boss test-server report: the back button sat flush on the scroll clip
+     edge - CJK glyph ink pokes above the box on device fonts, so the first
+     line read half-clipped under the header; standing top padding keeps the
+     rest state clear of the clip line. */
+  #tab-compose.im.im-full .compose-form { flex: 1 1 auto; overflow-y: auto; padding-top: 6px; }
   #tab-compose.im.im-full .compose-form > * { display: revert; }
   /* the irt row carries an inline display:flex - only !important hides it
      while the conversation owns the page (it returns in the full form) */
@@ -3175,9 +3251,47 @@ button.row-action.pill-btn.av-entry { border-color: var(--accent); color: var(--
   #tab-compose.im.im-full #im-bar { display: none; }
   #tab-compose.im.im-full #im-back {
     display: inline-flex; align-items: center; width: auto; align-self: flex-start;
-    min-height: 0; padding: 0; margin: 0 0 10px;
+    min-height: 0; padding: 3px 0; margin: 0 0 10px;
     background: none; border: none; border-radius: 0;
     color: var(--accent); font-weight: 700; font-size: 13px;
   }
   #tab-compose.im.im-full #im-back::before { content: "\2039\00a0"; font-size: 15px; line-height: 1; }
 }
+
+/* boss PC round (ct-row): the long-address marquee must not swallow the
+   badges/latest line - block-level address row, marquee boxed inside, the
+   line3 on its own row beneath. Late-placed + ID-scoped to win the cascade
+   over the .mq marquee rules above. */
+#accounts-table .ct-row .pc-av-line { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; overflow: hidden; }
+#accounts-table .ct-row .pc-av-line .sig-track { display: inline-block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#accounts-table .ct-row .pc-line3 { position: static; }
+
+
+/* boss PC round 2: an entry and its latest-message line read as ONE
+   block - the hairline between them read as clutter; the block divider
+   now rides the line3 row only (entry rows drop their bottom border). */
+#accounts-table .subrow-pc > td, #accounts-table .ct-row > td { border-bottom: none; }
+#accounts-table tr.line3-row > td { border-bottom: 1px solid var(--border); }
+/* 0.3.4 item 1: the avatar unread dot - server truth via the activity
+   poll, in-place flip only (1046 no-touch discipline). Positioned
+   INSIDE the box: the .im3-av overflow clips anything past the edge. */
+.im3-av-wrap { position: relative; display: inline-flex; flex: none; }
+.im3-av-wrap.has-unread::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--error); }
+
+/* boss 09-29: the ＋ panel's irt line - display + cancel. Late-placed and
+   ID-scoped to win the cascade; hidden outside conversation mode. */
+#tab-compose.im #im-bar #im-irt-line {
+  display: flex; align-items: center; gap: 7px; flex: 1 1 100%;
+  min-width: 0; padding: 1px 2px; font-size: 11px; color: var(--muted);
+}
+#tab-compose.im #im-bar #im-irt-line #im-irt-val {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11px;
+  color: var(--text); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+#tab-compose.im #im-bar #im-irt-line #im-irt-x { margin-left: auto; flex: 0 0 auto; }
+
+/* boss 09-30 (corrected): the IRT line rides above the input line in the
+   conversation card - visible only while an anchor is set. Opaque surface
+   so scrolling capsules never fight its text. */
+#tab-compose.im #im-bar > #im-irt-line { order: 2; background: var(--panel); }

@@ -354,7 +354,15 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	unread, _ := s.store.CountUnread(who)
 	total, _ := s.store.CountInbox(who)
 	s.store.TouchLastReadPull(who)
-	_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d total=%d", len(msgs), unread, total))
+	// badge=1 marks the red-dot poll (limit=1, nobody reading anything):
+	// the dot class fires on a 1s-per-account cadence and would bloat the
+	// audit log ~5x with rows that never correspond to a human read. Boss
+	// 09-29: red dots stay out of the audit. Every other inbox read -
+	// real page views with default limit, since_id syncs, mark-all - still
+	// records exactly as before.
+	if r.URL.Query().Get("badge") != "1" {
+		_ = s.audit.Record(r.Context(), audit.ActionReadInbox, who, fmt.Sprintf("count=%d unread=%d total=%d", len(msgs), unread, total))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages":     msgs,
 		"count":        len(msgs),
@@ -861,6 +869,14 @@ func (s *Server) handleAuthTokenRevoke(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	// 0.3.3.4 cache hardening: JSON payloads carry the freshness anchors
+	// (avatar_hash and friends), so they must revalidate every use —
+	// heuristic browser caching of a payload is exactly how a stale ?v=
+	// reference survives an avatar re-upload. Handlers that need a
+	// different policy set their own header first; this is the default.
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

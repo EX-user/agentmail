@@ -41,6 +41,38 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     // Input (and its set button) hides while an anchor is set.
     var inp = !!(composeInReplyTo);
     if (wrap) wrap.classList.toggle("hidden", inp);
+    imIrtPaint();
+  }
+
+  // boss 09-29: the ＋ panel's irt line - display + cancel for the anchor
+  // (boss asked to SEE the irt parameter and clear it; it now stays empty
+  // unless set explicitly). Painted from renderInReplyTo and the 400ms tick.
+  function imIrtPaint() {
+    var line = document.getElementById("im-irt-line");
+    if (!line) return;
+    var sec = document.getElementById("tab-compose");
+    // boss 09-30 (corrected): the line rides ABOVE the input line and shows
+    // only while an anchor is set; empty state hides it entirely (the full
+    // form's own irt row takes over when the form owns the page).
+    line.classList.toggle("hidden", !(sec && sec.classList.contains("im") && composeInReplyTo));
+    var val = document.getElementById("im-irt-val");
+    if (val) {
+      var v = composeInReplyTo || "\u2014";
+      if (composeInReplyTo) {
+        // boss 0.3.4.2: the line reads irt|prefix subject, cut to one line by
+        // the ellipsis CSS. Prefix/subject derive from the anchored capsule's
+        // own dataset (no state to track); a vanished capsule falls back bare.
+        var abtn = document.querySelector('#compose-thread .thread-action[data-mid="' + composeInReplyTo + '"]');
+        if (abtn) {
+          var apfx = abtn.dataset.act === "fwd" ? t("compose.followUpPrefix") : "Re:";
+          var asubj = (abtn.dataset.subj || "").trim();
+          v = composeInReplyTo + "|" + apfx + (asubj ? " " + asubj : "");
+        } else v = composeInReplyTo + "|";
+      }
+      if (val.textContent !== v) val.textContent = v;
+    }
+    var x = document.getElementById("im-irt-x");
+    if (x) x.classList.toggle("hidden", !composeInReplyTo);
   }
 
   // Manual anchor entry, Cc-autocomplete style. Typing filters the recent
@@ -248,10 +280,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   var sheetIntoCard = null; // wireImBar assigns: panel + attachment chips live in the card (v6)
   var attHomeRestore = null; // wireImBar assigns: the attachment chips' ride-home
   function imMode() { return window.innerWidth <= 800; }
+  function imInputGrow(el) {
+    if (!el || el.tagName !== "TEXTAREA") return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 88) + "px";
+  }
   function syncImBar() {
     var bar = document.getElementById("im-input");
     var bodyEl = $("#compose-body");
-    if (bar && bodyEl && bar.value !== bodyEl.value) bar.value = bodyEl.value;
+    if (bar && bodyEl && bar.value !== bodyEl.value) { bar.value = bodyEl.value; imInputGrow(bar); }
   }
   function imPeerText() {
     return t("compose.recentConv") + " · " + (($("#compose-to").value || "").trim() || "…");
@@ -259,11 +296,23 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // The single source of the IM send-title: the user's subject wins; empty
   // inherits "Re: <newest subject>" from the conversation (same rule the
   // send-time derive applies — the line predicts exactly what will go out).
+  // boss 09-29: conversation mode scrolls in #thread-holder (the inner list
+  // has no overflow) - seat BOTH to the bottom wherever we are in the move.
+  function scrollImThreadBottom() {
+    if (!imMode()) return;
+    var holder = document.getElementById("thread-holder");
+    if (holder) holder.scrollTop = holder.scrollHeight;
+    var t = document.getElementById("compose-thread");
+    if (t) t.scrollTop = t.scrollHeight;
+  }
+
   function predictedImSubject() {
     var s = ($("#compose-subject").value || "").trim();
     if (s) return { text: s, auto: false };
-    if (threadNewest && threadNewest.subject) return { text: "Re: " + threadNewest.subject, auto: true };
-    return { text: "", auto: false };
+    // boss 09-29: no auto-anchoring and no phantom inherit - the send path
+    // stamps the no-information subject word when empty, so the line shows
+    // exactly that (the line predicts what will go out).
+    return { text: t("compose.noSubjectWord"), auto: true };
   }
   function imPaintHead() {
     var peer = document.getElementById("im-peer");
@@ -298,19 +347,46 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var on = imMode() && !!($("#compose-to").value || "").trim();
     var was = sec.classList.contains("im");
     sec.classList.toggle("im", on);
+    // boss 09-30 bug 2: the mode itself moves the page geometry (main's top
+    // margin dies with .im), so a fit measured for the other state is stale
+    // by exactly that margin - the box stops 16px short of the nav. Refit on
+    // every flip; the fit reads the live geometry.
+    if (on !== was) fitComposeOneScreen();
     if (!on) {
       sec.classList.remove("im-cc-open");
       sec.classList.remove("im-full"); // stale full-form state dies with IM mode
       if (ccMoveBack) ccMoveBack();
       if (sheetHomeRestore) sheetHomeRestore();
       if (attHomeRestore) attHomeRestore();
+      // boss 09-30 bug 3 (PC thread panel sometimes completely blank):
+      // leaving the mode must also UNPARK the node. The on-path seats it in
+      // #thread-holder (display:none off-phones), and this branch used to
+      // reconcile classes only - so a window that crossed 800px with a
+      // recipient set and came back kept the PC split rail empty until a
+      // reload (bench: A split visible -> B 700 im inHolder:true -> C 1280
+      // still inHolder:true). Markup home is right after the holder.
+      var t3 = document.getElementById("compose-thread");
+      var h3 = document.getElementById("thread-holder");
+      var d3 = document.getElementById("thread-modal");
+      var drawerOwns3 = !!(d3 && !d3.classList.contains("hidden") && d3.contains(t3));
+      if (t3 && h3 && h3.contains(t3) && !drawerOwns3) {
+        h3.parentNode.insertBefore(t3, h3.nextSibling);
+      }
       return;
     }
     // The inline list lives in #thread-holder; if the drawer owns the node,
-    // take it back (the drawer only opens from the full form, never in IM).
+    // take it back - EXCEPT while the drawer is open (boss test-server
+    // report: the drawer opens from the full form, which lives INSIDE im
+    // mode since 0.3.5; this recovery used to yank the thread list out of
+    // the open drawer within one 400ms tick, leaving the modal empty).
     var thread = document.getElementById("compose-thread");
     var holder = document.getElementById("thread-holder");
-    if (thread && holder && !holder.contains(thread)) holder.appendChild(thread);
+    var drawer = document.getElementById("thread-modal");
+    var drawerOwns = !!(drawer && !drawer.classList.contains("hidden") && drawer.contains(thread));
+    if (!drawerOwns && thread && holder && !holder.contains(thread)) {
+      holder.appendChild(thread);
+      if (imMode()) scrollImThreadBottom(); // entering IM: land on the latest
+    }
     // Full-form owns the page: the chips stay in the form until the card
     // returns (syncImMode re-runs on many beats and would yank them back).
     if (sheetIntoCard && !sec.classList.contains("im-full")) sheetIntoCard();
@@ -331,14 +407,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     return /^(短信|消息|sms|message|—)$/i.test(v);
   }
 
-  function autoDeriveForIm() {
-    var sec = document.getElementById("tab-compose");
-    if (!sec || !sec.classList.contains("im")) return;
-    if (!composeInReplyTo && threadNewest && threadNewest.id) {
-      composeInReplyTo = threadNewest.id;
-      renderInReplyTo();
-    }
-  }
+  // autoDeriveForIm retired (boss 09-29): in-reply-to stays EMPTY unless it
+  // is set explicitly - a thread capsule anchors that letter, the panel's
+  // irt line shows and clears it. Nothing derives it from the thread.
 
   function renderComposeCc() {
     const tags = $("#cc-tags");
@@ -977,15 +1048,12 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   }
 
   $("#btn-send").addEventListener("click", async function () {
-    // 0.3.5 件2: the IM bar hides the three header controls — subject and
-    // the reply anchor ride on the conversation. This runs FIRST so the
-    // validation below reads the derived values (learned via probe: the
-    // stale-captured consts failed needSubject even after deriving).
-    autoDeriveForIm();
     // Boss doctrine (the contract): the envelope may not go out empty -
     // the conversation page stamps a no-information subject from the
     // agreed set; the display layer normalizes it back to the no-subject
     // face. The pair only works because both ends speak the same set.
+    // (The old autoDeriveForIm pre-pass is retired - boss 09-29: irt
+    // defaults to empty, nothing derives it from the thread.)
     if (imMode() && !$("#compose-subject").value.trim()) {
       $("#compose-subject").value = t("compose.noSubjectWord");
     }
@@ -1035,7 +1103,8 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       status.textContent = t("compose.sent", { id: res.message_id });
       toast(t("toast.sent"), "success");
       // Accounts page listens: refreshes activity so the recipient tops the list.
-      document.dispatchEvent(new CustomEvent("compose:sent", { detail: { to: $("#compose-to").value } }));
+      document.dispatchEvent(new CustomEvent("compose:sent", { detail: { to: $("#compose-to").value, subject: ($("#compose-subject").value || "").trim() } }));
+
       // Clear subject/body but keep To (so the thread reloads for the same contact).
       $("#compose-subject").value = "";
       $("#compose-body").value = "";
@@ -1078,11 +1147,20 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       titleEl.textContent = t("compose.recentConv");
       threadEl.className = "thread-list muted";
       threadEl.textContent = "Fill in \"To\" to load the thread.";
+      threadEl.setAttribute("data-peer", "");
       return;
     }
     titleEl.textContent = t("compose.recentConv");
     threadEl.className = "thread-list";
-    threadEl.textContent = t("common.loading");
+    // boss 09-30: a same-peer refresh (the newmail beat) must not blank the
+    // visible list into "loading" - the fresh render swaps in silently when
+    // the data arrives. A peer CHANGE still shows the loading placeholder.
+    // 0.3.4.2 follow-up (089c43b): harvest BEFORE any wipe - the wipe
+    // destroys the rendered boxes and a post-wipe harvest finds nothing.
+    // The bank feeds the render site's avRestore (the silent path would
+    // re-harvest the very same nodes, so one early harvest serves both).
+    var avBankT = window.__avHarvest ? window.__avHarvest(threadEl) : null;
+    if (threadEl.getAttribute("data-peer") !== to.toLowerCase()) threadEl.textContent = t("common.loading");
 
     try {
       // Server-side thread endpoint (v0.5.2): server merges both directions
@@ -1091,6 +1169,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       // contacts that fell outside the 50-message windows.
       const cur = getSession();
       const isRegular = cur && !cur.is_admin;
+      // 0.3.4.2 capsule avatars: own letters show the self address,
+      // incoming show the actual sender (falls back to the peer).
+      const selfAddr = isRegular ? (cur.address || "") : ("admin@" + composeDomain);
       // Boss: on the conversation page a letter has exactly ONE recipient.
       // A multi-value To (allowed on the full form) is CLIPPED to its first
       // address the moment the conversation view loads.
@@ -1112,9 +1193,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
       if (!all.length) {
         threadEl.className = "thread-list muted";
         threadEl.textContent = "No conversation with " + to + " yet.";
+        // boss 09-29 addendum: a peer with NO conversation lands in the full
+        // compose form - the conversation view has nothing to show. The
+        // explicit back button still works (no reload runs on exit).
+        if (imOrder) {
+          var secN = document.getElementById("tab-compose");
+          if (secN && secN.classList.contains("im")) secN.classList.add("im-full");
+        }
         return;
       }
-      threadEl.innerHTML = all.map(function (m) {
+      var html = all.map(function (m) {
         const arrow = m.dir === "out" ? t("thread.sentLabel") : t("thread.receivedLabel"); // 历史残留收编 i18n（boss）
         const cls = m.dir === "out" ? "thread-out" : "thread-in";
         const unreadMark = (m.dir === "in" && m.unread) ? '<span class="unread-dot" title="unread">●</span>' : "";
@@ -1124,16 +1212,60 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         // the subject field stays untouched (boss: it lives in the body).
         const actionLabel = m.dir === "in" ? t("thread.reply") : t("thread.followUp");
         const actionTarget = m.dir === "in" ? (m.from || m.peer) : m.peer;
+        const actionKind = m.dir === "in" ? "re" : "fwd";
         const actionBtn = '<span class="thread-action" data-target="' + esc(actionTarget) +
-          '" data-mid="' + esc(m.id) + '">' + actionLabel + '</span>';
+          '" data-mid="' + esc(m.id) + '" data-act="' + actionKind +
+          '" data-subj="' + esc(m.subject || "") + '">' + actionLabel + '</span>';
+        // 0.3.4.2: avatar rides the capsule in IM mode only - peer left,
+        // own right (row-reverse in CSS). Standard data-av box markup so
+        // app.js hydration (real avatar / robot fallback) applies as-is.
+        const avAddr = m.dir === "in" ? (m.from || m.peer) : selfAddr;
+        const avBox = imOrder ? '<div class="thread-av" data-av="' + esc(avAddr) + '" data-avremote="1">' +
+          esc((String(avAddr)[0] || "?").toUpperCase()) + '</div>' : "";
         return '<div class="thread-item ' + cls + '" data-mid="' + esc(m.id) + '" data-loaded="0">' +
+          avBox +
+          '<div class="thread-card">' +
           '<div class="thread-meta"><b>' + arrow + "</b> · <small>" + fmtTime(m.ts) + "</small>" +
           ' <span class="thread-toggle">' + esc(t("thread.expand")) + '</span> ' + actionBtn + '</div>' +
-          '<div class="thread-subj' + subjCls + '">' + unreadMark + esc(noSubjectInfo(m.subject) ? t("thread.noSubject") : m.subject) + "</div>" +
-          '<div class="thread-prev">' + esc(m.preview || "") + "</div>" +
+          (noSubjectInfo(m.subject)
+            ? // boss 09-30: a no-information subject gets NO redundant (no
+              // subject) label - the preview line carries the unread dot.
+              '<div class="thread-prev' + subjCls + ' thread-prev-multi">' + unreadMark + esc(m.preview || "") + "</div>"
+            : '<div class="thread-subj' + subjCls + '">' + esc(m.subject) + "</div>" +
+              '<div class="thread-prev">' + esc(m.preview || "") + "</div>") +
           '<div class="thread-full hidden"></div>' +
+          '</div>' +
           "</div>";
       }).join("");
+      threadEl.setAttribute("data-peer", to.toLowerCase()); // same-peer refreshes swap silently
+      // 0.3.4.2: same decode-free recycle as 06586e1 - polls re-render this
+      // list constantly, harvested avatar boxes keep their decoded bitmaps.
+      if (imOrder && window.__avRestore) {
+        threadEl.innerHTML = html;
+        window.__avRestore(threadEl, avBankT);
+        if (window.__avHydrate) window.__avHydrate(threadEl);
+        if (window.__avRemoteHydrate) window.__avRemoteHydrate(threadEl);
+      } else {
+        threadEl.innerHTML = html;
+      }
+      // 0.3.4 IM semantics (boss 09-29): opening the conversation reads
+      // it - each unread incoming letter is fetched once (the detail GET
+      // marks it read server-side), so the next accounts poll clears the
+      // dots everywhere. Self-limiting: afterwards there is nothing to
+      // fetch. Regular accounts only (admin previews never write state).
+      if (isRegular) {
+        // 0.3.5 (boss "5,6,7 quick"): reading happens when the user can
+        // SEE - the read-on-open body-fetch must not run for a hidden
+        // compose page, or the peer's letter is consumed before the badge
+        // ever lights (reddot A1/A2 reproduced on the shipped bytes). The
+        // letters keep their dots; the next VISIBLE render reads them.
+        var tabEl = document.getElementById("tab-compose");
+        var seen = !!tabEl && !tabEl.classList.contains("hidden") && document.visibilityState === "visible";
+        all.filter(function (m) { return m.dir === "in" && m.unread; }).forEach(function (m) {
+          if (!seen) return;
+          api("/api/message?id=" + encodeURIComponent(m.id), { keepSession: true }).catch(function () {});
+        });
+      }
       // Wire Reply/Follow-up buttons: fill the compose form's To + Subject.
       $$(".thread-action", threadEl).forEach(function (btn) {
         btn.addEventListener("click", function (e) {
@@ -1144,7 +1276,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           $("#compose-to").value = btn.dataset.target;
           composeInReplyTo = btn.dataset.mid || null;
           renderInReplyTo();
-          if (imMode()) { syncImBar(); $("#im-input").focus(); }
+          if (imMode()) {
+            // Boss 09-29 (refined): tapping the capsule RESETS the body to
+            // prefix + that letter's subject - the visible "who I am
+            // replying to" cue (subject itself goes out as the no-info word).
+            var pfx = btn.dataset.act === "fwd" ? t("compose.followUpPrefix") : "Re:";
+            var s2 = (btn.dataset.subj || "").trim();
+            $("#compose-body").value = s2 ? (pfx + " " + s2) : pfx;
+            syncImBar();
+            $("#im-input").focus();
+          }
           else $("#compose-body").focus();
           $("#compose-status").textContent = "Replying to " + btn.dataset.target;
           syncComposeSplit();
@@ -1168,7 +1309,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
           toggleThreadItem(item);
         });
       });
-      if (imOrder) threadEl.scrollTop = threadEl.scrollHeight; // start at the latest
+      if (imOrder) {
+        // boss 09-29: entering from the accounts row must land on the latest
+        // letter. The HOLDER is the scroller in conversation mode (the inner
+        // list has no overflow), and the im-mode node move/class flip can
+        // land after this render - seat now and re-seat on the next frame
+        // and once more after the tick's node move.
+        scrollImThreadBottom();
+        requestAnimationFrame(scrollImThreadBottom);
+        setTimeout(scrollImThreadBottom, 250);
+      } // start at the latest
     } catch (e) {
       threadEl.className = "thread-list";
       threadEl.textContent = "Error loading thread: " + e.message;
@@ -1221,7 +1371,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // sometimes (value changed by autofill/other code paths). The split state
   // now reconciles against the To value on a fixed tick — the value is the
   // single source of truth, events only make it instant.
-  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); }, 400);
+  setInterval(function () { syncComposeSplit(); syncImMode(); syncImBar(); imPaintHead(); imIrtPaint(); }, 400);
   document.addEventListener("focusin", syncComposeSplit);
   document.addEventListener("focusout", function () { setTimeout(syncComposeSplit, 0); });
 
@@ -1846,7 +1996,14 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
   // poll's signal - the same instant the accounts-row dots light up)
   // re-pulls the open peer's thread. No-to state: loadComposeThread
   // no-ops into its placeholder, so the listener stays dumb.
-  document.addEventListener("inbox:newmail", function () {
+  document.addEventListener("inbox:newmail", function (ev) {
+    // boss 09-30: a bystander's letter must not flash the open conversation.
+    // Reload only when the new mail is FROM the open peer (either side of a
+    // display-name form); a no-to state keeps the placeholder, not a reload.
+    var to2 = ($("#compose-to").value || "").trim().toLowerCase();
+    if (!to2) return;
+    var from2 = String((ev.detail || {}).from || "").toLowerCase();
+    if (from2 && to2.indexOf(from2) < 0 && from2.indexOf(to2) < 0) return;
     loadComposeThread();
   });
 
@@ -1865,6 +2022,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     input.addEventListener("input", function () {
       $("#compose-body").value = input.value;
       draftNoteTyping();
+      imInputGrow(input);
     });
     // Chat semantics: Enter sends, exactly like the ➤ button would.
     input.addEventListener("keydown", function (ev) {
@@ -1923,6 +2081,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
         ccHomeParent.insertBefore(ccHome, ccHomeNext);
       }
     };
+
     // Boss semantics (v2 correction): ＋ pops the buttons; tapping Cc pulls
     // the row OUT to reside by the bar (发信后即消 - a send dissolves it);
     // while the row exists its button hides. One reconciler keeps the pair
@@ -1932,6 +2091,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     document.addEventListener("click", function (e) {
       if (e.target.closest("#im-plus")) {
         setSheet(sheet.classList.contains("hidden"));
+        return;
+      }
+      if (e.target.closest("#im-irt-x")) {
+        composeInReplyTo = null;
+        renderInReplyTo();
         return;
       }
       if (e.target.closest("#im-cc")) {
@@ -1978,6 +2142,9 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     }
     function exitFullForm() {
       sec.classList.remove("im-full");
+      // boss 0.3.4.2: returning from the full form clears the irt anchor -
+      // the bar's attachment line depends on it and goes with it.
+      if (composeInReplyTo) { composeInReplyTo = null; renderInReplyTo(); }
       // Boss: the conversation page is single-To - a multi-value To the
       // user typed on the full form clips to its first address here too.
       var toEl = $("#compose-to");
@@ -2073,13 +2240,24 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes } from
     var refresh = document.getElementById("btn-refresh-thread");
     var refreshHome = refresh ? refresh.parentNode : null;
     if (!btn || !thread || !modal || !holder || !bodyBox) return;
+    // boss 09-30: the drawer is a 往来邮件 LIST - newest at TOP (like the PC
+    // rail and the pre-0.3.5 full page). The conversation view keeps chat
+    // order (newest at bottom), so the shared node flips on open and flips
+    // back on close; the drawer body then rests on its top edge.
+    function flipThreadOrder() {
+      var kids = Array.prototype.slice.call(thread.children);
+      for (var i = kids.length - 1; i >= 0; i--) thread.appendChild(kids[i]);
+    }
     function open() {
       bodyBox.appendChild(thread); // move the node in — listeners ride along
       if (refresh && tools) tools.appendChild(refresh); // 刷新会话 lives in the drawer
+      if (imMode()) flipThreadOrder();
       modal.classList.remove("hidden");
+      bodyBox.scrollTop = 0; // newest-first list starts at its top
       fitComposeOneScreen();
     }
     function close() {
+      if (imMode()) flipThreadOrder(); // restore chat order for the inline view
       holder.appendChild(thread); // back to the (hidden) inline anchor
       modal.classList.add("hidden");
     }

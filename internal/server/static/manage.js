@@ -231,10 +231,16 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
       // newest item hid the overview. The detail pane idles with a hint
       // until the user clicks a row.
       {
+        // (Boss field report 09-29, high prio: the hint used to render bare -
+        // when a list reload landed while the mobile grid sat in Message
+        // state, the pane showed the hint with no way back, the List|Message
+        // tabs being gone. The hint now rides the shared detail frame, so
+        // the pane-back control exists in EVERY detail state.)
         const detail = $("#mail-detail");
         if (detail && msgs.length) {
-          detail.innerHTML = '<p class="muted" style="padding:12px 4px;">' +
-            esc(t("mail.pickHint")) + "</p>";
+          detail.innerHTML = inboxDetailFrame('<p class="muted" style="padding:12px 4px;">' +
+            esc(t("mail.pickHint")) + "</p>");
+          wireMailNav(detail, null);
         }
       }
       mailSearchSrv = false;
@@ -1029,6 +1035,15 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     if (n) n.addEventListener("click", function () { mailStepNav(item, 1); });
     wirePaneBack(detail);
   }
+  // Inbox twin of wireMailNav: steps the #inbox-list and binds pane-back.
+  // (Boss field report 09-29: hint states ride the frame too, so the back
+  // control never disappears from Message state - item may be null there.)
+  function wireInboxNav(detail, item) {
+    const p = $('[data-nav="-1"]', detail), n = $('[data-nav="1"]', detail);
+    if (p) p.addEventListener("click", function () { inboxStepNav(item, -1); });
+    if (n) n.addEventListener("click", function () { inboxStepNav(item, 1); });
+    wirePaneBack(detail);
+  }
 
   // Thread rendering (v0.6.16 ①): "in reply to ‹parent id›" row in the
   // field zone; click reopens the parent (same loader, visibility rules
@@ -1502,7 +1517,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
-    detail.innerHTML = t("mail.selectHint");
+    // Boss field report 09-29: the idle hint rides the shared detail frame -
+    // Message state always keeps the pane-back control (see loadMailList).
+    detail.innerHTML = inboxDetailFrame('<p class="muted" style="padding:12px 4px;">' +
+      esc(t("mail.selectHint")) + "</p>");
+    wireInboxNav(detail, null);
     status.textContent = t("common.loading");
     list.textContent = "";
     // Both admins and regular accounts read their own inbox via /api/inbox
@@ -1669,7 +1688,11 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     const list = $("#inbox-list");
     const detail = $("#inbox-detail");
     const status = $("#inbox-status");
-    detail.innerHTML = t("mail.selectHint");
+    // Boss field report 09-29: the idle hint rides the shared detail frame -
+    // Message state always keeps the pane-back control (see loadMailList).
+    detail.innerHTML = inboxDetailFrame('<p class="muted" style="padding:12px 4px;">' +
+      esc(t("mail.selectHint")) + "</p>");
+    wireInboxNav(detail, null);
     status.textContent = t("common.loading");
     list.textContent = "";
     const box = inboxMode === "in" ? "in" : inboxMode === "sent" ? "out" : "both";
@@ -1818,10 +1841,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     if (item) item.classList.add("selected");
     const detail = $("#inbox-detail");
     detail.innerHTML = inboxDetailFrame('<div class="inbox-loading">' + t("common.loading") + "</div>");
-    const navPrev = $('[data-nav="-1"]', detail), navNext = $('[data-nav="1"]', detail);
-    if (navPrev) navPrev.addEventListener("click", function () { inboxStepNav(item, -1); });
-    if (navNext) navNext.addEventListener("click", function () { inboxStepNav(item, 1); });
-    wirePaneBack(detail);
+    wireInboxNav(detail, item);
     // Auto-preload (newest message on inbox load) stays on the List tab on
     // mobile — only a user tap flips to Message.
     if (!auto) revealDetailOnMobile("inbox-grid", detail);
@@ -1869,12 +1889,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
         });
       });
       document.dispatchEvent(new CustomEvent("badge:refresh"));
-      {
-        const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
-        if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
-        if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-        wirePaneBack(detail);
-      }
+      wireInboxNav(detail, item);
       const replyBtn = $("#btn-inbox-reply");
       if (replyBtn) replyBtn.addEventListener("click", function () {
         document.dispatchEvent(new CustomEvent("compose:reply", { detail: { to: replyBtn.dataset.replyTo, subject: replyBtn.dataset.replySubject, parentId: replyBtn.dataset.replyId } }));
@@ -1888,10 +1903,7 @@ import { $, $$, esc, api, getSession, basicAuth, toast, fmtTime, fmtBytes, copyT
     } catch (e) {
       // Keep the nav row on errors too — the reader can still step away.
       detail.innerHTML = inboxDetailFrame('<p class="muted">' + esc(t("common.error", { msg: e.message })) + "</p>");
-      const p1 = $('[data-nav="-1"]', detail), n1 = $('[data-nav="1"]', detail);
-      if (p1) p1.addEventListener("click", function () { inboxStepNav(item, -1); });
-      if (n1) n1.addEventListener("click", function () { inboxStepNav(item, 1); });
-      wirePaneBack(detail);
+      wireInboxNav(detail, item);
     }
   }
 
